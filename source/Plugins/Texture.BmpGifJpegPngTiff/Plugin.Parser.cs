@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using OpenBveApi.Colors;
 using OpenBveApi.Textures;
 using OpenBveApi.Hosts;
@@ -17,8 +20,63 @@ namespace Plugin {
 			 * any format, not necessarily the one that allows
 			 * us to extract the bitmap data easily.
 			 * */
+
+			using (var image = Image.FromFile(file))
+			{
+				if (image.RawFormat.Equals(ImageFormat.Gif))
+				{
+					List<Bitmap> frames = new List<Bitmap>();
+
+					if (ImageAnimator.CanAnimate(image))
+					{
+						var dimension = new FrameDimension(image.FrameDimensionsList[0]);
+						int frameCount = image.GetFrameCount(dimension);
+
+						int index = 0;
+						int duration = 0;
+						for (int i = 0; i < frameCount; i++)
+						{
+							image.SelectActiveFrame(dimension, i);
+							frames.Add(new Bitmap(image));
+
+							var delay = BitConverter.ToInt32(image.GetPropertyItem(20736).Value, index) * 10;
+							duration += (delay < 100 ? 100 : delay);
+
+							index += 4;
+						}
+
+						int numFrames = duration / frameCount;
+						List<byte[]> frameBytes = new List<byte[]>();
+						for (int i = 0; i < frames.Count; i++)
+						{
+							Color24[] p; //unused here, but don't clone the method- BVE2 had no support for animted gif
+							frameBytes.Add(GetRawBitmapData(frames[i], out p));
+						}
+
+						texture = new Texture(frames[0].Width, frames[0].Height, 32, frameBytes.ToArray(), ((double)duration / frameCount) / 10000000.0, frameCount);
+						return true;
+					}
+				}
+			}
+
 			System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(file);
-			Color24[] p = null;
+			Color24[] pallete;
+			byte[] raw = GetRawBitmapData(bitmap, out pallete);
+			if (raw != null)
+			{
+				texture = new Texture(bitmap.Width, bitmap.Height, 32, raw, pallete);
+				return true;
+			}
+			else
+			{
+				texture = null;
+				return false;
+			}
+		}
+
+		private byte[] GetRawBitmapData(Bitmap bitmap, out Color24[] p)
+		{
+			p = null;
 			if (bitmap.PixelFormat != PixelFormat.Format32bppArgb && bitmap.PixelFormat != PixelFormat.Format24bppRgb)
 			{
 				/* Only store the color palette data for
@@ -68,9 +126,8 @@ namespace Plugin {
 					raw[i] = raw[i + 2];
 					raw[i + 2] = temp;
 				}
-				texture = new Texture(width, height, 32, raw, p);
-				bitmap.Dispose();
-				return true;
+
+				return raw;
 			} else {
 				/*
 				 * The stride is invalid. This indicates that the
@@ -82,8 +139,7 @@ namespace Plugin {
 				bitmap.UnlockBits(data);
 				bitmap.Dispose();
 				CurrentHost.ReportProblem(ProblemType.InvalidOperation, "Invalid stride encountered.");
-				texture = null;
-				return false;
+				return null;
 			}
 		}
 		

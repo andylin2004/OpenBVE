@@ -1,4 +1,5 @@
 ﻿using System;
+using OpenBveApi;
 using OpenTK;
 using OpenTK.Graphics;
 using Vector3 = OpenBveApi.Math.Vector3;

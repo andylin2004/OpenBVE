@@ -202,6 +202,7 @@
     <Compile Include="System\Interop.cs" />
     <Compile Include="System\SimulationState.cs" />
     <Compile Include="System\TextEncoding.cs" />
+    <Compile Include="System\Timers.cs" />
     <Compile Include="Train\AbstractCar.cs" />
     <Compile Include="Train\AbstractTrain.cs" />
     <Compile Include="Train\Axle.cs" />
