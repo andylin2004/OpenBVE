@@ -61,7 +61,7 @@ namespace LibRender2.Primitives
 				}
 
 			}
-			if (texture == null || !renderer.currentHost.LoadTexture(texture, OpenGlTextureWrapMode.ClampClamp))
+			if (texture == null || !renderer.currentHost.LoadTexture(ref texture, OpenGlTextureWrapMode.ClampClamp))
 			{
 				GL.Disable(EnableCap.Texture2D);
 
