@@ -111,16 +111,13 @@ namespace Train.OpenBve
 					case "bve2060000":
 						return TrainDatFormats.BVE2060000;
 					case "openbve":
+						version = 0;
 						return TrainDatFormats.openBVE;
 					default:
 						if (t.ToLowerInvariant().StartsWith("openbve"))
 						{
 							string tt = t.Substring(7, t.Length - 7).Trim();
-							if (string.IsNullOrEmpty(tt))
-							{
-								version = 0;
-							}
-							else if (!NumberFormats.TryParseIntVb6(tt, out version))
+							if (!NumberFormats.TryParseIntVb6(tt, out version))
 							{
 								version = -1;
 							}
@@ -367,9 +364,12 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											powerDelayUp = new[] {a};
 										}
-
 										break;
 									case 1:
 										if (currentFormat == TrainDatFormats.openBVE && myVersion >= 1534)
@@ -378,9 +378,12 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											powerDelayDown = new[] {a};
 										}
-
 										break;
 									case 2:
 										if (currentFormat == TrainDatFormats.openBVE && myVersion >= 1534)
@@ -389,9 +392,12 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											brakeDelayUp = new[] {a};
 										}
-
 										break;
 									case 3:
 										if (currentFormat == TrainDatFormats.openBVE && myVersion >= 1534)
@@ -400,6 +406,10 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											brakeDelayDown = new[] {a};
 										}
 										break;
@@ -410,6 +420,10 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											locoBrakeDelayUp = new[] {a};
 										}
 										break;
@@ -420,6 +434,10 @@ namespace Train.OpenBve
 										}
 										else
 										{
+											if (Plugin.CurrentOptions.EnableBveTsHacks && a > 60)
+											{
+												break;
+											}
 											locoBrakeDelayDown = new[] {a};
 										}
 										break;

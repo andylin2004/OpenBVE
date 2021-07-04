@@ -36,7 +36,6 @@ namespace OpenBve
 		internal static bool CpuAutomaticMode = true;
 		internal static string CurrentRouteFile = null;
 		internal static bool CurrentlyLoading = false;
-		internal static int CurrentStation = -1;
 		internal static bool JumpToPositionEnabled = false;
 		internal static string JumpToPositionValue = "";
 		internal static double MinimumJumpToPositionValue =  0;
@@ -150,11 +149,6 @@ namespace OpenBve
 			}
 
 			var options = new ToolkitOptions();
-			if (!CurrentHost.LoadPlugins(FileSystem, Interface.CurrentOptions, out error, TrainManager, Renderer))
-			{
-				MessageBox.Show(error, @"OpenBVE", MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return;
-			}
 			options.Backend = PlatformBackend.PreferX11;
 			Toolkit.Init(options);
 			string folder = Program.FileSystem.GetDataFolder("Languages");
@@ -187,7 +181,6 @@ namespace OpenBve
 			{
 				return false;
 			}
-			CurrentStation = -1;
 			Renderer.UpdateViewport();
 			bool result;
 			try
@@ -221,7 +214,6 @@ namespace OpenBve
 						if (p < Program.Renderer.CameraTrackFollower.TrackPosition - 0.1) {
 							Program.Renderer.CameraTrackFollower.UpdateAbsolute(p, true, false);
 							Renderer.Camera.Alignment.TrackPosition = p;
-							CurrentStation = i;
 							break;
 						}
 					}
@@ -233,7 +225,6 @@ namespace OpenBve
 						if (p > Program.Renderer.CameraTrackFollower.TrackPosition + 0.1) {
 							Program.Renderer.CameraTrackFollower.UpdateAbsolute(p, true, false);
 							Renderer.Camera.Alignment.TrackPosition = p;
-							CurrentStation = i;
 							break;
 						}
 					}
@@ -403,18 +394,29 @@ namespace OpenBve
 					}
 					OpenFileDialog Dialog = new OpenFileDialog();
 					Dialog.CheckFileExists = true;
-					Dialog.Filter = @"CSV/RW files|*.csv;*.rw|All files|*";
+					Dialog.Filter = @"All Supported Routes|*.csv;*.rw;*.dat|CSV/RW files|*.csv;*.rw|Mechanik Routes|*.dat|All files|*";
 					if (Dialog.ShowDialog() == DialogResult.OK)
 					{
+						
 						Application.DoEvents();
 						CurrentlyLoading = true;
 						CurrentRouteFile = Dialog.FileName;
-						if (LoadRoute())
+						bool canLoad = false;
+						for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
+						{
+							if (Program.CurrentHost.Plugins[i].Route != null && Program.CurrentHost.Plugins[i].Route.CanLoadRoute(CurrentRouteFile))
+							{
+								canLoad = true;
+								break;
+							}
+						}
+						if (canLoad && LoadRoute())
 						{
 							ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
 						}
 						else
 						{
+							MessageBox.Show("No plugins found capable of loading routefile: " +Environment.NewLine + CurrentRouteFile);
 							Renderer.Camera.Alignment.Yaw = 0.0;
 							Renderer.Camera.Alignment.Pitch = 0.0;
 							Renderer.Camera.Alignment.Roll = 0.0;

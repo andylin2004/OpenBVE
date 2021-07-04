@@ -5,7 +5,6 @@ using System.Threading;
 using LibRender2;
 using OpenBveApi;
 using OpenBveApi.Math;
-using OpenBveApi.Routes;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
@@ -89,7 +88,7 @@ namespace OpenBve
 	            Game.SecondsSinceMidnight = (double)(3600 * d.Hour + 60 * d.Minute + d.Second) + 0.001 * (double)d.Millisecond;
 	            ObjectManager.UpdateAnimatedWorldObjects(TimeElapsed, false);
 	            World.UpdateAbsoluteCamera(TimeElapsed);
-				Program.Renderer.UpdateVisibility(Program.Renderer.CameraTrackFollower.TrackPosition + Program.Renderer.Camera.Alignment.Position.Z);
+	            Program.Renderer.UpdateVisibility(Program.Renderer.CameraTrackFollower.TrackPosition + Program.Renderer.Camera.Alignment.Position.Z);
 	            Program.Sounds.Update(TimeElapsed, SoundModels.Linear);
             }
             Program.Renderer.Lighting.UpdateLighting(Program.CurrentRoute.SecondsSinceMidnight, Program.CurrentRoute.LightDefinitions);
@@ -170,7 +169,7 @@ namespace OpenBve
 						routeProgress = Program.CurrentHost.Plugins[i].Route.CurrentProgress;
 					}
 				}
-				Program.Renderer.Loading.DrawLoadingScreen(Fonts.SmallFont, routeProgress);
+				Program.Renderer.Loading.DrawLoadingScreen(Program.Renderer.Fonts.SmallFont, routeProgress);
 				Program.currentGameWindow.SwapBuffers();
 
 				if (Loading.JobAvailable)
