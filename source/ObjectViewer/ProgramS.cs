@@ -264,18 +264,23 @@ namespace OpenBve {
 		    {
 			    try
 			    {
-				    if (String.Compare(System.IO.Path.GetFileName(Files[i]), "extensions.cfg", StringComparison.OrdinalIgnoreCase) == 0)
+				    string fn = System.IO.Path.GetFileName(Files[i]);
+				    if (String.Compare(fn, "extensions.cfg", StringComparison.OrdinalIgnoreCase) == 0 || fn.EndsWith(".con", StringComparison.InvariantCultureIgnoreCase))
 				    {
-					    string currentTrainFolder = System.IO.Path.GetDirectoryName(Files[i]);
+					    string currentTrain = Files[i];
+					    if (currentTrain.EndsWith("extensions.cfg", StringComparison.InvariantCultureIgnoreCase))
+					    {
+						    currentTrain = System.IO.Path.GetDirectoryName(currentTrain);
+					    }
 					    bool canLoad = false;
 					    for (int j = 0; j < Program.CurrentHost.Plugins.Length; j++)
 					    {
-						    if (Program.CurrentHost.Plugins[j].Train != null && Program.CurrentHost.Plugins[j].Train.CanLoadTrain(currentTrainFolder))
+						    if (Program.CurrentHost.Plugins[j].Train != null && Program.CurrentHost.Plugins[j].Train.CanLoadTrain(currentTrain))
 						    {
 							    Control[] dummyControls = new Control[0];
 								TrainManager.Trains = new[] { new TrainBase(TrainState.Available) };
 								AbstractTrain playerTrain = TrainManager.Trains[0];
-								Program.CurrentHost.Plugins[j].Train.LoadTrain(Encoding.UTF8, currentTrainFolder, ref playerTrain, ref dummyControls);
+								Program.CurrentHost.Plugins[j].Train.LoadTrain(Encoding.UTF8, currentTrain, ref playerTrain, ref dummyControls);
 								TrainManager.PlayerTrain = TrainManager.Trains[0];
 								canLoad = true;
 								break;
