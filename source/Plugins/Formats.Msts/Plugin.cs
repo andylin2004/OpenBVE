@@ -71,6 +71,9 @@ namespace OpenBve.Formats.MsTs
 		/// <summary>Reads a string from the block</summary>
 		public abstract string ReadString();
 
+		/// <summary>Reads a string from the block</summary>
+		public abstract string[] ReadStringArray();
+
 		/// <summary>Returns the length of the block</summary>
 		public abstract long Length();
 
@@ -235,6 +238,11 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			return (string.Empty); //Not sure this is valid, but let's be on the safe side
+		}
+
+		public override string[] ReadStringArray()
+		{
+			throw new NotImplementedException();
 		}
 
 		public override long Length()
@@ -744,6 +752,27 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			return getNextValue();
+		}
+
+		public override string[] ReadStringArray()
+		{
+			List<string> strings = new List<string>();
+			string s;
+			while (true)
+			{
+				s = ReadString();
+				if (s != string.Empty)
+				{
+					strings.Add(s);
+				}
+				else
+				{
+					break;
+				}
+			}
+
+			return strings.ToArray();
+
 		}
 
 		public override long Length()
