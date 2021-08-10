@@ -71,8 +71,13 @@ namespace OpenBve.Formats.MsTs
 		/// <summary>Reads a string from the block</summary>
 		public abstract string ReadString();
 
-		/// <summary>Reads a string from the block</summary>
+		/// <summary>Reads a string array from the block</summary>
 		public abstract string[] ReadStringArray();
+
+		/// <summary>Reads an array of enum values from the block</summary>
+		/// <typeparam name="TEnumType">The desired enum</typeparam>
+		/// <returns>An enum array</returns>
+		public abstract TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)  where TEnumType : struct;
 
 		/// <summary>Returns the length of the block</summary>
 		public abstract long Length();
@@ -234,13 +239,18 @@ namespace OpenBve.Formats.MsTs
 					i++;
 				}
 
-				return (Encoding.Unicode.GetString(buff, 0, stringLength * 2));
+				return Encoding.Unicode.GetString(buff, 0, stringLength * 2);
 			}
 
 			return (string.Empty); //Not sure this is valid, but let's be on the safe side
 		}
 
 		public override string[] ReadStringArray()
+		{
+			throw new NotImplementedException();
+		}
+
+		public override TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)
 		{
 			throw new NotImplementedException();
 		}
@@ -771,8 +781,27 @@ namespace OpenBve.Formats.MsTs
 				}
 			}
 
+			if (strings.Count == 1 && strings[0].IndexOf(',') != -1)
+			{
+				// Quote enclosed, comma separated as opposed to whitespace separated
+				return strings[0].Split(',');
+			}
 			return strings.ToArray();
 
+		}
+
+		public override TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)
+		{
+			string[] strings = ReadStringArray();
+			TEnumType[] returnArray = new TEnumType[strings.Length];
+			for (int i = 0; i < strings.Length; i++)
+			{
+				if (!Enum.TryParse(strings[i], true, out returnArray[i]))
+				{
+					throw new InvalidDataException("Expected " + strings[i] + " to be a value member of the specified enum.");
+				}
+			}
+			return returnArray;
 		}
 
 		public override long Length()
