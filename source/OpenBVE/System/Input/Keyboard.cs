@@ -99,10 +99,10 @@ namespace OpenBve
 				return;
 			}
 
-			if (TrainManager.PlayerTrain.Plugin != null)
-			{
-				TrainManager.PlayerTrain.Plugin.RawKeyUp((OpenBveApi.Input.Key)e.Key);
-			}
+			//if (TrainManager.PlayerTrain.Plugin != null)
+			//{
+			//	TrainManager.PlayerTrain.Plugin.RawKeyUp((OpenBveApi.Input.Key)e.Key);
+			//}
 			//We don't need to check for modifiers on key up
 			BlockKeyRepeat = true;
 			//Traverse the controls array
