@@ -23,10 +23,10 @@ namespace OpenBve
 				return;
 			}
 
-			if (TrainManager.PlayerTrain.Plugin != null)
-			{
-				TrainManager.PlayerTrain.Plugin.RawKeyDown((OpenBveApi.Input.Key)e.Key);
-			}
+ 		//	if (TrainManager.PlayerTrain.Plugin != null)
+			//{
+			//	TrainManager.PlayerTrain.Plugin.RawKeyDown((OpenBveApi.Input.Key)e.Key);
+			//}
 
 			BlockKeyRepeat = true;
 			//Check for modifiers
