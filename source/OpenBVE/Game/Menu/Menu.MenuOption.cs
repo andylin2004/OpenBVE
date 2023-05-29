@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using LibRender2.Screens;
 using OpenBveApi.Graphics;
@@ -116,6 +117,7 @@ namespace OpenBve
 						Program.Renderer.Screen.ScaledHeight = res.ScaledHeight;
 						Program.currentGameWindow.Width = (int)(res.Width * res.ScaledWidth);
 						Program.currentGameWindow.Height = (int)(res.Height * res.ScaledHeight);
+						Debug.Print("\n{0} x {1} @ {2}\n", Program.Renderer.Screen.Width, Program.Renderer.Screen.Height, Program.Renderer.Screen.ScaledHeight);
 						if (Interface.CurrentOptions.FullscreenMode)
 						{
 							IList<DisplayResolution> resolutions = DisplayDevice.Default.AvailableResolutions;
@@ -129,6 +131,8 @@ namespace OpenBve
 								{
 									try
 									{
+										System.Threading.Thread.Sleep(100);
+										//Debug.Print("{0} x {1} @ {2}", currentResolution.Width, currentResolution.Height, currentResolution.ScaleHeight);
 										//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
 										DisplayDevice.Default.RestoreResolution();
 										DisplayDevice.Default.ChangeResolution(currentResolution);
@@ -172,6 +176,8 @@ namespace OpenBve
 								{
 									try
 									{
+										System.Threading.Thread.Sleep(100);
+										//Debug.Print("{0} x {1} @ {2}", currentResolution.Width, currentResolution.Height, currentResolution.ScaleHeight);
 										//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
 										DisplayDevice.Default.RestoreResolution();
 										DisplayDevice.Default.ChangeResolution(currentResolution);
