@@ -9,6 +9,10 @@ namespace LibRender2.Screens
 		public int Width = 0;
 		/// <summary>Stores the current height of the screen.</summary>
 		public int Height = 0;
+		/// <summary>Stores the current width scaling of the screen.</summary>
+		public float ScaledWidth = 1;
+		/// <summary>Stores the current height scaling of the screen.</summary>
+		public float ScaledHeight = 1;
 		/// <summary>The current aspect ratio</summary>
 		public double AspectRatio;
 		/// <summary>Whether the screen is set to fullscreen mode.</summary>
@@ -25,9 +29,9 @@ namespace LibRender2.Screens
 			ScreenResolution lastResolution = new ScreenResolution(0,0);
 			for (int i = 0; i < DisplayDevice.Default.AvailableResolutions.Count; i++)
 			{
-				if (DisplayDevice.Default.AvailableResolutions[i].Width != lastResolution.Width || DisplayDevice.Default.AvailableResolutions[i].Height != lastResolution.Height)
+				if (DisplayDevice.Default.AvailableResolutions[i].Width != lastResolution.Width || DisplayDevice.Default.AvailableResolutions[i].Height != lastResolution.Height || DisplayDevice.Default.AvailableResolutions[i].ScaleHeight != lastResolution.ScaledHeight || DisplayDevice.Default.AvailableResolutions[i].ScaleWidth != lastResolution.ScaledWidth)
 				{
-					lastResolution = new ScreenResolution(DisplayDevice.Default.AvailableResolutions[i].Width, DisplayDevice.Default.AvailableResolutions[i].Height);
+					lastResolution = new ScreenResolution(DisplayDevice.Default.AvailableResolutions[i].Width, DisplayDevice.Default.AvailableResolutions[i].Height, DisplayDevice.Default.AvailableResolutions[i].ScaleWidth, DisplayDevice.Default.AvailableResolutions[i].ScaleHeight);
 					AvailableResolutions.Add(lastResolution);
 				}
 			}

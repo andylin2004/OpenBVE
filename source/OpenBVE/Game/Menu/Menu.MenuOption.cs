@@ -110,18 +110,22 @@ namespace OpenBve
 				{
 					case MenuOptionType.ScreenResolution:
 						ScreenResolution res = CurrentOption as ScreenResolution;
-						Program.Renderer.Screen.Width = (int)(res.Width * DisplayDevice.Default.ScaleFactor.X);
-						Program.Renderer.Screen.Height = (int)(res.Height * DisplayDevice.Default.ScaleFactor.Y);
-						Program.currentGameWindow.Width = (int)(res.Width * DisplayDevice.Default.ScaleFactor.X);
-						Program.currentGameWindow.Height = (int)(res.Height * DisplayDevice.Default.ScaleFactor.Y);
+						Program.Renderer.Screen.Width = (int)(res.Width * res.ScaledWidth);
+						Program.Renderer.Screen.Height = (int)(res.Height * res.ScaledHeight);
+						Program.Renderer.Screen.ScaledWidth = res.ScaledWidth;
+						Program.Renderer.Screen.ScaledHeight = res.ScaledHeight;
+						Program.currentGameWindow.Width = (int)(res.Width * res.ScaledWidth);
+						Program.currentGameWindow.Height = (int)(res.Height * res.ScaledHeight);
 						if (Interface.CurrentOptions.FullscreenMode)
 						{
 							IList<DisplayResolution> resolutions = DisplayDevice.Default.AvailableResolutions;
 							foreach (DisplayResolution currentResolution in resolutions)
 							{
 								//Test resolution
-								if (currentResolution.Width == Program.Renderer.Screen.Width / DisplayDevice.Default.ScaleFactor.X &&
-								    currentResolution.Height == Program.Renderer.Screen.Height / DisplayDevice.Default.ScaleFactor.Y)
+								if (currentResolution.Width * currentResolution.ScaleWidth == Program.Renderer.Screen.Width &&
+									currentResolution.Height * currentResolution.ScaleWidth == Program.Renderer.Screen.Height &&
+									currentResolution.ScaleWidth == Program.Renderer.Screen.ScaledWidth &&
+									currentResolution.ScaleHeight == Program.Renderer.Screen.ScaledHeight)
 								{
 									try
 									{
@@ -131,14 +135,17 @@ namespace OpenBve
 										Program.currentGameWindow.WindowState = WindowState.Fullscreen;
 										Program.currentGameWindow.X = 0;
 										Program.currentGameWindow.Y = 0;
-										Program.currentGameWindow.Width = (int)(currentResolution.Width * DisplayDevice.Default.ScaleFactor.X);
-										Program.currentGameWindow.Height = (int)(currentResolution.Height * DisplayDevice.Default.ScaleFactor.Y);
+										Program.currentGameWindow.Width = (int)(currentResolution.Width * currentResolution.ScaleWidth);
+										Program.currentGameWindow.Height = (int)(currentResolution.Height * currentResolution.ScaleHeight);
 										Program.Renderer.Screen.Width = Program.currentGameWindow.Width;
 										Program.Renderer.Screen.Height = Program.currentGameWindow.Height;
+										Program.Renderer.Screen.ScaledWidth = currentResolution.ScaleWidth;
+										Program.Renderer.Screen.ScaledHeight = currentResolution.ScaleHeight;
 										return;
 									}
-									catch
+									catch(System.Exception e)
 									{
+                                        System.Diagnostics.Debug.Print(e.ToString());
 										//refresh rate wrong? - Keep trying in case a different refresh rate works OK
 									}
 								}
@@ -158,8 +165,10 @@ namespace OpenBve
 							foreach (DisplayResolution currentResolution in resolutions)
 							{
 								//Test resolution
-								if (currentResolution.Width == Program.Renderer.Screen.Width / DisplayDevice.Default.ScaleFactor.X &&
-									currentResolution.Height == Program.Renderer.Screen.Height / DisplayDevice.Default.ScaleFactor.Y)
+								if (currentResolution.Width * currentResolution.ScaleWidth == Program.Renderer.Screen.Width &&
+									currentResolution.Height * currentResolution.ScaleWidth == Program.Renderer.Screen.Height &&
+									currentResolution.ScaleWidth == Program.Renderer.Screen.ScaledWidth &&
+									currentResolution.ScaleHeight == Program.Renderer.Screen.ScaledHeight)
 								{
 									try
 									{
@@ -169,14 +178,17 @@ namespace OpenBve
 										Program.currentGameWindow.WindowState = WindowState.Fullscreen;
 										Program.currentGameWindow.X = 0;
 										Program.currentGameWindow.Y = 0;
-										Program.currentGameWindow.Width = (int)(currentResolution.Width * DisplayDevice.Default.ScaleFactor.X);
-										Program.currentGameWindow.Height = (int)(currentResolution.Height * DisplayDevice.Default.ScaleFactor.Y);
+										Program.currentGameWindow.Width = (int)(currentResolution.Width * currentResolution.ScaleWidth);
+										Program.currentGameWindow.Height = (int)(currentResolution.Height * currentResolution.ScaleHeight);
 										Program.Renderer.Screen.Width = Program.currentGameWindow.Width;
 										Program.Renderer.Screen.Height = Program.currentGameWindow.Height;
+										Program.Renderer.Screen.ScaledWidth = currentResolution.ScaleWidth;
+										Program.Renderer.Screen.ScaledHeight = currentResolution.ScaleHeight;
 										return;
 									}
-									catch
+									catch (System.Exception e)
 									{
+										System.Diagnostics.Debug.Print(e.ToString());
 										//refresh rate wrong? - Keep trying in case a different refresh rate works OK
 									}
 								}
