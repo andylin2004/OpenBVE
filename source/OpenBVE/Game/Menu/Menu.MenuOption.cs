@@ -32,7 +32,7 @@ namespace OpenBve
 						ScreenResolution[] castEntries = entries as ScreenResolution[];
 						for (int i = 0; i < castEntries.Length; i++)
 						{
-							if (castEntries[i].Width == Program.Renderer.Screen.Width && castEntries[i].Height == Program.Renderer.Screen.Height)
+							if (castEntries[i].Width == Program.Renderer.Screen.Width && castEntries[i].Height == Program.Renderer.Screen.Height && castEntries[i].ScaledHeight == Program.Renderer.Screen.ScaledHeight && castEntries[i].ScaledWidth == Program.Renderer.Screen.ScaledWidth)
 							{
 								CurrentlySelectedOption = i;
 								return;
@@ -113,8 +113,6 @@ namespace OpenBve
 						ScreenResolution res = CurrentOption as ScreenResolution;
 						Program.Renderer.Screen.Width = (int)(res.Width * res.ScaledWidth);
 						Program.Renderer.Screen.Height = (int)(res.Height * res.ScaledHeight);
-						Program.Renderer.Screen.ScaledWidth = res.ScaledWidth;
-						Program.Renderer.Screen.ScaledHeight = res.ScaledHeight;
 						Program.currentGameWindow.Width = (int)(res.Width * res.ScaledWidth);
 						Program.currentGameWindow.Height = (int)(res.Height * res.ScaledHeight);
 						Debug.Print("\n{0} x {1} @ {2}\n", Program.Renderer.Screen.Width, Program.Renderer.Screen.Height, Program.Renderer.Screen.ScaledHeight);
@@ -131,8 +129,6 @@ namespace OpenBve
 								{
 									try
 									{
-										System.Threading.Thread.Sleep(100);
-										//Debug.Print("{0} x {1} @ {2}", currentResolution.Width, currentResolution.Height, currentResolution.ScaleHeight);
 										//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
 										DisplayDevice.Default.RestoreResolution();
 										DisplayDevice.Default.ChangeResolution(currentResolution);
@@ -176,12 +172,12 @@ namespace OpenBve
 								{
 									try
 									{
-										System.Threading.Thread.Sleep(100);
 										//Debug.Print("{0} x {1} @ {2}", currentResolution.Width, currentResolution.Height, currentResolution.ScaleHeight);
 										//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
 										DisplayDevice.Default.RestoreResolution();
 										DisplayDevice.Default.ChangeResolution(currentResolution);
 										Program.currentGameWindow.WindowState = WindowState.Fullscreen;
+										System.Threading.Thread.Sleep(10);
 										Program.currentGameWindow.X = 0;
 										Program.currentGameWindow.Y = 0;
 										Program.currentGameWindow.Width = (int)(currentResolution.Width * currentResolution.ScaleWidth);
