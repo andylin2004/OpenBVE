@@ -987,15 +987,15 @@ namespace LibRender2
 		public void ResetShader(Shader Shader)
 		{
 #if DEBUG
-			if (!ReShadeInUse)
-			{
-				lastError = GL.GetError();
+			//if (!ReShadeInUse)
+			//{
+			//	lastError = GL.GetError();
 
-				if (lastError != ErrorCode.NoError)
-				{
-					throw new InvalidOperationException($"OpenGL Error: {lastError}");
-				}
-			}
+			//	if (lastError != ErrorCode.NoError)
+			//	{
+			//		throw new InvalidOperationException($"OpenGL Error: {lastError}");
+			//	}
+			//}
 #endif
 
 			Shader.SetCurrentProjectionMatrix(Matrix4D.Identity);
