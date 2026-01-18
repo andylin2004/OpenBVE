@@ -4,7 +4,9 @@ using System.Globalization;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using Formats.OpenBve;
 using OpenBveApi.Interface;
+using OpenBveApi.Math;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -168,72 +170,56 @@ namespace TrainEditor2.ViewModels.Panels
 
 			LocationX = touch
 				.ToReactivePropertyAsSynchronized(
-					x => x.LocationX,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Location,
+					x => x.X.ToString(culture),
+					x => new Vector2(x.Parse(), touch.Location.Y),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			LocationY = touch
 				.ToReactivePropertyAsSynchronized(
-					x => x.LocationY,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Location,
+					x => x.Y.ToString(culture),
+					x => new Vector2(touch.Location.X, x.Parse()),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			SizeX = touch
 				.ToReactivePropertyAsSynchronized(
-					x => x.SizeX,
+					x => x.Size.X,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			SizeY = touch
 				.ToReactivePropertyAsSynchronized(
-					x => x.SizeY,
+					x => x.Size.Y,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);

@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace OpenBve
 {
 	/// <summary>
-	/// Present the Windows Vista-style open file dialog to select a folder. Fall back for older Windows Versions
+	/// Present the Windows Vista-style open file dialog to select a folder
 	/// </summary>
 	public class FolderSelectDialog
 	{
@@ -14,7 +14,7 @@ namespace OpenBve
 		private string _fileName = "";
 
 		/// <summary>
-		/// Gets or sets the initial directory for the folderbrowser dialog to show
+		/// Gets or sets the initial directory for the folder browser dialog to show
 		/// </summary>
 		public string InitialDirectory
 		{
@@ -45,9 +45,7 @@ namespace OpenBve
 		/// <returns>true if the user clicks OK</returns>
 		public bool Show(IntPtr hWndOwner)
 		{
-			var result = Environment.OSVersion.Version.Major >= 6
-				? VistaDialog.Show(hWndOwner, InitialDirectory, Title)
-				: ShowXpDialog(hWndOwner, InitialDirectory, Title);
+			var result = VistaDialog.Show(hWndOwner, InitialDirectory, Title);
 			_fileName = result.FileName;
 			return result.Result;
 		}
@@ -56,23 +54,6 @@ namespace OpenBve
 		{
 			public bool Result { get; set; }
 			public string FileName { get; set; }
-		}
-
-		private static ShowDialogResult ShowXpDialog(IntPtr ownerHandle, string initialDirectory, string title)
-		{
-			var folderBrowserDialog = new FolderBrowserDialog
-			{
-				Description = title,
-				SelectedPath = initialDirectory,
-				ShowNewFolderButton = false
-			};
-			var dialogResult = new ShowDialogResult();
-			if (folderBrowserDialog.ShowDialog(new WindowWrapper(ownerHandle)) == DialogResult.OK)
-			{
-				dialogResult.Result = true;
-				dialogResult.FileName = folderBrowserDialog.SelectedPath;
-			}
-			return dialogResult;
 		}
 
 		private static class VistaDialog
@@ -129,16 +110,6 @@ namespace OpenBve
 				{
 					s_unAdviseMethodInfo.Invoke(iFileDialog, new[] { adviseParametersWithOutputConnectionToken[1] });
 				}
-			}
-		}
-
-		// Wrap an IWin32Window around an IntPtr
-		private class WindowWrapper : IWin32Window
-		{
-			public WindowWrapper(IntPtr handle) { Handle = handle; }
-			public IntPtr Handle
-			{
-				get;
 			}
 		}
 	}

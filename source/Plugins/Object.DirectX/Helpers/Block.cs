@@ -28,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using OpenBveApi.Colors;
 
 namespace OpenBve.Formats.DirectX
 {
@@ -41,13 +42,16 @@ namespace OpenBve.Formats.DirectX
 		/// <remarks>Normally blank</remarks>
 		public string Label;
 
-		public int FloatingPointSize;
+		public readonly int FloatingPointSize;
 
 		/// <summary>Reads an integer from the block</summary>
-		public abstract int ReadUInt();
+		public abstract int ReadInt();
 
 		/// <summary>Reads an unsigned 16-bit integer from the block</summary>
 		public abstract ushort ReadUInt16();
+
+		/// <summary>Reads an unsigned 32-bit integer from the block</summary>
+		public abstract uint ReadDword();
 
 		/// <summary>Reads a single-bit precision floating point number from the block</summary>
 		public abstract float ReadSingle();
@@ -59,21 +63,17 @@ namespace OpenBve.Formats.DirectX
 		/// <summary>Reads a string from the block</summary>
 		public abstract string ReadString();
 
+		/// <summary>Reads a Color128 from the block</summary>
+		public Color128 ReadColor128 => new Color128(ReadSingle(), ReadSingle(), ReadSingle(), ReadSingle());
+
+		/// <summary>Reads a Color96 from the block</summary>
+		public Color96 ReadColor96 => new Color96(ReadSingle(), ReadSingle(), ReadSingle());
+
 		/// <summary>Returns the length of the block</summary>
 		public abstract long Length();
 
 		/// <summary>Returns the position of the reader within the block</summary>
 		public abstract long Position();
-
-		/// <summary>Creates a new block from the supplied byte array</summary>
-		/// <param name="bytes">The block of data</param>
-		/// <param name="token">The token for the new block</param>
-		/// <returns>The new block</returns>
-		/// <remarks>Always creates a BinaryBlock</remarks>
-		public static Block ReadBlock(byte[] bytes, TemplateID token)
-		{
-			return new BinaryBlock(bytes, token);
-		}
 
 		/// <summary>Creates a new block from the supplied string</summary>
 		/// <param name="text">The string</param>
@@ -101,6 +101,11 @@ namespace OpenBve.Formats.DirectX
 		/// <returns>The new block</returns>
 		/// <remarks>The type of the new block will always match that of the base block</remarks>
 		public abstract Block ReadSubBlock();
+
+		protected Block(int floatingPointSize = -1)
+		{
+			FloatingPointSize = floatingPointSize;
+		}
 	}
 
 	/// <inheritdoc />
@@ -153,8 +158,21 @@ namespace OpenBve.Formats.DirectX
 				{
 					currentPosition++;
 				}
+
+				if (currentPosition - 1 - p > 0)
+				{
+					// reference based material name in textual X
+					string l = myText.Substring(p, currentPosition - 1);
+					Label = l.Trim();
+					return;
+				}
+				if (currentPosition == text.Length - 1)
+				{
+					// Null rail converted by BVE5 : Contains texture co-ords, but the key is missing...
+					return;
+				}
 				string s = myText.Substring(p, currentPosition - 1);
-				Label = s.Trim(new char[] { });
+				Label = s.Trim();
 			}
 			else
 			{
@@ -166,12 +184,11 @@ namespace OpenBve.Formats.DirectX
 				int ws = s.IndexOf(' ');
 				if (ws != -1)
 				{
-					Label = s.Substring(ws, s.Length - ws).Trim(new char[] { });
+					Label = s.Substring(ws, s.Length - ws).Trim();
 					s = s.Substring(0, ws);
 				}
 
-				TemplateID currentToken;
-				if (!Enum.TryParse(s, true, out currentToken))
+				if (!Enum.TryParse(s, true, out TemplateID currentToken))
 				{
 					throw new Exception("Invalid token " + s);
 				}
@@ -202,7 +219,7 @@ namespace OpenBve.Formats.DirectX
 				if (myText[currentPosition] == '{')
 				{
 					int l = currentPosition - startPosition;
-					s = myText.Substring(startPosition, l).Trim(new char[] { });
+					s = myText.Substring(startPosition, l).Trim();
 					currentPosition++;
 					break;
 				}
@@ -219,7 +236,6 @@ namespace OpenBve.Formats.DirectX
 				throw new Exception();
 			}
 
-			TemplateID currentToken;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
@@ -228,7 +244,7 @@ namespace OpenBve.Formats.DirectX
 				s = s.Substring(0, ws);
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
+			if (!Enum.TryParse(s, true, out TemplateID currentToken))
 			{
 				if (newToken == TemplateID.TextureKey)
 				{
@@ -258,7 +274,7 @@ namespace OpenBve.Formats.DirectX
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken);
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(), currentToken);
 					}
 
 					level--;
@@ -287,7 +303,7 @@ namespace OpenBve.Formats.DirectX
 				if (myText[currentPosition] == '{')
 				{
 					int l = currentPosition - startPosition;
-					s = myText.Substring(startPosition, l).Trim(new char[] { });
+					s = myText.Substring(startPosition, l).Trim();
 					currentPosition++;
 					break;
 				}
@@ -299,16 +315,15 @@ namespace OpenBve.Formats.DirectX
 				currentPosition++;
 			}
 
-			TemplateID currentToken;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
 				//The block has the optional label
-				Label = s.Substring(ws, s.Length - ws).Trim(new char[] { });
+				Label = s.Substring(ws, s.Length - ws).Trim();
 				s = s.Substring(0, ws);
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
+			if (!Enum.TryParse(s, true, out TemplateID currentToken))
 			{
 				if (validTokens.Contains(TemplateID.TextureKey))
 				{
@@ -339,7 +354,7 @@ namespace OpenBve.Formats.DirectX
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken);
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(), currentToken);
 					}
 
 					level--;
@@ -368,7 +383,7 @@ namespace OpenBve.Formats.DirectX
 				if (myText[currentPosition] == '{')
 				{
 					int l = currentPosition - startPosition;
-					s = myText.Substring(startPosition, l).Trim(new char[] { });
+					s = myText.Substring(startPosition, l).Trim();
 					currentPosition++;
 					break;
 				}
@@ -385,16 +400,15 @@ namespace OpenBve.Formats.DirectX
 				throw new Exception();
 			}
 
-			TemplateID currentToken;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
 				//The block has the optional label
-				Label = s.Substring(ws, s.Length - ws).Trim(new char[] { });
-				s = s.Substring(0, ws).Trim(new char[] { });
+				Label = s.Substring(ws, s.Length - ws).Trim();
+				s = s.Substring(0, ws).Trim();
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
+			if (!Enum.TryParse(s, true, out TemplateID currentToken))
 			{
 				throw new Exception("Unrecognised token " + s);
 			}
@@ -412,7 +426,7 @@ namespace OpenBve.Formats.DirectX
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken);
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(), currentToken);
 					}
 
 					level--;
@@ -428,7 +442,7 @@ namespace OpenBve.Formats.DirectX
 
 		private int startPosition;
 
-		public override int ReadUInt()
+		public override int ReadInt()
 		{
 			startPosition = currentPosition;
 			string s = getNextValue();
@@ -439,8 +453,7 @@ namespace OpenBve.Formats.DirectX
 					currentPosition++;
 				}
 			}
-			int val;
-			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out val))
+			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out int val))
 			{
 				return val;
 			}
@@ -458,10 +471,27 @@ namespace OpenBve.Formats.DirectX
 					currentPosition++;
 				}
 			}
-			int val;
-			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out val))
+			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out int val))
 			{
 				return (ushort) val;
+			}
+			throw new Exception("Unable to parse " + s + " to a valid integer in block " + Token);
+		}
+
+		public override uint ReadDword()
+		{
+			startPosition = currentPosition;
+			string s = getNextValue();
+			if (char.IsWhiteSpace(myText[currentPosition]))
+			{
+				while (char.IsWhiteSpace(myText[currentPosition]))
+				{
+					currentPosition++;
+				}
+			}
+			if (uint.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out uint val))
+			{
+				return val;
 			}
 			throw new Exception("Unable to parse " + s + " to a valid integer in block " + Token);
 		}
@@ -471,8 +501,7 @@ namespace OpenBve.Formats.DirectX
 			startPosition = currentPosition;
 			string s = getNextValue();
 			currentPosition++;
-			float val;
-			if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out val))
+			if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out float val))
 			{
 				return val;
 			}
@@ -535,7 +564,7 @@ namespace OpenBve.Formats.DirectX
 				currentPosition++;
 				if (l > 0)
 				{
-					return myText.Substring(startPosition, l).Trim(new char[] { });
+					return myText.Substring(startPosition, l).Trim();
 				}
 			}
 			else if (myText[currentPosition] == '<')
@@ -552,7 +581,7 @@ namespace OpenBve.Formats.DirectX
 				currentPosition++;
 				if (l > 0)
 				{
-					return myText.Substring(startPosition, l).Trim(new char[] { });
+					return myText.Substring(startPosition, l).Trim();
 				}
 			}
 			else
@@ -565,7 +594,7 @@ namespace OpenBve.Formats.DirectX
 				int l = currentPosition - startPosition;
 				if (l > 0)
 				{
-					return myText.Substring(startPosition, l).Trim(new char[] { });
+					return myText.Substring(startPosition, l).Trim();
 				}
 			}
 
@@ -581,73 +610,29 @@ namespace OpenBve.Formats.DirectX
 		private int currentLevel = 0;
 
 		private readonly List<int> cachedIntegers = new List<int>();
+		private readonly List<uint> cachedUInts = new List<uint>();
 		private readonly List<double> cachedFloats = new List<double>();
 		private readonly List<string> cachedStrings = new List<string>();
 
-		public BinaryBlock(byte[] bytes, TemplateID token)
+		public BinaryBlock(byte[] bytes, int floatingPointSize) : base(floatingPointSize)
 		{
 			myStream = new MemoryStream(bytes);
 			myReader = new BinaryReader(myStream);
 			while (myStream.Position < myStream.Length)
 			{
-				string currentToken = getNextToken();
+				long startPosition = myStream.Position;
+				string currentToken = GetNextToken();
 				switch (currentToken)
 				{
 					case "int_list":
-						int integerCount = (int) myReader.ReadInt32();
-						for (int i = 0; i < integerCount; i++)
-						{
-							cachedIntegers.Add(myReader.ReadInt16());
-						}
-						myStream.Position += integerCount * 4;
-						break;
-					case "float_list":
-						int floatCount = (int) myReader.ReadInt32();
-						switch (FloatingPointSize)
-						{
-							case 32:
-								for (int i = 0; i < floatCount; i++)
-								{
-									cachedFloats.Add(myReader.ReadSingle());
-								}
-
-								break;
-							case 64:
-								for (int i = 0; i < floatCount; i++)
-								{
-									cachedFloats.Add(myReader.ReadDouble());
-								}
-								break;
-							default:
-								throw new Exception("Unsupported Floating Point Size");
-						}
-						break;
-
-				}
-			}
-		}
-
-		public BinaryBlock(byte[] bytes, int floatingPointSize)
-		{
-			FloatingPointSize = floatingPointSize;
-			myStream = new MemoryStream(bytes);
-			myReader = new BinaryReader(myStream);
-			long startPosition;
-			while (myStream.Position < myStream.Length)
-			{
-				startPosition = myStream.Position;
-				string currentToken = getNextToken();
-				switch (currentToken)
-				{
-					case "int_list":
-						int integerCount = (int) myReader.ReadInt32();
+						int integerCount = myReader.ReadInt32();
 						for (int i = 0; i < integerCount; i++)
 						{
 							cachedIntegers.Add(myReader.ReadInt16());
 						}
 						break;
 					case "float_list":
-						int floatCount = (int) myReader.ReadInt32();
+						int floatCount = myReader.ReadInt32();
 						switch (FloatingPointSize)
 						{
 							case 32:
@@ -669,8 +654,7 @@ namespace OpenBve.Formats.DirectX
 						break;
 					default:
 						cachedStrings.Add(currentToken);
-						TemplateID newBlockToken;
-						if (Enum.TryParse(currentToken, true, out newBlockToken) && newBlockToken != TemplateID.Header)
+						if (Enum.TryParse(currentToken, true, out TemplateID newBlockToken) && newBlockToken != TemplateID.Header)
 						{
 							myStream.Position = startPosition;
 							return;
@@ -681,28 +665,35 @@ namespace OpenBve.Formats.DirectX
 			}
 		}
 
-		private BinaryBlock(byte[] bytes, TemplateID token, int floatingPointSize)
+		private BinaryBlock(byte[] bytes, string label, TemplateID token, int floatingPointSize) : base(floatingPointSize)
 		{
-			FloatingPointSize = floatingPointSize;
 			myStream = new MemoryStream(bytes);
 			myReader = new BinaryReader(myStream);
+			Label = label;
 			Token = token;
-			long startPosition;
 			while (myStream.Position < myStream.Length)
 			{
-				startPosition = myStream.Position;
-				string currentToken = getNextToken();
+				long startPosition = myStream.Position;
+				string currentToken = GetNextToken();
 				switch (currentToken)
 				{
 					case "int_list":
-						int integerCount = (int) myReader.ReadInt32();
+						int integerCount = myReader.ReadInt32();
 						for (int i = 0; i < integerCount; i++)
 						{
-							cachedIntegers.Add(myReader.ReadInt32());
+							if (token == TemplateID.DeclData)
+							{
+								cachedUInts.Add(myReader.ReadUInt32());
+							}
+							else
+							{
+								cachedIntegers.Add(myReader.ReadInt32());
+							}
+								
 						}
 						break;
 					case "float_list":
-						int floatCount = (int) myReader.ReadInt32();
+						int floatCount = myReader.ReadInt32();
 						switch (FloatingPointSize)
 						{
 							case 32:
@@ -724,9 +715,9 @@ namespace OpenBve.Formats.DirectX
 						break;
 					default:
 						cachedStrings.Add(currentToken);
-						TemplateID newBlockToken;
-						if (Enum.TryParse(currentToken, true, out newBlockToken))
+						if (Enum.TryParse(currentToken, true, out TemplateID _))
 						{
+							// Block encloses another block, nothing further to add to the cache
 							myStream.Position = startPosition;
 							return;
 						}
@@ -736,7 +727,7 @@ namespace OpenBve.Formats.DirectX
 			}
 		}
 
-		public override int ReadUInt()
+		public override int ReadInt()
 		{
 			int u = cachedIntegers[0];
 			cachedIntegers.RemoveAt(0);
@@ -748,6 +739,13 @@ namespace OpenBve.Formats.DirectX
 			ushort u = (ushort)cachedIntegers[0];
 			cachedIntegers.RemoveAt(0);
 			return u;
+		}
+
+		public override uint ReadDword()
+		{
+			uint ui = cachedUInts[0];
+			cachedUInts.RemoveAt(0);
+			return ui;
 		}
 
 		public override float ReadSingle()
@@ -807,19 +805,17 @@ namespace OpenBve.Formats.DirectX
 
 		public override Block ReadSubBlock()
 		{
-			string blockName = getNextToken();
-			TemplateID newToken;
-			
-			if (!Enum.TryParse(blockName, true, out newToken))
+			string blockName = GetNextToken();
+
+			if (!Enum.TryParse(blockName, true, out TemplateID newToken))
 			{
 				throw new Exception("Unable to parse " + blockName + " into a valid token.");
 			}
 
 			long blockStart = 0;
-			int integerCount, floatCount;
 			while (myStream.Position < myStream.Length)
 			{
-				string currentToken = getNextToken();
+				string currentToken = GetNextToken();
 				
 				switch (currentToken)
 				{
@@ -837,16 +833,16 @@ namespace OpenBve.Formats.DirectX
 							long newBlockLength = myStream.Position - blockStart;
 							myStream.Position -= newBlockLength;
 							byte[] newBlockBytes = myReader.ReadBytes((int)newBlockLength);
-							BinaryBlock b = new BinaryBlock(newBlockBytes, newToken, FloatingPointSize);
+							BinaryBlock b = new BinaryBlock(newBlockBytes, Label, newToken, FloatingPointSize);
 							return b;
 						}
 						break;
 					case "int_list":
-						integerCount = myReader.ReadInt32();
+						long integerCount = myReader.ReadInt32();
 						myStream.Position += integerCount * 4;
 						break;
 					case "float_list":
-						floatCount = myReader.ReadInt32();
+						long floatCount = myReader.ReadInt32();
 						switch (FloatingPointSize)
 						{
 							case 32:
@@ -859,12 +855,18 @@ namespace OpenBve.Formats.DirectX
 								throw new Exception("Unsupported Floating Point Size");
 						}
 						break;
+					default:
+						if (currentLevel == 0 && newToken == TemplateID.Material)
+						{
+							Label = currentToken;
+						}
+						break;
 				}
 			}
 			throw new Exception("Reached the end of the binary block, but did not find the block terminator.");
 		}
 
-		private string getNextToken()
+		private string GetNextToken()
 		{
 			TokenID token = (TokenID)myReader.ReadInt16();
 			int byteCount;
@@ -882,7 +884,7 @@ namespace OpenBve.Formats.DirectX
 					{
 						return string.Empty;
 					}
-					byteCount = (int)myReader.ReadInt32();
+					byteCount = myReader.ReadInt32();
 					byte[] nameBytes = myReader.ReadBytes(byteCount);
 					return Encoding.ASCII.GetString(nameBytes);
 				case TokenID.STRING:
@@ -890,7 +892,7 @@ namespace OpenBve.Formats.DirectX
 					{
 						return string.Empty;
 					}
-					byteCount = (int)myReader.ReadInt32();
+					byteCount = myReader.ReadInt32();
 					if (myStream.Length - (myStream.Position + byteCount) < 4)
 					{
 						return string.Empty;
@@ -971,6 +973,7 @@ namespace OpenBve.Formats.DirectX
 
 		public void Dispose()
 		{
+			GC.SuppressFinalize(this);
 			Dispose(true);
 		}
 

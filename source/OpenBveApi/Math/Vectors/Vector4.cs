@@ -1,4 +1,5 @@
 ﻿using System;
+// ReSharper disable MergeCastWithTypeCheck
 
 namespace OpenBveApi.Math
 {
@@ -20,10 +21,7 @@ namespace OpenBveApi.Math
 		/// <summary>A Vector3 representing the X Y and Z components</summary>
 		public Vector3 Xyz
 		{
-			get
-			{
-				return new Vector3(X, Y, Z);
-			}
+			get => new Vector3(X, Y, Z);
 			set
 			{
 				X = value.X;
@@ -77,7 +75,19 @@ namespace OpenBveApi.Math
 			a.W += b.W;
 			return a;
 		}
-		
+
+		/// <summary>Adds two vectors.</summary>
+		/// <param name="a">The first vector.</param>
+		/// <param name="b">The second vector.</param>
+		/// <returns>The sum of the two vectors.</returns>
+		public static Vector4 operator +(Vector4 a, Vector3 b)
+		{
+			a.X += b.X;
+			a.Y += b.Y;
+			a.Z += b.Z;
+			return a;
+		}
+
 		/// <summary>Adds a vector and a scalar.</summary>
 		/// <param name="a">The vector.</param>
 		/// <param name="b">The scalar.</param>
@@ -115,7 +125,19 @@ namespace OpenBveApi.Math
 			a.W -= b.W;
 			return a;
 		}
-		
+
+		/// <summary>Subtracts two vectors.</summary>
+		/// <param name="a">The first vector.</param>
+		/// <param name="b">The second vector.</param>
+		/// <returns>The difference of the two vectors.</returns>
+		public static Vector4 operator -(Vector4 a, Vector3 b)
+		{
+			a.X -= b.X;
+			a.Y -= b.Y;
+			a.Z -= b.Z;
+			return a;
+		}
+
 		/// <summary>Subtracts a scalar from a vector.</summary>
 		/// <param name="a">The vector.</param>
 		/// <param name="b">The scalar.</param>
@@ -166,6 +188,19 @@ namespace OpenBveApi.Math
 			a.W *= b.W;
 			return a;
 		}
+
+		/// <summary>Multiplies two vectors.</summary>
+		/// <param name="a">The first vector.</param>
+		/// <param name="b">The second vector.</param>
+		/// <returns>The product of the two vectors.</returns>
+		public static Vector4 operator *(Vector4 a, Vector3 b)
+		{
+			a.X *= b.X;
+			a.Y *= b.Y;
+			a.Z *= b.Z;
+			return a;
+		}
+
 		/// <summary>Multiplies a vector and a scalar.</summary>
 		/// <param name="a">The vector.</param>
 		/// <param name="b">The scalar.</param>
@@ -209,7 +244,25 @@ namespace OpenBveApi.Math
 			a.W /= b.W;
 			return a;
 		}
-		
+
+		/// <summary>Divides two vectors.</summary>
+		/// <param name="a">The first vector.</param>
+		/// <param name="b">The second vector.</param>
+		/// <returns>The quotient of the two vectors.</returns>
+		/// <exception cref="System.DivideByZeroException">Raised when any member of the second vector is zero.</exception>
+		public static Vector4 operator /(Vector4 a, Vector3 b)
+		{
+			if (b.X == 0.0 | b.Y == 0.0 | b.Z == 0.0)
+			{
+				throw new DivideByZeroException();
+			}
+
+			a.X /= b.X;
+			a.Y /= b.Y;
+			a.Z /= b.Z;
+			return a;
+		}
+
 		/// <summary>Divides a vector by a scalar.</summary>
 		/// <param name="a">The vector.</param>
 		/// <param name="b">The scalar.</param>
@@ -317,8 +370,7 @@ namespace OpenBveApi.Math
 		/// <returns>The transformed vector</returns>
 		public static Vector4 Transform(Vector4 vec, Matrix4D mat)
 		{
-			Vector4 result;
-			Transform(ref vec, ref mat, out result);
+			Transform(ref vec, ref mat, out Vector4 result);
 			return result;
 		}
 

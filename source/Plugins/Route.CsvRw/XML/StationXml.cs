@@ -10,6 +10,7 @@ using OpenBveApi.Trains;
 using RouteManager2;
 using RouteManager2.SignalManager;
 using RouteManager2.Stations;
+using Path = OpenBveApi.Path;
 
 namespace CsvRwRouteParser
 {
@@ -29,7 +30,7 @@ namespace CsvRwRouteParser
 			XmlDocument currentXML = new XmlDocument();
 			//Load the object's XML file 
 			currentXML.Load(fileName);
-			string Path = System.IO.Path.GetDirectoryName(fileName);
+			string filePath = Path.GetDirectoryName(fileName);
 			//Check for null
 			if (currentXML.DocumentElement != null)
 			{
@@ -43,11 +44,14 @@ namespace CsvRwRouteParser
 						{
 							foreach (XmlNode c in n.ChildNodes)
 							{
-
-								//string[] Arguments = c.InnerText.Split(new[] { ',' });
-								switch (c.Name.ToLowerInvariant())
+								if (!Enum.TryParse(c.Name, true, out StationXmlCommand parsedCommand))
 								{
-									case "name":
+									Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Unknown entry " + c.Name + " encountered in XML file " + fileName);
+									continue;
+								}
+								switch (parsedCommand)
+								{
+									case StationXmlCommand.Name:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											station.Name = c.InnerText;
@@ -57,7 +61,7 @@ namespace CsvRwRouteParser
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Station name was empty in XML file " + fileName);
 										}
 										break;
-									case "arrivaltime":
+									case StationXmlCommand.ArrivalTime:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											if (!Parser.TryParseTime(c.InnerText, out station.ArrivalTime))
@@ -66,7 +70,7 @@ namespace CsvRwRouteParser
 											}
 										}
 										break;
-									case "departuretime":
+									case StationXmlCommand.DepartureTime:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											if (!Parser.TryParseTime(c.InnerText, out station.DepartureTime))
@@ -75,7 +79,7 @@ namespace CsvRwRouteParser
 											}
 										}
 										break;
-									case "type":
+									case StationXmlCommand.Type:
 										switch (c.InnerText.ToLowerInvariant())
 										{
 											case "c":
@@ -95,7 +99,7 @@ namespace CsvRwRouteParser
 												break;
 										}
 										break;
-									case "jumpindex":
+									case StationXmlCommand.JumpIndex:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											if (!NumberFormats.TryParseIntVb6(c.InnerText, out station.JumpIndex))
@@ -110,7 +114,7 @@ namespace CsvRwRouteParser
 											station.Type = StationType.Normal;
 										}
 										break;
-									case "passalarm":
+									case StationXmlCommand.PassAlarm:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											if (c.InnerText.ToLowerInvariant() == "1" || c.InnerText.ToLowerInvariant() == "true")
@@ -123,16 +127,16 @@ namespace CsvRwRouteParser
 											}
 										}
 										break;
-									case "doors":
+									case StationXmlCommand.Doors:
 										Direction door = Direction.Both;
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
-											door = Parser.FindDirection(c.InnerText, "StationXML:Doors", false, -1, System.IO.Path.GetFileName(fileName));
+											door = Parser.FindDirection(c.InnerText, "StationXML:Doors", false, -1, Path.GetFileName(fileName));
 										}
 										station.OpenLeftDoors = door == Direction.Left | door == Direction.Both;
 										station.OpenRightDoors = door == Direction.Right | door == Direction.Both;
 										break;
-									case "forcedredsignal":
+									case StationXmlCommand.ForcedRedSignal:
 										if (!string.IsNullOrEmpty(c.InnerText))
 										{
 											if (c.InnerText.ToLowerInvariant() == "1" || c.InnerText.ToLowerInvariant() == "true")
@@ -145,7 +149,7 @@ namespace CsvRwRouteParser
 											}
 										}
 										break;
-									case "system":
+									case StationXmlCommand.System:
 										switch (c.InnerText.ToLowerInvariant())
 										{
 											case "0":
@@ -162,7 +166,7 @@ namespace CsvRwRouteParser
 												break;
 										}
 										break;
-									case "arrivalsound":
+									case StationXmlCommand.ArrivalSound:
 										string arrSound = string.Empty;
 										double arrRadius = 30.0;
 										if (!c.ChildNodes.OfType<XmlElement>().Any())
@@ -174,7 +178,7 @@ namespace CsvRwRouteParser
 													case "filename":
 														try
 														{
-															arrSound = OpenBveApi.Path.CombineFile(Path, cc.InnerText);
+															arrSound = Path.CombineFile(filePath, cc.InnerText);
 														}
 														catch
 														{
@@ -194,7 +198,7 @@ namespace CsvRwRouteParser
 										{
 											try
 											{
-												arrSound = OpenBveApi.Path.CombineFile(Path, c.InnerText);
+												arrSound = Path.CombineFile(filePath, c.InnerText);
 											}
 											catch
 											{
@@ -211,9 +215,8 @@ namespace CsvRwRouteParser
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Arrival sound file does not exist in XML file " + fileName);
 										}
 										break;
-									case "stopduration":
-										double stopDuration;
-										if (!double.TryParse(c.InnerText, out stopDuration))
+									case StationXmlCommand.StopDuration:
+										if (!double.TryParse(c.InnerText, out double stopDuration))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Stop duration is invalid in XML file " + fileName);
 										}
@@ -226,9 +229,8 @@ namespace CsvRwRouteParser
 											station.StopTime = stopDuration;
 										}
 										break;
-									case "passengerratio":
-										double ratio;
-										if (!double.TryParse(c.InnerText, out ratio))
+									case StationXmlCommand.PassengerRatio:
+										if (!double.TryParse(c.InnerText, out double ratio))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Passenger ratio is invalid in XML file " + fileName);
 										}
@@ -242,7 +244,7 @@ namespace CsvRwRouteParser
 											station.PassengerRatio = ratio * 0.01;
 										}
 										break;
-									case "departuresound":
+									case StationXmlCommand.DepartureSound:
 										string depSound = string.Empty;
 										double depRadius = 30.0;
 										if (!c.ChildNodes.OfType<XmlElement>().Any())
@@ -254,7 +256,7 @@ namespace CsvRwRouteParser
 													case "filename":
 														try
 														{
-															depSound = OpenBveApi.Path.CombineFile(Path, cc.InnerText);
+															depSound = Path.CombineFile(filePath, cc.InnerText);
 														}
 														catch
 														{
@@ -274,7 +276,7 @@ namespace CsvRwRouteParser
 										{
 											try
 											{
-												depSound = OpenBveApi.Path.CombineFile(Path, c.InnerText);
+												depSound = Path.CombineFile(filePath, c.InnerText);
 											}
 											catch
 											{
@@ -291,7 +293,7 @@ namespace CsvRwRouteParser
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Departure sound file does not exist in XML file " + fileName);
 										}
 										break;
-									case "timetableindex":
+									case StationXmlCommand.TimetableIndex:
 										if (!PreviewOnly)
 										{
 											int ttidx = -1;
@@ -329,9 +331,8 @@ namespace CsvRwRouteParser
 											}
 										}
 										break;
-									case "reopendoor":
-										double reopenDoor;
-										if (!double.TryParse(c.InnerText, out reopenDoor))
+									case StationXmlCommand.ReOpenDoor:
+										if (!double.TryParse(c.InnerText, out double reopenDoor))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "ReopenDoor is invalid in XML file " + fileName);
 											reopenDoor = 0.0;
@@ -346,9 +347,8 @@ namespace CsvRwRouteParser
 										}
 										station.ReopenDoor = 0.01 * reopenDoor;
 										break;
-									case "reopenstationlimit":
-										int reopenStationLimit;
-										if (!int.TryParse(c.InnerText, out reopenStationLimit))
+									case StationXmlCommand.ReOpenStationLimit:
+										if (!int.TryParse(c.InnerText, out int reopenStationLimit))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "ReopenStationLimit is invalid in XML file " + fileName);
 											reopenStationLimit = 5;
@@ -363,9 +363,8 @@ namespace CsvRwRouteParser
 										}
 										station.ReopenStationLimit = reopenStationLimit;
 										break;
-									case "interferenceindoor":
-										double interferenceInDoor;
-										if (!double.TryParse(c.InnerText, out interferenceInDoor))
+									case StationXmlCommand.InterferenceInDoor:
+										if (!double.TryParse(c.InnerText, out double interferenceInDoor))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "InterferenceInDoor is invalid in XML file " + fileName);
 											interferenceInDoor = 0.0;
@@ -380,9 +379,8 @@ namespace CsvRwRouteParser
 										}
 										station.InterferenceInDoor = interferenceInDoor;
 										break;
-									case "maxinterferingobjectrate":
-										int maxInterferingObjectRate;
-										if (!int.TryParse(c.InnerText, out maxInterferingObjectRate))
+									case StationXmlCommand.MaxInterferingObjectRate:
+										if (!int.TryParse(c.InnerText, out int maxInterferingObjectRate))
 										{
 											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "MaxInterferingObjectRate is invalid in XML file " + fileName);
 											maxInterferingObjectRate = Plugin.RandomNumberGenerator.Next(1, 99);
@@ -397,7 +395,7 @@ namespace CsvRwRouteParser
 										}
 										station.MaxInterferingObjectRate = maxInterferingObjectRate;
 										break;
-									case "requeststop":
+									case StationXmlCommand.RequestStop:
 										station.Type = StationType.RequestStop;
 										station.StopMode = StationStopMode.AllRequestStop;
 										foreach (XmlNode cc in c.ChildNodes)
@@ -425,8 +423,7 @@ namespace CsvRwRouteParser
 												case "distance":
 													if (!string.IsNullOrEmpty(cc.InnerText))
 													{
-														double d;
-														if (!NumberFormats.TryParseDoubleVb6(cc.InnerText, out d))
+														if (!NumberFormats.TryParseDoubleVb6(cc.InnerText, out double d))
 														{
 															Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Request stop distance is invalid in XML file " + fileName);
 															break;
@@ -477,7 +474,7 @@ namespace CsvRwRouteParser
 																		stopRequest.Late.StopMessage = cd.InnerText;
 																	}
 																	break;
-																case "#text":
+																case "text":
 																	stopRequest.Early.StopMessage = cc.InnerText;
 																	stopRequest.OnTime.StopMessage = cc.InnerText;
 																	stopRequest.Late.StopMessage = cc.InnerText;
@@ -511,7 +508,7 @@ namespace CsvRwRouteParser
 																		stopRequest.Late.PassMessage = cd.InnerText;
 																	}
 																	break;
-																case "#text":
+																case "text":
 																	stopRequest.Early.PassMessage = cc.InnerText;
 																	stopRequest.OnTime.PassMessage = cc.InnerText;
 																	stopRequest.Late.PassMessage = cc.InnerText;
@@ -554,7 +551,7 @@ namespace CsvRwRouteParser
 																	}
 																}
 																break;
-															case "#text":
+															case "text":
 																if (!NumberFormats.TryParseIntVb6(cd.InnerText, out stopRequest.OnTime.Probability))
 																{
 

@@ -1,6 +1,4 @@
-﻿using System;
 using System.Linq;
-using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
@@ -32,6 +30,11 @@ namespace TrainEditor2.ViewModels.Trains
 		}
 
 		internal ReadOnlyReactivePropertySlim<CarViewModel> SelectedCar
+		{
+			get;
+		}
+
+		internal ReadOnlyReactivePropertySlim<ParticleSourceViewModel> SelectedParticleSource
 		{
 			get;
 		}
@@ -72,17 +75,14 @@ namespace TrainEditor2.ViewModels.Trains
 			Cars = train.Cars
 				.ToReadOnlyReactiveCollection(x =>
 				{
-					MotorCar motorCar = x as MotorCar;
-					TrailerCar trailerCar = x as TrailerCar;
-
 					CarViewModel viewModel = null;
 
-					if (motorCar != null)
+					if (x is MotorCar motorCar)
 					{
 						viewModel = new MotorCarViewModel(motorCar, train);
 					}
 
-					if (trailerCar != null)
+					if (x is TrailerCar trailerCar)
 					{
 						viewModel = new TrailerCarViewModel(trailerCar);
 					}
@@ -101,6 +101,14 @@ namespace TrainEditor2.ViewModels.Trains
 				.Select(x => Cars.FirstOrDefault(y => y.Model == x.Tag))
 				.ToReadOnlyReactivePropertySlim()
 				.AddTo(disposable);
+
+			SelectedParticleSource = app
+				.ObserveProperty(x => x.SelectedItem)
+				.Where(x => x != null)
+				.Select(x => Cars.FirstOrDefault(y => y.Model == x.SecondaryTag)?.ParticleSources.FirstOrDefault(t => t.Model == x.Tag))
+				.ToReadOnlyReactivePropertySlim()
+				.AddTo(disposable);
+
 
 			SelectedCoupler = app
 				.ObserveProperty(x => x.SelectedItem)

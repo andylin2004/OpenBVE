@@ -1,7 +1,10 @@
+#pragma warning disable CS0618 // Type or member is obsolete
+
 using System;
 using System.Threading;
 using OpenBveApi;
 using OpenBveApi.Colors;
+using OpenBveApi.Hosts;
 using OpenBveApi.Input;
 using OpenBveApi.Interface;
 using OpenBveApi.Runtime;
@@ -46,19 +49,7 @@ namespace TrainManager.SafetySystems
 
 		private readonly IRuntime BaseApi;
 
-		private IRuntime Api
-		{
-			get
-			{
-				if (RawApi != null)
-				{
-					return RawApi;
-				}
-				return BaseApi;
-			}
-		}
-
-		private readonly IRawRuntime RawApi;
+		private IRuntime Api => BaseApi;
 
 		/// <summary>An array containing all of the plugin's current sound handles</summary>
 		private SoundHandleEx[] SoundHandles;
@@ -87,16 +78,9 @@ namespace TrainManager.SafetySystems
 			LastAspects = new int[] { };
 			LastSection = -1;
 			LastException = null;
-			PluginFolder = System.IO.Path.GetDirectoryName(pluginFile);
+			PluginFolder = Path.GetDirectoryName(pluginFile);
 			TrainFolder = trainFolder;
-			if (api is IRawRuntime rawRuntime)
-			{
-				RawApi = rawRuntime;
-			}
-			else if(api is IRuntime runtime)
-			{
-				BaseApi = runtime;
-			}
+			BaseApi = (IRuntime)api;
 			
 			SoundHandles = new SoundHandleEx[16];
 			SoundHandlesCount = 0;
@@ -118,7 +102,7 @@ namespace TrainManager.SafetySystems
 				{
 					//TTC plugin, broken when multi-threading is used
 					success = false;
-					properties.FailureReason = "This plugin does not function correctly with the current version of " + Translations.GetInterfaceString("program_title") + ". Please ask the plugin developer to fix this.";
+					properties.FailureReason = "This plugin does not function correctly with the current version of " + Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"program","title"}) + ". Please ask the plugin developer to fix this.";
 				}
 				else
 				{
@@ -137,7 +121,7 @@ namespace TrainManager.SafetySystems
 				Api.Initialize(mode);
 #if !DEBUG
 				} catch (Exception ex) {
-					base.LastException = ex;
+					LastException = ex;
 					throw;
 				}
 #endif
@@ -164,7 +148,7 @@ namespace TrainManager.SafetySystems
 			Api.Unload();
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -178,7 +162,7 @@ namespace TrainManager.SafetySystems
 			Api.Initialize(mode);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -211,7 +195,7 @@ namespace TrainManager.SafetySystems
 			}
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -225,7 +209,7 @@ namespace TrainManager.SafetySystems
 			Api.SetReverser(reverser);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -239,7 +223,7 @@ namespace TrainManager.SafetySystems
 			Api.SetPower(powerNotch);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -253,7 +237,7 @@ namespace TrainManager.SafetySystems
 			Api.SetBrake(brakeNotch);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -267,7 +251,7 @@ namespace TrainManager.SafetySystems
 			Api.KeyDown(key);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -281,7 +265,7 @@ namespace TrainManager.SafetySystems
 			Api.KeyUp(key);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -295,7 +279,7 @@ namespace TrainManager.SafetySystems
 			Api.HornBlow(type);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -309,7 +293,7 @@ namespace TrainManager.SafetySystems
 			Api.DoorChange(oldState, newState);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -323,7 +307,7 @@ namespace TrainManager.SafetySystems
 			Api.SetSignal(signal);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -337,7 +321,7 @@ namespace TrainManager.SafetySystems
 			Api.SetBeacon(beacon);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -351,7 +335,7 @@ namespace TrainManager.SafetySystems
 			Api.PerformAI(data);
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -362,14 +346,33 @@ namespace TrainManager.SafetySystems
 #if !DEBUG
 			try {
 #endif
-			if (RawApi != null)
+			if (BaseApi is IRawRuntime rawRuntime)
 			{
-				RawApi.TouchEvent(groupIndex, commandIndex);
+				rawRuntime.TouchEvent(groupIndex, commandIndex);
+				
 			}
-			
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
+				throw;
+			}
+#endif
+		}
+
+		public override void TouchEvent(int groupIndex, Translations.Command command)
+		{
+#if !DEBUG
+			try {
+#endif
+			if (BaseApi is IRawRuntime2 rawRuntime2)
+			{
+				rawRuntime2.TouchEvent(groupIndex, command);
+			}
+				
+
+#if !DEBUG
+			} catch (Exception ex) {
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -380,14 +383,14 @@ namespace TrainManager.SafetySystems
 #if !DEBUG
 			try {
 #endif
-			if (RawApi != null)
+			if (BaseApi is IRawRuntime rawRuntime)
 			{
-				RawApi.RawKeyDown(key);
+				rawRuntime.RawKeyDown(key);
 			}
 			
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -398,14 +401,14 @@ namespace TrainManager.SafetySystems
 #if !DEBUG
 			try {
 #endif
-			if (RawApi != null)
+			if (BaseApi is IRawRuntime rawRuntime)
 			{
-				RawApi.RawKeyUp(key);
+				rawRuntime.RawKeyUp(key);
 			}
-			
+
 #if !DEBUG
 			} catch (Exception ex) {
-				base.LastException = ex;
+				LastException = ex;
 				throw;
 			}
 #endif
@@ -417,7 +420,7 @@ namespace TrainManager.SafetySystems
 		/// <param name="Time">The time in seconds for which to display the message</param>
 		internal void AddInterfaceMessage(string Message, MessageColor Color, double Time)
 		{
-			TrainManagerBase.currentHost.AddMessage(Message, MessageDependency.Plugin, GameMode.Expert, Color, TrainManagerBase.currentHost.InGameTime + Time, null);
+			TrainManagerBase.currentHost.AddMessage(Message, MessageDependency.Plugin, GameMode.Expert, Color, Time, null);
 		}
 
 		/// <summary>May be called from a .Net plugin, in order to add a score to the post-game log</summary>

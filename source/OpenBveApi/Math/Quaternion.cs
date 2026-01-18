@@ -1,4 +1,5 @@
-﻿/*
+﻿#pragma warning disable IDE0017
+/*
 Some Matrix math code derived from OpenTK-
 
 Copyright (c) 2006 - 2008 The Open Toolkit library.
@@ -19,14 +20,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#pragma warning disable 660,661
+#pragma warning disable 660, 661
+using System;
 using System.Runtime.InteropServices;
 
 namespace OpenBveApi.Math
 {
 	/// <summary>Represents a Quaternion</summary>
 	[StructLayout(LayoutKind.Sequential)]
-	public struct Quaternion
+	public struct Quaternion : IEquatable<Quaternion>
 	{
 		/// <summary>The X, Y and Z components</summary>
 		public Vector3 Xyz;
@@ -57,40 +59,22 @@ namespace OpenBveApi.Math
 		/// <summary>Gets / sets the X component</summary>
 		public double X
 		{
-			get
-			{
-				return Xyz.X;
-			}
-			set
-			{
-				Xyz.X = value;
-			}
+			get => Xyz.X;
+			set => Xyz.X = value;
 		}
 
 		/// <summary>Gets / sets the Y component</summary>
 		public double Y
 		{
-			get
-			{
-				return Xyz.Y;
-			}
-			set
-			{
-				Xyz.Y = value;
-			}
+			get => Xyz.Y;
+			set => Xyz.Y = value;
 		}
 
 		/// <summary>Gets / sets the Z component</summary>
 		public double Z
 		{
-			get
-			{
-				return Xyz.Z;
-			}
-			set
-			{
-				Xyz.Z = value;
-			}
+			get => Xyz.Z;
+			set => Xyz.Z = value;
 		}
 
 		/// <summary>Creates a new quaternion describing the rotation between two vectors</summary>
@@ -139,9 +123,9 @@ namespace OpenBveApi.Math
 				q.Normalize();
 			}
 
-			Vector4 result = new Vector4();
 
-			result.W = 2.0f * (float)System.Math.Acos(q.W); // angle
+            Vector4 result = new Vector4();
+            result.W = 2.0f * (float)System.Math.Acos(q.W); // angle
 			float den = (float)System.Math.Sqrt(1.0 - q.W * q.W);
 			if (den > 0.0001f)
 			{
@@ -286,10 +270,10 @@ namespace OpenBveApi.Math
         /// <param name="scalar">The scalar</param>
         public void Multiply(double scalar)
         {
-            W = W * scalar;
-            X = X * scalar;
-            Y = Y * scalar;
-            Z = Z * scalar;
+            W *= scalar;
+            X *= scalar;
+            Y *= scalar;
+            Z *= scalar;
         }
 
         /// <summary>
@@ -398,6 +382,166 @@ namespace OpenBveApi.Math
 
 		/// <summary>A quaterion representing an identity matrix.</summary>
 		public static readonly Quaternion Identity = new Quaternion(0, 0, 0, 1);
+
+		/// <summary>A quaterion representing an identity matrix in DirectX format.</summary>
+		public static readonly Quaternion DirectXIdentity = new Quaternion(0, 0, 0, -1);
+
+		/// <summary>
+		/// Do Spherical linear interpolation between two quaternions 
+		/// </summary>
+		/// <param name="q1">The first quaternion</param>
+		/// <param name="q2">The second quaternion</param>
+		/// <param name="blend">The blend factor</param>
+		/// <returns>A smooth blend between the given quaternions</returns>
+		public static Quaternion Slerp(Quaternion q1, Quaternion q2, float blend)
+		{
+			// if either input is zero, return the other.
+			if (q1.LengthSquared == 0.0f)
+			{
+				if (q2.LengthSquared == 0.0f)
+				{
+					return Identity;
+				}
+				return q2;
+			}
+			else if (q2.LengthSquared == 0.0f)
+			{
+				return q1;
+			}
+
+
+			double cosHalfAngle = q1.W * q2.W + Vector3.Dot(q1.Xyz, q2.Xyz);
+
+			if (cosHalfAngle >= 1.0f || cosHalfAngle <= -1.0f)
+			{
+				// angle = 0.0f, so just return one input.
+				return q1;
+			}
+			else if (cosHalfAngle < 0.0f)
+			{
+				q2.Xyz = -q2.Xyz;
+				q2.W = -q2.W;
+				cosHalfAngle = -cosHalfAngle;
+			}
+
+			float blendA;
+			float blendB;
+			if (cosHalfAngle < 0.99f)
+			{
+				// do proper slerp for big angles
+				float halfAngle = (float)System.Math.Acos(cosHalfAngle);
+				float sinHalfAngle = (float)System.Math.Sin(halfAngle);
+				float oneOverSinHalfAngle = 1.0f / sinHalfAngle;
+				blendA = (float)System.Math.Sin(halfAngle * (1.0f - blend)) * oneOverSinHalfAngle;
+				blendB = (float)System.Math.Sin(halfAngle * blend) * oneOverSinHalfAngle;
+			}
+			else
+			{
+				// do lerp if angle is really small.
+				blendA = 1.0f - blend;
+				blendB = blend;
+			}
+
+			Quaternion result = new Quaternion(blendA * q1.Xyz + blendB * q2.Xyz, blendA * q1.W + blendB * q2.W);
+			if (result.LengthSquared > 0.0f)
+			{
+				result.Normalize();
+				return result;
+			}
+			return Identity;
+		}
+
+
+		/// <summary>
+		/// Convert this instance to an Euler angle representation.
+		/// </summary>
+		/// <returns>The Euler angles in radians.</returns>
+		public Vector3 ToEulerAngles()
+		{
+			/*
+            reference
+            http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+            http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/
+            */
+
+			var q = this;
+
+			Vector3 eulerAngles;
+
+			// Threshold for the singularities found at the north/south poles.
+			const float SINGULARITY_THRESHOLD = 0.4999995f;
+
+			var sqw = q.W * q.W;
+			var sqx = q.X * q.X;
+			var sqy = q.Y * q.Y;
+			var sqz = q.Z * q.Z;
+			var unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
+			var singularityTest = (q.X * q.Z) + (q.W * q.Y);
+
+			double PiOver2 = System.Math.PI / 2;
+
+			if (singularityTest > SINGULARITY_THRESHOLD * unit)
+			{
+				eulerAngles.Z = 2 * System.Math.Atan2(q.X, q.W);
+				eulerAngles.Y = PiOver2;
+				eulerAngles.X = 0;
+			}
+			else if (singularityTest < -SINGULARITY_THRESHOLD * unit)
+			{
+				eulerAngles.Z = -2 * System.Math.Atan2(q.X, q.W);
+				eulerAngles.Y = -PiOver2;
+				eulerAngles.X = 0;
+			}
+			else
+			{
+				eulerAngles.Z = System.Math.Atan2(2 * ((q.W * q.Z) - (q.X * q.Y)), sqw + sqx - sqy - sqz);
+				eulerAngles.Y = System.Math.Asin(2 * singularityTest / unit);
+				eulerAngles.X = System.Math.Atan2(2 * ((q.W * q.X) - (q.Y * q.Z)), sqw - sqx - sqy + sqz);
+			}
+
+			return eulerAngles;
+		}
+
+		/// <summary>
+		/// Builds a Quaternion from the given euler angles in radians.
+		/// The rotations will get applied in following order:
+		/// 1. Around X, 2. Around Y, 3. Around Z.
+		/// </summary>
+		/// <param name="eulerAngles">The counterclockwise euler angles a vector.</param>
+		public static Quaternion FromEulerAngles(Vector3 eulerAngles)
+		{
+			var c1 = System.Math.Cos(eulerAngles.X * 0.5f);
+			var c2 = System.Math.Cos(eulerAngles.Y * 0.5f);
+			var c3 = System.Math.Cos(eulerAngles.Z * 0.5f);
+			var s1 = System.Math.Sin(eulerAngles.X * 0.5f);
+			var s2 = System.Math.Sin(eulerAngles.Y * 0.5f);
+			var s3 = System.Math.Sin(eulerAngles.Z * 0.5f);
+			Quaternion q = new Quaternion((s1 * c2 * c3) + (c1 * s2 * s3), (c1 * s2 * c3) - (s1 * c2 * s3), (c1 * c2 * s3) + (s1 * s2 * c3), (c1 * c2 * c3) - (s1 * s2 * s3));
+			return q;
+		}
+
+		/// <summary>Tests whether this Quaternion is equal to another</summary>
+		/// <param name="other">The other quaternion</param>
+		public bool Equals(Quaternion other)
+		{
+			return Xyz.Equals(other.Xyz) && W.Equals(other.W);
+		}
+
+		/// <summary>Tests whether this Quaternion is equal to the specified object</summary>
+		/// <param name="obj">The object</param>
+		public override bool Equals(object obj)
+		{
+			return obj is Quaternion other && Equals(other);
+		}
+
+		/// <summary>Gets the hash-code for this quaternion</summary>
+		public override int GetHashCode()
+		{
+			unchecked
+			{
+				return (Xyz.GetHashCode() * 397) ^ W.GetHashCode();
+			}
+		}
 	}
 }
 #pragma warning restore 660,661

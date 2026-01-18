@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Reactive.Linq;
+using Formats.OpenBve;
 using OpenBveApi.Colors;
 using OpenBveApi.Math;
 using Reactive.Bindings;
@@ -139,11 +140,7 @@ namespace TrainEditor2.ViewModels.Panels
 				)
 				.SetValidateNotifyError(x =>
 				{
-					Color24 result;
-					string message;
-
-					Utilities.TryParse(x, out result, out message);
-
+					Utilities.TryParse(x, out Color24 _, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -156,16 +153,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.Radius,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonZero, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonZero, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -179,11 +172,7 @@ namespace TrainEditor2.ViewModels.Panels
 				)
 				.SetValidateNotifyError(x =>
 				{
-					Color24 result;
-					string message;
-
-					Utilities.TryParse(x, out result, out message);
-
+					Utilities.TryParse(x, out Color24 _, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -194,36 +183,28 @@ namespace TrainEditor2.ViewModels.Panels
 
 			OriginX = needle
 				.ToReactivePropertyAsSynchronized(
-					x => x.OriginX,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Origin,
+					x => x.X.ToString(culture),
+					x => new Vector2(x.Parse(), needle.Origin.Y),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			OriginY = needle
 				.ToReactivePropertyAsSynchronized(
-					x => x.OriginY,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Origin,
+					x => x.Y.ToString(culture),
+					x => new Vector2(needle.Origin.X, x.Parse()),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -232,16 +213,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.InitialAngle,
 					x => x.ToDegrees().ToString(culture),
-					x => double.Parse(x).ToRadians(),
+					x => x.Parse().ToRadians(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -250,16 +227,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.LastAngle,
 					x => x.ToDegrees().ToString(culture),
-					x => double.Parse(x).ToRadians(),
+					x => x.Parse().ToRadians(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -268,16 +241,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.Minimum,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -286,16 +255,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.Maximum,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -308,16 +273,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.NaturalFreq,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -330,16 +291,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.DampingRatio,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);

@@ -96,24 +96,59 @@ namespace SoundManager
 		/// <returns>Whether the sound is playing or supposed to be playing.</returns>
 		public bool IsPlaying()
 		{
-			if (State == SoundSourceState.PlayPending | State == SoundSourceState.Playing)
+			if (State == SoundSourceState.PlayPending | State == SoundSourceState.Playing | State == SoundSourceState.ResumePending)
 			{
 				return true;
 			}
-
 			return false;
 		}
 
-		/// <summary>Stops this sound.</summary>
+		/// <summary>Checks whether this sound is paused or supposed to be paused.</summary>
+		/// <returns>Whether the sound is paused or supposed to be paused.</returns>
+		public bool IsPaused()
+		{
+			if (State == SoundSourceState.PausePending | State == SoundSourceState.Paused)
+			{
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>Stops this sound</summary>
 		public void Stop()
 		{
-			if (State == SoundSourceState.PlayPending)
+			switch (State)
 			{
-				State = SoundSourceState.Stopped;
+				case SoundSourceState.PlayPending:
+					State = SoundSourceState.Stopped;
+					break;
+				case SoundSourceState.ResumePending:
+				case SoundSourceState.Playing:
+					State = SoundSourceState.StopPending;
+					break;
 			}
-			else if (State == SoundSourceState.Playing)
+		}
+
+		/// <summary>Pauses this sound</summary>
+		public void Pause()
+		{
+			switch (State)
 			{
-				State = SoundSourceState.StopPending;
+				case SoundSourceState.PlayPending:
+				case SoundSourceState.ResumePending:
+					State = SoundSourceState.Paused;
+					break;
+				case SoundSourceState.Playing:
+					State = SoundSourceState.PausePending;
+					break;
+			}
+		}
+
+		public void Resume()
+		{
+			if (State == SoundSourceState.Paused || State == SoundSourceState.PausePending)
+			{
+				State = SoundSourceState.ResumePending;
 			}
 		}
 	}

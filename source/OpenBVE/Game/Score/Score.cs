@@ -1,7 +1,7 @@
 ﻿using System;
 using OpenBveApi;
 using OpenBveApi.Colors;
-using OpenBveApi.Math;
+using OpenBveApi.Hosts;
 using OpenBveApi.Runtime;
 using OpenBveApi.Interface;
 using OpenBveApi.Trains;
@@ -18,7 +18,7 @@ namespace OpenBve
 		{
 			/// <summary>The current total score</summary>
 			internal int CurrentValue;
-			/// <summary>The maxium available score</summary>
+			/// <summary>The maximum available score</summary>
 			internal int Maximum;
 			/// <summary>The number of times the doors have been opened incorrectly</summary>
 			internal double OpenedDoorsCounter;
@@ -43,69 +43,64 @@ namespace OpenBve
 					return;
 				}
 				// doors
+				bool leftopen = false;
+				bool rightopen = false;
+				for (int j = 0; j < TrainManager.PlayerTrain.Cars.Length; j++)
 				{
-					bool leftopen = false;
-					bool rightopen = false;
-					for (int j = 0; j < TrainManager.PlayerTrain.Cars.Length; j++)
+					for (int k = 0; k < TrainManager.PlayerTrain.Cars[j].Doors.Length; k++)
 					{
-						for (int k = 0; k < TrainManager.PlayerTrain.Cars[j].Doors.Length; k++)
+						if (TrainManager.PlayerTrain.Cars[j].Doors[k].State != 0.0)
 						{
-							if (TrainManager.PlayerTrain.Cars[j].Doors[k].State != 0.0)
+							if (TrainManager.PlayerTrain.Cars[j].Doors[k].Direction == -1)
 							{
-								if (TrainManager.PlayerTrain.Cars[j].Doors[k].Direction == -1)
-								{
-									leftopen = true;
-								}
-								else if (TrainManager.PlayerTrain.Cars[j].Doors[k].Direction == 1)
-								{
-									rightopen = true;
-								}
+								leftopen = true;
+							}
+							else if (TrainManager.PlayerTrain.Cars[j].Doors[k].Direction == 1)
+							{
+								rightopen = true;
 							}
 						}
-					}
-					bool bad;
-					if (leftopen | rightopen)
-					{
-						bad = true;
-						int j = TrainManager.PlayerTrain.Station;
-						if (j >= 0)
-						{
-							int p = Program.CurrentRoute.Stations[j].GetStopIndex(TrainManager.PlayerTrain.NumberOfCars);
-							if (p >= 0)
-							{
-								if (Math.Abs(TrainManager.PlayerTrain.CurrentSpeed) < 0.1)
-								{
-									if (leftopen == Program.CurrentRoute.Stations[j].OpenLeftDoors & rightopen == Program.CurrentRoute.Stations[j].OpenRightDoors)
-									{
-										bad = false;
-									}
-								}
-							}
-						}
-					}
-					else
-					{
-						bad = false;
-					}
-					if (bad)
-					{
-						OpenedDoorsCounter += (Math.Abs(TrainManager.PlayerTrain.CurrentSpeed) + 0.25) * TimeElapsed;
-					}
-					else if (OpenedDoorsCounter != 0.0)
-					{
-						int x = (int)Math.Ceiling(ScoreFactorOpenedDoors * OpenedDoorsCounter);
-						CurrentValue += x;
-						if (x != 0)
-						{
-							AddScore(x, ScoreTextToken.DoorsOpened, 5.0);
-						}
-						OpenedDoorsCounter = 0.0;
 					}
 				}
+				bool bad;
+				if (leftopen | rightopen)
+				{
+					bad = true;
+					int j = TrainManager.PlayerTrain.Station;
+					if (j >= 0)
+					{
+						if (Program.CurrentRoute.Stations[j].GetStopIndex(TrainManager.PlayerTrain) >= 0)
+						{
+							if (Math.Abs(TrainManager.PlayerTrain.CurrentSpeed) < 0.1)
+							{
+								if (leftopen == Program.CurrentRoute.Stations[j].OpenLeftDoors & rightopen == Program.CurrentRoute.Stations[j].OpenRightDoors)
+								{
+									bad = false;
+								}
+							}
+						}
+					}
+				}
+				else
+				{
+					bad = false;
+				}
+				if (bad)
+				{
+					OpenedDoorsCounter += (Math.Abs(TrainManager.PlayerTrain.CurrentSpeed) + 0.25) * TimeElapsed;
+				}
+				else if (OpenedDoorsCounter != 0.0)
+				{
+					int x = (int)Math.Ceiling(ScoreFactorOpenedDoors * OpenedDoorsCounter);
+					CurrentValue += x;
+					if (x != 0)
+					{
+						AddScore(x, ScoreTextToken.DoorsOpened, 5.0);
+					}
+					OpenedDoorsCounter = 0.0;
+				}
 				// overspeed
-				double nr = TrainManager.PlayerTrain.CurrentRouteLimit;
-				double ns = TrainManager.PlayerTrain.CurrentSectionLimit;
-				double n = nr < ns ? nr : ns;
+				double n = Math.Min(TrainManager.PlayerTrain.CurrentRouteLimit, TrainManager.PlayerTrain.CurrentSectionLimit);
 				double a = Math.Abs(TrainManager.PlayerTrain.CurrentSpeed) - 0.277777777777778;
 				if (a > n)
 				{
@@ -172,21 +167,18 @@ namespace OpenBve
 					}
 				}
 				// red signal
+				if (TrainManager.PlayerTrain.CurrentSectionLimit == 0.0)
 				{
-					if (TrainManager.PlayerTrain.CurrentSectionLimit == 0.0)
+					if (!RedSignal)
 					{
-						if (!RedSignal)
-						{
-							int x = ScoreValueRedSignal;
-							CurrentValue += x;
-							AddScore(x, ScoreTextToken.PassedRedSignal, 5.0);
-							RedSignal = true;
-						}
+						CurrentValue += ScoreValueRedSignal;
+						AddScore(ScoreValueRedSignal, ScoreTextToken.PassedRedSignal, 5.0);
+						RedSignal = true;
 					}
-					else
-					{
-						RedSignal = false;
-					}
+				}
+				else
+				{
+					RedSignal = false;
 				}
 				// arrival
 				{
@@ -232,7 +224,7 @@ namespace OpenBve
 								}
 								// position
 								int xc;
-								int p = Program.CurrentRoute.Stations[j].GetStopIndex(TrainManager.PlayerTrain.NumberOfCars);
+								int p = Program.CurrentRoute.Stations[j].GetStopIndex(TrainManager.PlayerTrain);
 								if (p >= 0)
 								{
 									double d = TrainManager.PlayerTrain.StationDistanceToStopPoint;
@@ -288,8 +280,8 @@ namespace OpenBve
 										int k = (int)Math.Floor(y * Translations.RatingsCount);
 										if (k >= Translations.RatingsCount) k = Translations.RatingsCount - 1;
 										System.Globalization.CultureInfo Culture = System.Globalization.CultureInfo.InvariantCulture;
-										AddScore(Translations.GetInterfaceString("score_rating"), 20.0);
-										AddScore(Translations.GetInterfaceString("rating_" + k.ToString(Culture)) + " (" + (100.0 * y).ToString("0.00", Culture) + "%)", 20.0);
+										AddScore(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"score","rating"}), 20.0);
+										AddScore(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"rating" , k.ToString(Culture)}) + " (" + (100.0 * y).ToString("0.00", Culture) + "%)", 20.0);
 									}
 								}
 							}
@@ -300,33 +292,30 @@ namespace OpenBve
 					}
 				}
 				// departure
+				if (TrainManager.PlayerTrain.Station >= 0 & TrainManager.PlayerTrain.Station < Program.CurrentRoute.Stations.Length & TrainManager.PlayerTrain.Station == DepartureStation)
 				{
-					int j = TrainManager.PlayerTrain.Station;
-					if (j >= 0 & j < Program.CurrentRoute.Stations.Length & j == DepartureStation)
+					bool q;
+					if (Program.CurrentRoute.Stations[TrainManager.PlayerTrain.Station].OpenLeftDoors | Program.CurrentRoute.Stations[TrainManager.PlayerTrain.Station].OpenRightDoors)
 					{
-						bool q;
-						if (Program.CurrentRoute.Stations[j].OpenLeftDoors | Program.CurrentRoute.Stations[j].OpenRightDoors)
+						q = TrainManager.PlayerTrain.StationState == TrainStopState.Completed;
+					}
+					else
+					{
+						q = TrainManager.PlayerTrain.StationState != TrainStopState.Pending & (TrainManager.PlayerTrain.CurrentSpeed < -1.5 | TrainManager.PlayerTrain.CurrentSpeed > 1.5);
+					}
+					if (q)
+					{
+						double r = TrainManager.PlayerTrain.StationDepartureTime - Program.CurrentRoute.SecondsSinceMidnight;
+						if (r > 0.0)
 						{
-							q = TrainManager.PlayerTrain.StationState == TrainStopState.Completed;
-						}
-						else
-						{
-							q = TrainManager.PlayerTrain.StationState != TrainStopState.Pending & (TrainManager.PlayerTrain.CurrentSpeed < -1.5 | TrainManager.PlayerTrain.CurrentSpeed > 1.5);
-						}
-						if (q)
-						{
-							double r = TrainManager.PlayerTrain.StationDepartureTime - Program.CurrentRoute.SecondsSinceMidnight;
-							if (r > 0.0)
+							int x = (int)Math.Ceiling(ScoreFactorStationDeparture * r);
+							CurrentValue += x;
+							if (x != 0)
 							{
-								int x = (int)Math.Ceiling(ScoreFactorStationDeparture * r);
-								CurrentValue += x;
-								if (x != 0)
-								{
-									AddScore(x, ScoreTextToken.PrematureDeparture, 5.0);
-								}
+								AddScore(x, ScoreTextToken.PrematureDeparture, 5.0);
 							}
-							DepartureStation = -1;
 						}
+						DepartureStation = -1;
 					}
 				}
 				// passengers
@@ -346,9 +335,8 @@ namespace OpenBve
 				}
 				if (fallenOver & PassengerTimer == 0.0)
 				{
-					int x = ScoreValuePassengerDiscomfort;
-					CurrentValue += x;
-					AddScore(x, ScoreTextToken.PassengerDiscomfort, 5.0);
+					CurrentValue += ScoreValuePassengerDiscomfort;
+					AddScore(ScoreValuePassengerDiscomfort, ScoreTextToken.PassengerDiscomfort, 5.0);
 					PassengerTimer = 5.0;
 				}
 				else
@@ -370,25 +358,7 @@ namespace OpenBve
 			{
 				if (Interface.CurrentOptions.GameMode == GameMode.Arcade)
 				{
-					int n = ScoreMessages.Length;
-					Array.Resize(ref ScoreMessages, n + 1);
-					ScoreMessages[n].Value = Value;
-					ScoreMessages[n].Text = Interface.GetScoreText(TextToken) + ": " + Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-					ScoreMessages[n].Timeout = Program.CurrentRoute.SecondsSinceMidnight + Duration;
-					ScoreMessages[n].RendererPosition = new Vector2(0.0, 0.0);
-					ScoreMessages[n].RendererAlpha = 0.0;
-					if (Value < 0.0)
-					{
-						ScoreMessages[n].Color = MessageColor.Red;
-					}
-					else if (Value > 0.0)
-					{
-						ScoreMessages[n].Color = MessageColor.Green;
-					}
-					else
-					{
-						ScoreMessages[n].Color = MessageColor.White;
-					}
+					ScoreMessages.Add(new ScoreMessage(Value, TextToken, Duration));
 				}
 				if (Value != 0 & Count)
 				{
@@ -409,37 +379,27 @@ namespace OpenBve
 			/// <param name="Duration">The duration of the score event (e.g. overspeed)</param>
 			private void AddScore(string Text, double Duration)
 			{
-				if (Interface.CurrentOptions.GameMode == GameMode.Arcade)
+				if (Interface.CurrentOptions.GameMode != GameMode.Arcade)
 				{
-					int n = ScoreMessages.Length;
-					Array.Resize(ref ScoreMessages, n + 1);
-					ScoreMessages[n].Value = 0;
-					ScoreMessages[n].Text = Text.Length != 0 ? Text : "══════════";
-					ScoreMessages[n].Timeout = Program.CurrentRoute.SecondsSinceMidnight + Duration;
-					ScoreMessages[n].RendererPosition = new Vector2(0.0, 0.0);
-					ScoreMessages[n].RendererAlpha = 0.0;
-					ScoreMessages[n].Color = MessageColor.White;
+					return;
 				}
+				ScoreMessages.Add(new ScoreMessage(0, Text, MessageColor.White, Duration));
 			}
 		}
 
 		/// <summary>Updates all score messages displayed by the renderer</summary>
-		/// <param name="TimeElapsed">The frame time elapsed</param>
-		internal static void UpdateScoreMessages(double TimeElapsed)
+		internal static void UpdateScoreMessages(double timeElapsed)
 		{
-			if (Interface.CurrentOptions.GameMode == GameMode.Arcade)
+			if (Interface.CurrentOptions.GameMode != GameMode.Arcade)
 			{
-				for (int i = 0; i < ScoreMessages.Length; i++)
+				return;
+			}
+			for (int i = ScoreMessages.Count; i > 0; i--)
+			{
+				ScoreMessages[i].Timeout -= timeElapsed;
+				if (ScoreMessages[i].Timeout <= 0 & ScoreMessages[i].RendererAlpha == 0.0)
 				{
-					if (Program.CurrentRoute.SecondsSinceMidnight >= ScoreMessages[i].Timeout & ScoreMessages[i].RendererAlpha == 0.0)
-					{
-						for (int j = i; j < ScoreMessages.Length - 1; j++)
-						{
-							ScoreMessages[j] = ScoreMessages[j + 1];
-						}
-						Array.Resize(ref ScoreMessages, ScoreMessages.Length - 1);
-						i--;
-					}
+					ScoreMessages.RemoveAt(i);
 				}
 			}
 		}

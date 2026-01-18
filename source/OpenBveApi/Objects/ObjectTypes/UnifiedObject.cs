@@ -1,4 +1,4 @@
-﻿using OpenBveApi.Math;
+using OpenBveApi.Math;
 using OpenBveApi.World;
 
 namespace OpenBveApi.Objects
@@ -70,5 +70,25 @@ namespace OpenBveApi.Objects
 		/// <param name="FarDistance">The object's width at the end of the block</param>
 		/// <returns>The transformed clone</returns>
 		public abstract UnifiedObject Transform(double NearDistance, double FarDistance);
+
+		/// <summary>Creates a left-handed transformed clone of this object</summary>
+		/// <param name="NearDistance">The object's width at the start of the block</param>
+		/// <param name="FarDistance">The object's width at the end of the block</param>
+		/// <returns>The transformed clone</returns>
+		public abstract UnifiedObject TransformLeft(double NearDistance, double FarDistance);
+
+		/// <summary>Creates a right-handed transformed clone of this object</summary>
+		/// <param name="NearDistance">The object's width at the start of the block</param>
+		/// <param name="FarDistance">The object's width at the end of the block</param>
+		/// <returns>The transformed clone</returns>
+		public abstract UnifiedObject TransformRight(double NearDistance, double FarDistance);
+
+		/// <summary>Applies translation</summary>
+		/// <param name="x">The X value</param>
+		/// <param name="y">The Y value</param>
+		/// <param name="z">The Z value</param>
+		/// <param name="absoluteTranslation">Whether the translation is applied relative to the root matrix, or as an absolute</param>
+		public abstract void ApplyTranslation(double x, double y, double z, bool absoluteTranslation = false);
+
 	}
 }

@@ -22,9 +22,8 @@ namespace CsvRwRouteParser
 			}
 
 			string fileHash = Path.GetChecksum(FileName);
-			if (availableRoutefilePatches.ContainsKey(fileHash))
+			if (availableRoutefilePatches.TryGetValue(fileHash, out RoutefilePatch patch))
 			{
-				RoutefilePatch patch = availableRoutefilePatches[fileHash];
 				if (patch.Incompatible)
 				{
 					throw new Exception("This routefile is incompatible with OpenBVE: " + Environment.NewLine + Environment.NewLine + patch.LogMessage);
@@ -52,6 +51,7 @@ namespace CsvRwRouteParser
 
 				Plugin.CurrentOptions.Derailments = patch.Derailments;
 				Plugin.CurrentOptions.Toppling = patch.Toppling;
+				Plugin.CurrentOptions.DelayedAnimatedUpdates = patch.DelayedAnimatedUpdates;
 				SplitLineHack = patch.SplitLineHack;
 				AllowTrackPositionArguments = patch.AllowTrackPositionArguments;
 				foreach (int i in patch.DummyRailTypes)
@@ -81,10 +81,7 @@ namespace CsvRwRouteParser
 					for (int i = 0; i < Plugin.CurrentHost.Plugins.Length; i++)
 					{
 						CompatabilityHacks hacks = new CompatabilityHacks { ReduceTransparencyColorDepth = true };
-						if (Plugin.CurrentHost.Plugins[i].Texture != null)
-						{
-							Plugin.CurrentHost.Plugins[i].Texture.SetCompatabilityHacks(hacks);
-						}
+						Plugin.CurrentHost.Plugins[i].Texture?.SetCompatabilityHacks(hacks);
 					}
 				}
 
@@ -155,5 +152,7 @@ namespace CsvRwRouteParser
 		internal bool Incompatible = false;
 		/// <summary>Whether aggressive RW bracket fixing is applied</summary>
 		internal bool AggressiveRwBrackets = false;
+		/// <summary>Whether animated object updates are delayed based upon distance</summary>
+		internal bool DelayedAnimatedUpdates = false;
 	}
 }

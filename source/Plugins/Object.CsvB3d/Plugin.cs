@@ -6,7 +6,7 @@ using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 using OpenBveApi.Objects;
 
-namespace Plugin
+namespace Object.CsvB3d
 {
     public partial class Plugin : ObjectInterface
     {
@@ -111,11 +111,11 @@ namespace Plugin
 			return false;
 	    }
 
-	    public override bool LoadObject(string path, System.Text.Encoding Encoding, out UnifiedObject unifiedObject)
+	    public override bool LoadObject(string path, System.Text.Encoding textEncoding, out UnifiedObject unifiedObject)
 	    {
 		    try
 		    {
-			    unifiedObject = ReadObject(path, Encoding);
+			    unifiedObject = ReadObject(path, textEncoding);
 			    return true;
 		    }
 		    catch

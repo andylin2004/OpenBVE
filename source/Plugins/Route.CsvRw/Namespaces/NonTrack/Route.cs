@@ -37,7 +37,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						string f = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), Arguments[0]);
+						string f = Path.CombineFile(Path.GetDirectoryName(FileName), Arguments[0]);
 						if (!System.IO.File.Exists(f))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, true, "FileName " + f + " not found in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
@@ -89,8 +89,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double a;
-						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out a))
+						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out double a))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "ValueInMillimeters is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -117,8 +116,7 @@ namespace CsvRwRouteParser
 						}
 						else
 						{
-							double a;
-							if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out a))
+							if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out double a))
 							{
 								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Speed is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 							}
@@ -157,8 +155,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double a;
-						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out a))
+						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out double a))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -179,8 +176,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double t;
-						if (!TryParseTime(Arguments[0], out t))
+						if (!TryParseTime(Arguments[0], out double t))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, Arguments[0] + " does not parse to a valid time in command " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -205,14 +201,14 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						string f = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), Arguments[0]);
+						string f = Path.CombineFile(Path.GetDirectoryName(FileName), Arguments[0]);
 						if (!System.IO.File.Exists(f))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, true, "FileName " + f + " not found in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
 						else
 						{
-							Texture t = new Texture(f, new TextureParameters(null, null), Plugin.CurrentHost);
+							Texture t = new Texture(f, TextureParameters.NoChange, Plugin.CurrentHost);
 							CurrentRoute.Information.LoadingScreenBackground = t;
 						}
 					}
@@ -252,7 +248,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						string f = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), Arguments[0]);
+						string f = Path.CombineFile(Path.GetDirectoryName(FileName), Arguments[0]);
 						if (!System.IO.File.Exists(f))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, true, "FileName " + f + " not found in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
@@ -270,8 +266,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double a;
-						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], UnitOfLength, out a))
+						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], UnitOfLength, out double a))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Height is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -288,8 +283,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double a;
-						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out a))
+						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out double a))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "ValueInCelsius is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -314,8 +308,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						double a;
-						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out a))
+						if (!NumberFormats.TryParseDoubleVb6(Arguments[0], out double a))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "ValueInKPa is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 						}
@@ -342,36 +335,21 @@ namespace CsvRwRouteParser
 					}
 
 					int r = 255, g = 255, b = 255;
-					if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[0], out r))
+					if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[0], out r))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "RedValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (r < 0 | r > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "RedValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						r = r < 0 ? 0 : 255;
-					}
-
-					if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[1], out g))
+					
+					if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[1], out g))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "GreenValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (g < 0 | g > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "GreenValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						g = g < 0 ? 0 : 255;
-					}
-
-					if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[2], out b))
+					
+					if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[2], out b))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "BlueValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (b < 0 | b > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "BlueValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						b = b < 0 ? 0 : 255;
-					}
-
+					
 					Plugin.CurrentRoute.Atmosphere.AmbientLightColor = new Color24((byte) r, (byte) g, (byte) b);
 				}
 					break;
@@ -384,36 +362,21 @@ namespace CsvRwRouteParser
 					}
 
 					int r = 255, g = 255, b = 255;
-					if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[0], out r))
+					if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[0], out r))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "RedValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (r < 0 | r > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "RedValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						r = r < 0 ? 0 : 255;
-					}
-
-					if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[1], out g))
+					
+					if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[1], out g))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "GreenValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (g < 0 | g > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "GreenValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						g = g < 0 ? 0 : 255;
-					}
-
-					if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseIntVb6(Arguments[2], out b))
+					
+					if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseByteVb6(Arguments[2], out b))
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "BlueValue is invalid in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 					}
-					else if (b < 0 | b > 255)
-					{
-						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "BlueValue is required to be within the range from 0 to 255 in " + Command + " at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
-						b = b < 0 ? 0 : 255;
-					}
-
+					
 					Plugin. CurrentRoute.Atmosphere.DiffuseLightColor = new Color24((byte) r, (byte) g, (byte) b);
 				}
 					break;
@@ -450,7 +413,7 @@ namespace CsvRwRouteParser
 						break;
 					}
 					//Read the lighting XML file
-					string path = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), Arguments[0]);
+					string path = Path.CombineFile(Path.GetDirectoryName(FileName), Arguments[0]);
 					if (System.IO.File.Exists(path))
 					{
 						if (DynamicLightParser.ReadLightingXML(path, out Plugin.CurrentRoute.LightDefinitions))
@@ -475,8 +438,7 @@ namespace CsvRwRouteParser
 					}
 					else
 					{
-						int cv;
-						if (!NumberFormats.TryParseIntVb6(Arguments[0], out cv))
+						if (!NumberFormats.TryParseIntVb6(Arguments[0], out int cv))
 						{
 							switch (Arguments[0].ToLowerInvariant())
 							{
@@ -515,20 +477,13 @@ namespace CsvRwRouteParser
 				case RouteCommand.TfoXML:
 					if (!PreviewOnly)
 					{
-						string tfoFile = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), Arguments[0]);
+						string tfoFile = Path.CombineFile(Path.GetDirectoryName(FileName), Arguments[0]);
 						if (!System.IO.File.Exists(tfoFile))
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, true, "TrackFollowingObject XML file " + tfoFile + " not found in Track.TfoXML at line " + Expression.Line.ToString(Culture) + ", column " + Expression.Column.ToString(Culture) + " in file " + Expression.File);
 							break;
 						}
-
-						if (Plugin.TrainManager.TFOs == null)
-						{
-							Plugin.TrainManager.TFOs = new AbstractTrain[] { };
-						}
-						int n = Plugin.TrainManager.TFOs.Length;
-						Array.Resize(ref Plugin.TrainManager.TFOs, n + 1);
-						Plugin.TrainManager.TFOs[n] = Plugin.CurrentHost.ParseTrackFollowingObject(ObjectPath, tfoFile);
+						Data.ScriptedTrainFiles.Add(tfoFile);
 					}
 					break;
 			}

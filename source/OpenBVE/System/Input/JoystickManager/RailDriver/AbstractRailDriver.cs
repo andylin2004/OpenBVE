@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using System.Xml;
+using OpenBveApi.Hosts;
 using OpenBveApi.Math;
 using OpenBveApi.Interface;
 using OpenTK.Input;
@@ -119,7 +120,7 @@ namespace OpenBve.Input
 					Calibration[i] = new AxisCalibration();
 				}
 
-				MessageBox.Show(Translations.GetInterfaceString("raildriver_config_error"), Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
+				MessageBox.Show(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"raildriver","config_error"}), Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
 				//Clear the calibration file
 				File.Delete(calibrationFile);
 			}
@@ -230,7 +231,7 @@ namespace OpenBve.Input
 		private static int ScaleValue(int value, int value_min, int value_max)
 		{
 			long temp = (value - value_min) * 65535;
-			return (int) (temp / (value_max - value_min) + Int16.MinValue);
+			return (int) (temp / (value_max - value_min) + short.MinValue);
 		}
 
 		internal byte[] wData;

@@ -2,17 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using OpenBveApi;
 using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Objects;
 using OpenBveApi.Routes;
+using OpenBveApi.Sounds;
 using OpenBveApi.Textures;
 using OpenBveApi.Trains;
 using OpenBveApi.World;
 using RouteManager2.MessageManager;
+using SoundManager;
 using TrainManager.Trains;
+using Path = OpenBveApi.Path;
 
 namespace RouteViewer
 {
@@ -134,14 +138,20 @@ namespace RouteViewer
 								{
 									if (Program.CurrentHost.Plugins[i].Texture.LoadTexture(path, out texture))
 									{
-										//texture.CompatibleTransparencyMode = Interface.CurrentOptions.OldTransparencyMode;
+										texture.CompatibleTransparencyMode = false;
 										texture = texture.ApplyParameters(parameters);
 										return true;
 									}
-									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadTexture");
+									if (!FailedTextures.Contains(path))
+									{
+										FailedTextures.Add(path);
+										Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadTexture");
+									}
+
 								}
 								catch (Exception ex)
 								{
+									// exception may be transient
 									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at LoadTexture:" + ex.Message);
 								}
 							}
@@ -155,11 +165,19 @@ namespace RouteViewer
 				FileInfo f = new FileInfo(path);
 				if (f.Length == 0)
 				{
-					Interface.AddMessage(MessageType.Error, false, "Zero-byte texture file encountered at " + path);
+					if (!FailedTextures.Contains(path))
+					{
+						FailedTextures.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "Zero-byte texture file encountered at " + path);
+					}
 				}
 				else
 				{
-					Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading texture " + path);
+					if (!FailedTextures.Contains(path))
+					{
+						FailedTextures.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading texture " + path);
+					}
 				}
 			}
 			else
@@ -175,10 +193,9 @@ namespace RouteViewer
 			return Program.Renderer.TextureManager.LoadTexture(ref Texture, wrapMode, CPreciseTimer.GetClockTicks(), Interface.CurrentOptions.Interpolation, Interface.CurrentOptions.AnisotropicFilteringLevel);
 		}
 		
-		public override bool RegisterTexture(string path, TextureParameters parameters, out Texture handle, bool loadTexture = false) {
+		public override bool RegisterTexture(string path, TextureParameters parameters, out Texture handle, bool loadTexture = false, int timeout = 1000) {
 			if (File.Exists(path) || Directory.Exists(path)) {
-				Texture data;
-				if (Program.Renderer.TextureManager.RegisterTexture(path, parameters, out data)) {
+				if (Program.Renderer.TextureManager.RegisterTexture(path, parameters, out Texture data)) {
 					handle = data;
 					if (loadTexture)
 					{
@@ -267,6 +284,7 @@ namespace RouteViewer
 			if (File.Exists(path) || Directory.Exists(path))
 			{
 				handle = Program.Sounds.RegisterBuffer(path, 0.0);
+				return true;
 			}
 			else
 			{
@@ -305,36 +323,67 @@ namespace RouteViewer
 
 		public override bool LoadStaticObject(string path, System.Text.Encoding Encoding, bool PreserveVertices, out StaticObject Object)
 		{
-			Encoding = TextEncoding.GetSystemEncodingFromFile(path, Encoding);
-			if (File.Exists(path) || Directory.Exists(path)) {
-				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++) {
-					if (Program.CurrentHost.Plugins[i].Object != null) {
-						try {
-							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path)) {
-								try {
-									UnifiedObject unifiedObject;
-									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out unifiedObject)) {
-										if (unifiedObject is StaticObject)
+			if (base.LoadStaticObject(path, Encoding, PreserveVertices, out Object))
+			{
+				return true;
+			}
+
+			if (File.Exists(path) || Directory.Exists(path))
+			{
+				Encoding = TextEncoding.GetSystemEncodingFromFile(path, Encoding);
+
+				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
+				{
+					if (Program.CurrentHost.Plugins[i].Object != null)
+					{
+						try
+						{
+							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path))
+							{
+								try
+								{
+									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out var unifiedObject))
+									{
+										if (unifiedObject is StaticObject staticObject)
 										{
-											unifiedObject.OptimizeObject(PreserveVertices, Interface.CurrentOptions.ObjectOptimizationBasicThreshold, true);
-											Object = (StaticObject) unifiedObject;
+											staticObject.OptimizeObject(PreserveVertices, Interface.CurrentOptions.ObjectOptimizationBasicThreshold, true);
+											Object = staticObject;
+											StaticObjectCache.Add(ValueTuple.Create(path, PreserveVertices, File.GetLastWriteTime(path)), Object);
 											return true;
 										}
+
 										Object = null;
+										// may be trying to load in different places, so leave
 										Interface.AddMessage(MessageType.Error, false, "Attempted to load " + path + " which is an animated object where only static objects are allowed.");
 									}
-									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
-								} catch (Exception ex) {
+									if (!FailedObjects.Contains(path))
+									{
+										FailedObjects.Add(path);
+										Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
+									}
+
+								}
+								catch (Exception ex)
+								{
 									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at LoadObject:" + ex.Message);
 								}
 							}
-						} catch (Exception ex) {
+						}
+						catch (Exception ex)
+						{
 							Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at CanLoadObject:" + ex.Message);
 						}
 					}
 				}
-				Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
-			} else {
+				if (!FailedObjects.Contains(path))
+				{
+					FailedObjects.Add(path);
+					Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
+				}
+
+			}
+			else
+			{
 				ReportProblem(ProblemType.PathNotFound, path);
 			}
 			Object = null;
@@ -348,17 +397,22 @@ namespace RouteViewer
 				return true;
 			}
 
-			if (File.Exists(path) || Directory.Exists(path)) {
+			if (File.Exists(path) || Directory.Exists(path))
+			{
 				Encoding = TextEncoding.GetSystemEncodingFromFile(path, Encoding);
 
-				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++) {
-					if (Program.CurrentHost.Plugins[i].Object != null) {
-						try {
-							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path)) {
+				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
+				{
+					if (Program.CurrentHost.Plugins[i].Object != null)
+					{
+						try
+						{
+							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path))
+							{
 								try
 								{
-									UnifiedObject obj;
-									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out obj)) {
+									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out UnifiedObject obj))
+									{
 										if (obj == null)
 										{
 											continue;
@@ -366,33 +420,59 @@ namespace RouteViewer
 										obj.OptimizeObject(false, Interface.CurrentOptions.ObjectOptimizationBasicThreshold, true);
 										Object = obj;
 
-										StaticObject staticObject = Object as StaticObject;
-										if (staticObject != null)
+										if (Object is StaticObject staticObject)
 										{
-											StaticObjectCache.Add(ValueTuple.Create(path, false), staticObject);
+											StaticObjectCache.Add(ValueTuple.Create(path, false, File.GetLastWriteTime(path)), staticObject);
 											return true;
 										}
 
-										AnimatedObjectCollection aoc = Object as AnimatedObjectCollection;
-										if (aoc != null)
+										if (Object is AnimatedObjectCollection aoc)
 										{
 											AnimatedObjectCollectionCache.Add(path, aoc);
 										}
 
 										return true;
 									}
-									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
-								} catch (Exception ex) {
+									if (!FailedObjects.Contains(path))
+									{
+										FailedObjects.Add(path);
+										Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
+									}
+
+								}
+								catch (Exception ex)
+								{
+									// exception may be transient
 									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at LoadObject:" + ex.Message);
 								}
 							}
-						} catch (Exception ex) {
+						}
+						catch (Exception ex)
+						{
 							Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at CanLoadObject:" + ex.Message);
 						}
 					}
 				}
-				Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
-			} else {
+				FileInfo f = new FileInfo(path);
+				if (f.Length == 0)
+				{
+					if (!NullFiles.Contains(Path.GetFileNameWithoutExtension(path).ToLowerInvariant()) && !FailedObjects.Contains(path))
+					{
+						FailedObjects.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "Zero-byte object file encountered at " + path);
+					}
+				}
+				else
+				{
+					if (!NullFiles.Contains(Path.GetFileNameWithoutExtension(path).ToLowerInvariant()) && !FailedObjects.Contains(path))
+					{
+						FailedObjects.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
+					}
+				}
+			}
+			else
+			{
 				ReportProblem(ProblemType.PathNotFound, path);
 			}
 			Object = null;
@@ -404,14 +484,14 @@ namespace RouteViewer
 			FunctionScripts.ExecuteFunctionScript(functionScript, (TrainManager.Train)train, CarIndex, Position, TrackPosition, SectionIndex, IsPartOfTrain, TimeElapsed, CurrentState);
 		}
 
-		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition, double Brightness)
+		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition)
 		{
-			return Program.Renderer.CreateStaticObject(Prototype, Position, WorldTransformation, LocalTransformation, Program.CurrentRoute.AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, Program.CurrentRoute.BlockLength, TrackPosition, Brightness);
+			return Program.Renderer.CreateStaticObject(Prototype, Position, WorldTransformation, LocalTransformation, Program.CurrentRoute.AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, Program.CurrentRoute.BlockLength, TrackPosition);
 		}
 
-		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation LocalTransformation, Matrix4D Rotate, Matrix4D Translate, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition, double Brightness)
+		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation LocalTransformation, Matrix4D Rotate, Matrix4D Translate, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition)
 		{
-			return Program.Renderer.CreateStaticObject(Position, Prototype, LocalTransformation, Rotate, Translate, Program.CurrentRoute.AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, Program.CurrentRoute.BlockLength, TrackPosition, Brightness);
+			return Program.Renderer.CreateStaticObject(Position, Prototype, LocalTransformation, Rotate, Translate, Program.CurrentRoute.AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, Program.CurrentRoute.BlockLength, TrackPosition);
 		}
 
 		public override void CreateDynamicObject(ref ObjectState internalObject)
@@ -429,12 +509,29 @@ namespace RouteViewer
 			Program.Renderer.VisibleObjects.HideObject(objectToHide);
 		}
 
+		public override bool SoundIsPlaying(object SoundSource)
+		{
+			return Program.Sounds.IsPlaying(SoundSource);
+		}
+
+		public override object PlaySound(SoundHandle buffer, double pitch, double volume, Vector3 position, object parent, bool looped)
+		{
+			return Program.Sounds.PlaySound(buffer, pitch, volume, position, parent, looped);
+		}
+
+		public override void StopSound(object SoundSource)
+		{
+			Program.Sounds.StopSound(SoundSource as SoundSource);
+		}
+
+		public override void StopAllSounds(object parent)
+		{
+			Program.Sounds.StopAllSounds(parent);
+		}
+
 		public override int AnimatedWorldObjectsUsed
 		{
-			get
-			{
-				return ObjectManager.AnimatedWorldObjectsUsed;
-			}
+			get => ObjectManager.AnimatedWorldObjectsUsed;
 			set
 			{
 				int a = ObjectManager.AnimatedWorldObjectsUsed;
@@ -453,45 +550,32 @@ namespace RouteViewer
 
 		public override WorldObject[] AnimatedWorldObjects
 		{
-			get
-			{
-				return ObjectManager.AnimatedWorldObjects;
-			}
-			set
-			{
-				ObjectManager.AnimatedWorldObjects = value;
-			}
+			get => ObjectManager.AnimatedWorldObjects;
+			set => ObjectManager.AnimatedWorldObjects = value;
 		}
 
 		public override Dictionary<int, Track> Tracks
 		{
-			get
-			{
-				return Program.CurrentRoute.Tracks;
-			}
-			set
-			{
-				Program.CurrentRoute.Tracks = value;
-			}
+			get => Program.CurrentRoute.Tracks;
+			set => Program.CurrentRoute.Tracks = value;
 		}
 
 		public override AbstractTrain ParseTrackFollowingObject(string objectPath, string tfoFile)
 		{
-			Interface.AddMessage(MessageType.Warning, false, "Track Following Objects are not shown in Route Viewer. Please test using the main simulation.");
+			Interface.AddMessage(MessageType.Information, false, "Track Following Objects are not shown in Route Viewer. Please test using the main simulation.");
 			return null;
 		}
 
 		// ReSharper disable once CoVariantArrayConversion
-		public override AbstractTrain[] Trains => Program.TrainManager.Trains;
+		public override IEnumerable<AbstractTrain> Trains => Program.TrainManager.Trains;
 
 		public override AbstractTrain ClosestTrain(AbstractTrain Train)
 		{
-			TrainBase baseTrain = Train as TrainBase;
 			AbstractTrain closestTrain = null;
 			double bestLocation = double.MaxValue;
-			if(baseTrain != null)
+			if(Train is TrainBase baseTrain)
 			{
-				for (int i = 0; i < Program.TrainManager.Trains.Length; i++)
+				for (int i = 0; i < Program.TrainManager.Trains.Count; i++)
 				{
 					if (Program.TrainManager.Trains[i] != baseTrain & Program.TrainManager.Trains[i].State == TrainState.Available & baseTrain.Cars.Length > 0)
 					{
@@ -508,27 +592,20 @@ namespace RouteViewer
 			return closestTrain;
 		}
 
-		public override AbstractTrain ClosestTrain(double TrackPosition)
+		public override AbstractTrain ClosestTrain(Vector3 worldPosition)
 		{
 			AbstractTrain closestTrain = null;
 			double trainDistance = double.MaxValue;
-			for (int j = 0; j < Program.TrainManager.Trains.Length; j++)
+			for (int j = 0; j < Program.TrainManager.Trains.Count; j++)
 			{
-				if (Program.TrainManager.Trains[j].State == TrainState.Available)
+				if (Program.TrainManager.Trains[j].State == TrainState.Available && Program.TrainManager.Trains[j].Cars.Length > 0)
 				{
-					double distance;
-					if (Program.TrainManager.Trains[j].Cars[0].FrontAxle.Follower.TrackPosition < TrackPosition)
-					{
-						distance = TrackPosition - Program.TrainManager.Trains[j].Cars[0].TrackPosition;
-					}
-					else if (Program.TrainManager.Trains[j].Cars[Program.TrainManager.Trains[j].Cars.Length - 1].RearAxle.Follower.TrackPosition > TrackPosition)
-					{
-						distance = Program.TrainManager.Trains[j].Cars[Program.TrainManager.Trains[j].Cars.Length - 1].RearAxle.Follower.TrackPosition - TrackPosition;
-					}
-					else
-					{
-						distance = 0;
-					}
+					Vector3 frontAxlePosition = Program.TrainManager.Trains[j].Cars[0].FrontAxle.Follower.WorldPosition;
+					Vector3 rearAxlePosition = Program.TrainManager.Trains[j].Cars[Program.TrainManager.Trains[j].Cars.Length - 1].RearAxle.Follower.WorldPosition;
+					double frontAxleDistance = Math.Abs(Math.Sqrt(((worldPosition.X - frontAxlePosition.X) * (worldPosition.X - frontAxlePosition.X)) + ((worldPosition.Y - frontAxlePosition.Y) * (worldPosition.Y - frontAxlePosition.Y))));
+					double rearAxleDistance = Math.Abs(Math.Sqrt(((worldPosition.X - rearAxlePosition.X) * (worldPosition.X - rearAxlePosition.X)) + ((worldPosition.Y - rearAxlePosition.Y) * (worldPosition.Y - rearAxlePosition.Y))));
+					double distance = Math.Min(frontAxleDistance, rearAxleDistance);
+
 					if (distance < trainDistance)
 					{
 						closestTrain = Program.TrainManager.Trains[j];

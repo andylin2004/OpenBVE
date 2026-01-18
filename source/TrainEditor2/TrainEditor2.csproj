@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -40,32 +40,40 @@
   <PropertyGroup>
     <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GLMenu|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>..\..\bin_debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.0</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
   <ItemGroup>
-    <Reference Include="OpenTK, Version=3.3.3.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\OpenTK-OpenBVE.1.0.2\lib\net20\OpenTK.dll</HintPath>
+    <Reference Include="OpenTK, Version=3.3.2.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\OpenTK-OpenBVE.1.0.4\lib\net20\OpenTK.dll</HintPath>
     </Reference>
     <Reference Include="OpenTK.GLControl, Version=3.1.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
       <HintPath>..\..\packages\OpenTK.GLControl-OpenBVE.1.0.1\lib\net20\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="PresentationCore" />
-    <Reference Include="Prism, Version=7.2.0.1422, Culture=neutral, PublicKeyToken=40ee6c3a2184dc59, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\Prism.Core.7.2.0.1422\lib\net45\Prism.dll</HintPath>
+    <Reference Include="ReactiveProperty, Version=9.7.0.0, Culture=neutral, PublicKeyToken=910d1732782c71cb, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\ReactiveProperty.9.7.0\lib\net472\ReactiveProperty.dll</HintPath>
     </Reference>
-    <Reference Include="ReactiveProperty, Version=7.1.0.0, Culture=neutral, PublicKeyToken=910d1732782c71cb, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\ReactiveProperty.7.1.0\lib\netstandard2.0\ReactiveProperty.dll</HintPath>
-    </Reference>
-    <Reference Include="ReactiveProperty.Core, Version=7.1.0.0, Culture=neutral, PublicKeyToken=910d1732782c71cb, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\ReactiveProperty.Core.7.1.0\lib\netstandard2.0\ReactiveProperty.Core.dll</HintPath>
+    <Reference Include="ReactiveProperty.Core, Version=9.7.0.0, Culture=neutral, PublicKeyToken=910d1732782c71cb, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\ReactiveProperty.Core.9.7.0\lib\net472\ReactiveProperty.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Annotations, Version=4.2.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\System.ComponentModel.Annotations.4.7.0\lib\net461\System.ComponentModel.Annotations.dll</HintPath>
+      <HintPath>..\..\packages\System.ComponentModel.Annotations.5.0.0\lib\net461\System.ComponentModel.Annotations.dll</HintPath>
     </Reference>
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Reactive, Version=4.4.0.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\System.Reactive.4.4.1\lib\net46\System.Reactive.dll</HintPath>
+    <Reference Include="System.Reactive, Version=6.0.0.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\System.Reactive.6.0.1\lib\net472\System.Reactive.dll</HintPath>
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\..\packages\System.Runtime.CompilerServices.Unsafe.6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
@@ -87,6 +95,7 @@
   <ItemGroup>
     <Compile Include="Audio\SoundApi.cs" />
     <Compile Include="Audio\SoundApi.Update.cs" />
+    <Compile Include="Extensions\BindableBase.cs" />
     <Compile Include="Extensions\Binders.cs" />
     <Compile Include="Extensions\CollectionBasedDictionary.cs" />
     <Compile Include="Extensions\ObservableDictionary.cs" />
@@ -108,6 +117,7 @@
     <Compile Include="IO\Trains\ExtensionsCfg\Writer.cs" />
     <Compile Include="IO\Trains\TrainDat\Parser.cs" />
     <Compile Include="IO\Trains\TrainDat\Writer.cs" />
+    <Compile Include="IO\Trains\XML\Writer.cs" />
     <Compile Include="Models\App.cs" />
     <Compile Include="Models\Dialogs\BaseDialog.cs" />
     <Compile Include="Models\Dialogs\MessageBox.cs" />
@@ -144,6 +154,7 @@
     <Compile Include="Models\Trains\Motor.Functions.cs" />
     <Compile Include="Models\Trains\Motor.Simulation.cs" />
     <Compile Include="Models\Trains\Move.cs" />
+    <Compile Include="Models\Trains\ParticleSource.cs" />
     <Compile Include="Models\Trains\Performance.cs" />
     <Compile Include="Models\Trains\Pressure.cs" />
     <Compile Include="Models\Trains\Train.cs" />
@@ -188,6 +199,7 @@
     <Compile Include="ViewModels\Trains\HandleViewModel.cs" />
     <Compile Include="ViewModels\Trains\MotorViewModel.cs" />
     <Compile Include="ViewModels\Trains\MoveViewModel.cs" />
+    <Compile Include="ViewModels\Trains\ParticleSourceViewModel.cs" />
     <Compile Include="ViewModels\Trains\PerformanceViewModel.cs" />
     <Compile Include="ViewModels\Trains\PressureViewModel.cs" />
     <Compile Include="ViewModels\Trains\TrainViewModel.cs" />
@@ -260,6 +272,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Views\FormEditor.Panel.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Views\FormEditor.ParticleSource.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Views\FormEditor.Performance.cs">
@@ -378,6 +393,10 @@
     <ProjectReference Include="..\OpenBveApi\OpenBveApi.csproj">
       <Project>{27134980-4415-4375-a564-40a9014dfa5f}</Project>
       <Name>OpenBveApi</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Plugins\Formats.OpenBve\Formats.OpenBve.csproj">
+      <Project>{7ED7B285-FAE6-4B34-ACC5-87399F27C8BC}</Project>
+      <Name>Formats.OpenBve</Name>
     </ProjectReference>
     <ProjectReference Include="..\SoundManager\SoundManager.csproj">
       <Project>{90abfa0c-abca-444e-adef-9a299aed6524}</Project>

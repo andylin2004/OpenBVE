@@ -1,4 +1,5 @@
-﻿using TrainManager.Car;
+﻿using OpenBveApi.Motor;
+using TrainManager.Car;
 using TrainManager.SafetySystems;
 
 namespace TrainManager.Trains
@@ -20,5 +21,9 @@ namespace TrainManager.Trains
 		public DoorMode DoorCloseMode;
 		/// <summary>Whether door closure has been attempted</summary>
 		public bool DoorClosureAttempted;
+		/// <summary>Whether the pressure distribution uses the legacy averages algorithm</summary>
+		public bool AveragesPressureDistribution;
+		/// <summary>The pantograph state for the train</summary>
+		public PantographState PantographState;
 	}
 }

@@ -5,7 +5,6 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Globalization;
 using System.Linq;
-using Prism.Mvvm;
 using TrainEditor2.Extensions;
 
 namespace TrainEditor2.Models.Trains
@@ -21,38 +20,20 @@ namespace TrainEditor2.Models.Trains
 
 		internal Handle Handle
 		{
-			get
-			{
-				return handle;
-			}
-			set
-			{
-				SetProperty(ref handle, value);
-			}
+			get => handle;
+			set => SetProperty(ref handle, value);
 		}
 
 		internal Cab Cab
 		{
-			get
-			{
-				return cab;
-			}
-			set
-			{
-				SetProperty(ref cab, value);
-			}
+			get => cab;
+			set => SetProperty(ref cab, value);
 		}
 
 		internal Device Device
 		{
-			get
-			{
-				return device;
-			}
-			set
-			{
-				SetProperty(ref device, value);
-			}
+			get => device;
+			set => SetProperty(ref device, value);
 		}
 
 		internal ObservableCollection<Car> Cars;
@@ -169,16 +150,7 @@ namespace TrainEditor2.Models.Trains
 			for (int x = 0; x < car.Acceleration.ImageWidth; x++)
 			{
 				double velocity = car.Acceleration.XtoVelocity(x);
-				double acceleration;
-
-				if (car.Acceleration.Resistance)
-				{
-					acceleration = Math.Max(car.Acceleration.GetAcceleration(entry, velocity) - GetDeceleration(car, velocity), 0.0);
-				}
-				else
-				{
-					acceleration = car.Acceleration.GetAcceleration(entry, velocity);
-				}
+				double acceleration = car.Acceleration.Resistance ? Math.Max(car.Acceleration.GetAcceleration(entry, velocity) - GetDeceleration(car, velocity), 0.0) : car.Acceleration.GetAcceleration(entry, velocity);
 
 				int y = (int)Math.Round(car.Acceleration.AccelerationToY(acceleration));
 

@@ -1,4 +1,8 @@
-﻿using System;
+﻿using Formats.OpenBve;
+using OpenBveApi;
+using OpenBveApi.Interface;
+using OpenBveApi.Math;
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -42,6 +46,7 @@ namespace CarXmlConvertor
 			internal double RearAxle;
 			internal bool AxlesDefined;
 			internal bool Reversed;
+			internal bool VisibleFromInterior;
 			internal string Object;
 			internal Bogie FrontBogie;
 			internal Bogie RearBogie;
@@ -72,276 +77,123 @@ namespace CarXmlConvertor
 
 		internal static void ReadExtensionsCfg()
 		{
-			string[] Lines = File.ReadAllLines(FileName, System.Text.Encoding.Default);
-			for (int i = 0; i < Lines.Length; i++)
+			ConfigFile<ExtensionCfgSection, ExtensionCfgKey> cfg = new ConfigFile<ExtensionCfgSection, ExtensionCfgKey>(FileName, Program.CurrentHost);
+
+			while (cfg.RemainingSubBlocks > 0)
 			{
-				int j = Lines[i].IndexOf(';');
-				if (j >= 0)
+				Block<ExtensionCfgSection, ExtensionCfgKey> block = cfg.ReadNextBlock();
+				string carObject;
+				switch (block.Key)
 				{
-					Lines[i] = Lines[i].Substring(0, j).Trim(new char[] { });
-				}
-				else
-				{
-					Lines[i] = Lines[i].Trim(new char[] { });
-				}
-			}
-			for (int i = 0; i < Lines.Length; i++)
-			{
-				if (Lines[i].Length != 0)
-				{
-					switch (Lines[i].ToLowerInvariant())
-					{
-						case "[exterior]":
-							// exterior
-							i++;
-							while (i < Lines.Length && !Lines[i].StartsWith("[", StringComparison.Ordinal) & !Lines[i].EndsWith("]", StringComparison.Ordinal))
-							{
-								if (Lines[i].Length != 0)
-								{
-									int j = Lines[i].IndexOf("=", StringComparison.Ordinal);
-									if (j >= 0)
-									{
-										string a = Lines[i].Substring(0, j).TrimEnd(new char[] { });
-										string b = Lines[i].Substring(j + 1).TrimStart(new char[] { });
-										int n;
-										if (int.TryParse(a, NumberStyles.Integer, Culture, out n))
-										{
-											if (n >= 0 & n < ConvertTrainDat.NumberOfCars)
-											{
-												if (!String.IsNullOrEmpty(b) && !Path.ContainsInvalidChars(b))
-												{
-													string File = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), b);
-													if (System.IO.File.Exists(File))
-													{
-														CarInfos[n].Object = b;
-													}
-												}
-											}
-										}
-									}
-								}
-								i++;
-							}
-							i--;
+					case ExtensionCfgSection.Exterior:
+						while (block.RemainingDataValues > 0 && block.GetIndexedPath(Path.GetDirectoryName(FileName), out var carIndex, out carObject) && carIndex < ConvertTrainDat.NumberOfCars)
+						{
+							CarInfos[carIndex].Object = carObject;
+						}
+						break;
+					case ExtensionCfgSection.Car:
+						if (block.Index == -1)
+						{
 							break;
-						default:
-							if (Lines[i].StartsWith("[car", StringComparison.OrdinalIgnoreCase) & Lines[i].EndsWith("]", StringComparison.Ordinal))
-							{
-								// car
-								string t = Lines[i].Substring(4, Lines[i].Length - 5);
-								int n; if (int.TryParse(t, NumberStyles.Integer, Culture, out n))
-								{
-									if (n >= 0 & n < ConvertTrainDat.NumberOfCars)
-									{
-										i++;
-										while (i < Lines.Length && !Lines[i].StartsWith("[", StringComparison.Ordinal) & !Lines[i].EndsWith("]", StringComparison.Ordinal))
-										{
-											if (Lines[i].Length != 0)
-											{
-												int j = Lines[i].IndexOf("=", StringComparison.Ordinal);
-												if (j >= 0)
-												{
-													string a = Lines[i].Substring(0, j).TrimEnd(new char[] { });
-													string b = Lines[i].Substring(j + 1).TrimStart(new char[] { });
-													switch (a.ToLowerInvariant())
-													{
-														case "object":
-															if (!String.IsNullOrEmpty(b) && !Path.ContainsInvalidChars(b))
-															{
-																string File = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), b);
-																if (System.IO.File.Exists(File))
-																{
-																	CarInfos[n].Object = b;
-																}
-															}
-															break;
-														case "length":
-														{
-															double m;
-															if (double.TryParse(b, NumberStyles.Float, Culture, out m))
-															{
-																if (m > 0.0)
-																{
-																	CarInfos[n].Length = m;
-																}
-															}
-														}
-															break;
-														case "axles":
-														int k = b.IndexOf(',');
-															if (k >= 0)
-															{
-																string c = b.Substring(0, k).TrimEnd(new char[] { });
-																string d = b.Substring(k + 1).TrimStart(new char[] { });
-																double rear, front;
-																if (double.TryParse(c, NumberStyles.Float, Culture, out rear) && double.TryParse(d, NumberStyles.Float, Culture, out front))
-																{
-																	CarInfos[n].RearAxle = rear;
-																	CarInfos[n].FrontAxle = front;
-																	CarInfos[n].AxlesDefined = true;
-																}
-															}
-															break;
-														case "reversed":
-															CarInfos[n].Reversed = b.Equals("true", StringComparison.OrdinalIgnoreCase);
-															break;
-														case "loadingsway":
-															CarInfos[n].LoadingSway = b.Equals("true", StringComparison.OrdinalIgnoreCase);
-															break;
-													}
-												}
-											}
-											i++;
-										}
-										i--;
-									}
-								}
-							}
-							else if (Lines[i].StartsWith("[coupler", StringComparison.OrdinalIgnoreCase) & Lines[i].EndsWith("]", StringComparison.Ordinal))
-							{
-								// coupler
-								string t = Lines[i].Substring(8, Lines[i].Length - 9);
-								int n; if (int.TryParse(t, NumberStyles.Integer, Culture, out n))
-								{
-									if (n >= 0 & n < Couplers.Length)
-									{
-										i++; while (i < Lines.Length && !Lines[i].StartsWith("[", StringComparison.Ordinal) & !Lines[i].EndsWith("]", StringComparison.Ordinal))
-										{
-											if (Lines[i].Length != 0)
-											{
-												int j = Lines[i].IndexOf("=", StringComparison.Ordinal);
-												if (j >= 0)
-												{
-													string a = Lines[i].Substring(0, j).TrimEnd(new char[] { });
-													string b = Lines[i].Substring(j + 1).TrimStart(new char[] { });
-													switch (a.ToLowerInvariant())
-													{
-														case "distances":
-														{
-															int k = b.IndexOf(',');
-															if (k >= 0)
-															{
-																string c = b.Substring(0, k).TrimEnd(new char[] { });
-																string d = b.Substring(k + 1).TrimStart(new char[] { });
-																double min, max;
-																if (!double.TryParse(c, NumberStyles.Float, Culture, out min))
-																{
-																}
-																else if (!double.TryParse(d, NumberStyles.Float, Culture, out max))
-																{
-																}
-																else
-																{
-																	Couplers[n] = new Coupler { Min = min, Max = max };
-																}
-															}
-														} 
-															break;
-														case "object":
-															if (!String.IsNullOrEmpty(b) && !Path.ContainsInvalidChars(b))
-															{
-																string File = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), b);
-																if (System.IO.File.Exists(File))
-																{
-																	Couplers[n].Object = b;
-																}
-															}
-															break;
-													}
-												}
-											}
-											i++;
-										}
-										i--;
-									}
-								}
-							}
-							else if (Lines[i].StartsWith("[bogie", StringComparison.OrdinalIgnoreCase) & Lines[i].EndsWith("]", StringComparison.Ordinal))
-							{
-								// car
-								string t = Lines[i].Substring(6, Lines[i].Length - 7);
-								int n; if (int.TryParse(t, NumberStyles.Integer, Culture, out n))
-								{
-									//Assuming that there are two bogies per car
-									bool IsOdd = (n % 2 != 0);
-									int CarIndex = n / 2;
-									if (n >= 0 & n < ConvertTrainDat.NumberOfCars * 2)
-									{
-										i++;
-										while (i < Lines.Length && !Lines[i].StartsWith("[", StringComparison.Ordinal) & !Lines[i].EndsWith("]", StringComparison.Ordinal))
-										{
-											if (Lines[i].Length != 0)
-											{
-												int j = Lines[i].IndexOf("=", StringComparison.Ordinal);
-												if (j >= 0)
-												{
-													string a = Lines[i].Substring(0, j).TrimEnd(new char[] { });
-													string b = Lines[i].Substring(j + 1).TrimStart(new char[] { });
-													switch (a.ToLowerInvariant())
-													{
-														case "object":
-															if (!String.IsNullOrEmpty(b) && !Path.ContainsInvalidChars(b))
-															{
-																string File = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), b);
-																if (System.IO.File.Exists(File))
-																{
-																	if (IsOdd)
-																	{
-																		CarInfos[CarIndex].RearBogie.Object = b;
-																	}
-																	else
-																	{
-																		CarInfos[CarIndex].FrontBogie.Object = b;
-																	}
-																}
-															}
-															break;
-														case "axles":
-															int k = b.IndexOf(',');
-															if (k >= 0)
-															{
-																string c = b.Substring(0, k).TrimEnd(new char[] { });
-																string d = b.Substring(k + 1).TrimStart(new char[] { });
-																double rear, front;
-																if (double.TryParse(c, NumberStyles.Float, Culture, out rear) && double.TryParse(d, NumberStyles.Float, Culture, out front))
-																{
-																	if (IsOdd)
-																	{
-																		CarInfos[CarIndex].RearBogie.RearAxle = rear;
-																		CarInfos[CarIndex].RearBogie.FrontAxle = front;
-																		CarInfos[CarIndex].RearBogie.AxlesDefined = true;
-																	}
-																	else
-																	{
-																		CarInfos[CarIndex].FrontBogie.RearAxle = rear;
-																		CarInfos[CarIndex].FrontBogie.FrontAxle = front;
-																		CarInfos[CarIndex].FrontBogie.AxlesDefined = true;
-																	}
-																}
-															}
-															break;
-														case "reversed":
-															if (IsOdd)
-															{
-																CarInfos[CarIndex].FrontBogie.Reversed = b.Equals("true", StringComparison.OrdinalIgnoreCase);
-															}
-															else
-															{
-																CarInfos[CarIndex].RearBogie.Reversed = b.Equals("true", StringComparison.OrdinalIgnoreCase);
-															}
-															break;
-													}
-												}
-											}
-											i++;
-										}
-										i--;
-										
-									}
-								}
-							}
+						}
+
+						if (block.Index >= ConvertTrainDat.NumberOfCars)
+						{
 							break;
-					}
+						}
+						
+						if (block.GetPath(ExtensionCfgKey.Object, Path.GetDirectoryName(FileName), out carObject))
+						{
+							CarInfos[block.Index].Object = carObject;
+						}
+
+						if (block.GetValue(ExtensionCfgKey.Length, out double carLength, NumberRange.Positive))
+						{
+							CarInfos[block.Index].Length = carLength;
+						}
+						block.GetValue(ExtensionCfgKey.Reversed, out CarInfos[block.Index].Reversed);
+						block.GetValue(ExtensionCfgKey.VisibleFromInterior, out CarInfos[block.Index].VisibleFromInterior);
+						block.GetValue(ExtensionCfgKey.LoadingSway, out CarInfos[block.Index].LoadingSway);
+						if (block.GetVector2(ExtensionCfgKey.Axles, ',', out Vector2 carAxles))
+						{
+							if (carAxles.X >= carAxles.Y)
+							{
+								CarInfos[block.Index].RearAxle = carAxles.X;
+								CarInfos[block.Index].FrontAxle = carAxles.Y;
+								CarInfos[block.Index].AxlesDefined = true;
+							}
+						}
+						break;
+					case ExtensionCfgSection.Coupler:
+						if (block.Index == -1 || block.Index >= CarInfos.Length)
+						{
+							break;
+						}
+						if (block.GetVector2(ExtensionCfgKey.Distances, ',', out Vector2 distances))
+						{
+							if (distances.X > distances.Y)
+							{
+								Couplers[block.Index].Min = distances.X;
+								Couplers[block.Index].Max = distances.Y;
+							}
+						}
+						if (block.GetPath(ExtensionCfgKey.Object, Path.GetDirectoryName(FileName), out string couplerObject))
+						{
+							Couplers[block.Index].Object = couplerObject;
+						}
+						break;
+					case ExtensionCfgSection.Bogie:
+						if (block.Index == -1)
+						{
+							break;
+						}
+
+						if (block.Index > ConvertTrainDat.NumberOfCars * 2)
+						{
+							break;
+						}
+
+						//Assuming that there are two bogies per car
+						bool IsOdd = (block.Index % 2 != 0);
+						int CarIndex = block.Index / 2;
+
+						if (block.GetPath(ExtensionCfgKey.Object, Path.GetDirectoryName(FileName), out string bogieObject))
+						{
+							if (IsOdd)
+							{
+								CarInfos[CarIndex].RearBogie.Object = bogieObject;
+							}
+							else
+							{
+								CarInfos[CarIndex].FrontBogie.Object = bogieObject;
+							}
+						}
+						block.GetValue(ExtensionCfgKey.Reversed, out bool bogieReversed);
+						if (IsOdd)
+						{
+							CarInfos[CarIndex].RearBogie.Reversed = bogieReversed;
+						}
+						else
+						{
+							CarInfos[CarIndex].FrontBogie.Reversed = bogieReversed;
+						}
+						if (block.GetVector2(ExtensionCfgKey.Axles, ',', out Vector2 bogieAxles))
+						{
+							if (bogieAxles.X >= bogieAxles.Y)
+							{
+								if (IsOdd)
+								{
+									CarInfos[CarIndex].FrontBogie.RearAxle = bogieAxles.X;
+									CarInfos[CarIndex].FrontBogie.FrontAxle = bogieAxles.Y;
+								}
+								else
+								{
+									CarInfos[CarIndex].RearBogie.RearAxle = bogieAxles.X;
+									CarInfos[CarIndex].RearBogie.FrontAxle = bogieAxles.Y;
+								}
+							}
+						}
+						break;
 				}
 			}
 		}
@@ -362,6 +214,10 @@ namespace CarXmlConvertor
 				// Ignore- Most likely the convertor has been copied elsewhere
 			}
 			newLines.Add("<DriverCar>" + ConvertTrainDat.DriverCar + "</DriverCar>");
+			newLines.Add("<DriverBody>");
+			newLines.Add("<ShoulderHeight>0.6</ShoulderHeight>");
+			newLines.Add("<HeadHeight>0.1</HeadHeight>");
+			newLines.Add("</DriverBody>");
 			for (int i = 0; i < ConvertTrainDat.NumberOfCars; i++)
 			{
 				if (SingleFile)
@@ -373,7 +229,7 @@ namespace CarXmlConvertor
 					TabbedList carLines = new TabbedList();
 					GenerateCarXML(ref carLines, i);
 					carLines.Add("</openBVE>");
-					string fileOut = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FileName), "Car" + i + ".xml");
+					string fileOut = System.IO.Path.Combine(Path.GetDirectoryName(FileName), "Car" + i + ".xml");
 					try
 					{
 						
@@ -394,13 +250,13 @@ namespace CarXmlConvertor
 				
 			}
 
-			string pluginFile = ConvertAts.DllPath(System.IO.Path.GetDirectoryName(FileName));
+			string pluginFile = ConvertAts.DllPath(Path.GetDirectoryName(FileName));
 			if (!string.IsNullOrEmpty(pluginFile))
 			{
 				newLines.Add("<Plugin>" + pluginFile + "</Plugin>");
 			}
 			newLines.Add("<HeadlightStates>1</HeadlightStates>");
-			string trainTxt = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), "train.txt");
+			string trainTxt = Path.CombineFile(Path.GetDirectoryName(FileName), "train.txt");
 			if (File.Exists(trainTxt))
 			{
 				string desc = File.ReadAllText(trainTxt, OpenBveApi.TextEncoding.GetSystemEncodingFromFile(trainTxt));
@@ -410,7 +266,7 @@ namespace CarXmlConvertor
 			newLines.Add("</openBVE>");
 			try
 			{
-				string fileOut = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FileName), "Train.xml");
+				string fileOut = System.IO.Path.Combine(Path.GetDirectoryName(FileName), "Train.xml");
 				using (StreamWriter sw = new StreamWriter(fileOut))
 				{
 					foreach (String s in newLines.Lines)
@@ -463,6 +319,7 @@ namespace CarXmlConvertor
 				}
 				newLines.Add("<Power>");
 				newLines.Add("<Notches>" + ConvertTrainDat.PowerNotches + "</Notches>");
+				newLines.Add("<!-- Note that XML figures are per-car as opposed to a blended figure for the complete train in Train.dat -->");
 				newLines.Add("<AccelerationCurves>");
 				foreach (ConvertTrainDat.AccelerationCurve curve in ConvertTrainDat.AccelerationCurves)
 				{
@@ -472,6 +329,8 @@ namespace CarXmlConvertor
 					newLines.Add("<StageOneSpeed>" + curve.StageOneSpeed + "</StageOneSpeed>");
 					newLines.Add("<StageTwoSpeed>" + curve.StageTwoSpeed + "</StageTwoSpeed>");
 					newLines.Add("<StageTwoExponent>" + curve.StageTwoExponent + "</StageTwoExponent>");
+					newLines.Add("<!-- If manually setting the acceleration figures per motor car, you will normally want a multiplier of 1.0 -->");
+					newLines.Add("<Multiplier>" + curve.Multiplier + "</Multiplier>");
 					newLines.Add("</OpenBVE>");
 				}
 				newLines.Add("</AccelerationCurves>");
@@ -496,16 +355,17 @@ namespace CarXmlConvertor
 			}
 			if (!String.IsNullOrEmpty(CarInfos[i].Object))
 			{
-				newLines.Add("<Object>" + CarInfos[i].Object + "</Object>");
+				newLines.Add("<Object>" + CarInfos[i].Object.Escape() + "</Object>");
 			}
 			newLines.Add("<Reversed>" + CarInfos[i].Reversed + "</Reversed>");
+			newLines.Add("<VisibleFromInterior>" + CarInfos[i].VisibleFromInterior + "</VisibleFromInterior>");
 			newLines.Add("<LoadingSway>" + CarInfos[i].LoadingSway + "</LoadingSway>");
 			if (CarInfos[i].FrontBogie.AxlesDefined || !string.IsNullOrEmpty(CarInfos[i].FrontBogie.Object))
 			{
 				newLines.Add("<FrontBogie>");
 				newLines.Add("<FrontAxle>" + CarInfos[i].FrontBogie.FrontAxle + "</FrontAxle>");
 				newLines.Add("<RearAxle>" + CarInfos[i].FrontBogie.RearAxle + "</RearAxle>");
-				newLines.Add("<Object>" + CarInfos[i].FrontBogie.Object + "</Object>");
+				newLines.Add("<Object>" + CarInfos[i].FrontBogie.Object.Escape() + "</Object>");
 				newLines.Add("<Reversed>" + CarInfos[i].FrontBogie.Reversed + "</Reversed>");
 				newLines.Add("</FrontBogie>");
 			}
@@ -515,21 +375,21 @@ namespace CarXmlConvertor
 				newLines.Add("<RearBogie>");
 				newLines.Add("<FrontAxle>" + CarInfos[i].RearBogie.FrontAxle + "</FrontAxle>");
 				newLines.Add("<RearAxle>" + CarInfos[i].RearBogie.RearAxle + "</RearAxle>");
-				newLines.Add("<Object>" + CarInfos[i].RearBogie.Object + "</Object>");
+				newLines.Add("<Object>" + CarInfos[i].RearBogie.Object.Escape() + "</Object>");
 				newLines.Add("<Reversed>" + CarInfos[i].RearBogie.Reversed + "</Reversed>");
 				newLines.Add("</RearBogie>");
 			}
 			if (i == ConvertTrainDat.DriverCar)
 			{
-				if(File.Exists(Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), "panel.animated")))
+				if(File.Exists(Path.CombineFile(Path.GetDirectoryName(FileName), "panel.animated")))
 				{
 					newLines.Add("<InteriorView>panel.animated</InteriorView>" );
-					newLines.Add("<DriverPosition>" + ConvertSoundCfg.DriverPosition.X + "," + ConvertSoundCfg.DriverPosition.Y + "," + ConvertSoundCfg.DriverPosition.Z + "</DriverPosition>");
+					newLines.Add("<DriverPosition>" + ConvertTrainDat.DriverPosition + "</DriverPosition>");
 				}
-				else if (File.Exists(Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), "panel2.cfg")))
+				else if (File.Exists(Path.CombineFile(Path.GetDirectoryName(FileName), "panel2.cfg")))
 				{
 					newLines.Add("<InteriorView>panel.xml</InteriorView>");
-					newLines.Add("<DriverPosition>" + ConvertSoundCfg.DriverPosition.X + "," + ConvertSoundCfg.DriverPosition.Y + "," + ConvertSoundCfg.DriverPosition.Z + "</DriverPosition>");
+					newLines.Add("<DriverPosition>" + ConvertTrainDat.DriverPosition + "</DriverPosition>");
 				}
 			}
 			newLines.Add("<Brake>");
@@ -539,6 +399,7 @@ namespace CarXmlConvertor
 				newLines.Add("<Notches>" + ConvertTrainDat.BrakeNotches + "</Notches>");
 				newLines.Add("</Handle>");
 			}
+			newLines.Add("<!-- Pressures are in kPa -->");
 			if (ConvertTrainDat.MotorCars[i])
 			{
 
@@ -576,6 +437,7 @@ namespace CarXmlConvertor
 			newLines.Add("<EmergencyRate>" + ConvertTrainDat.BrakeCylinderEmergencyRate + "</EmergencyRate>");
 			newLines.Add("<ReleaseRate>" + ConvertTrainDat.BrakeCylinderReleaseRate + "</ReleaseRate>");
 			newLines.Add("</BrakeCylinder>");
+			newLines.Add("<LegacyPressureDistribution>true</LegacyPressureDistribution>");
 			newLines.Add("</Brake>");
 			newLines.Add("<Doors>");
 			newLines.Add("<Width>" + ConvertTrainDat.DoorWidth / 1000.0 + "</Width>");
@@ -589,9 +451,10 @@ namespace CarXmlConvertor
 					newLines.Add("<Coupler>");
 					newLines.Add("<Minimum>" + Couplers[i].Min + "</Minimum>");
 					newLines.Add("<Maximum>" + Couplers[i].Max + "</Maximum>");
+					newLines.Add("<CanUncouple>true</CanUncouple>");
 					if (!string.IsNullOrEmpty(Couplers[i].Object))
 					{
-						newLines.Add("<Object>" + Couplers[i].Object + "</Object>");
+						newLines.Add("<Object>" + Couplers[i].Object.Escape() + "</Object>");
 					}
 					newLines.Add("</Coupler>");
 				}
@@ -610,14 +473,25 @@ namespace CarXmlConvertor
 				newLines.Add("<Length>" + ConvertTrainDat.CarLength + "</Length>");
 				newLines.Add("<Width>" + ConvertTrainDat.CarWidth + "</Width>");
 				newLines.Add("<Height>" + ConvertTrainDat.CarHeight + "</Height>");
+				newLines.Add("<CenterOfGravityHeight>" + ConvertTrainDat.CenterOfGravityHeight + "</CenterOfGravityHeight>");
+				if (ConvertTrainDat.ExposedFrontalArea != -1)
+				{
+					newLines.Add("<ExposedFrontalArea>" + ConvertTrainDat.ExposedFrontalArea + "</ExposedFrontalArea>");
+				}
+				if (ConvertTrainDat.UnexposedFrontalArea != -1)
+				{
+					newLines.Add("<UnexposedFrontalArea>" + ConvertTrainDat.UnexposedFrontalArea + "</UnexposedFrontalArea>");
+				}
 				if (ConvertTrainDat.MotorCars[i])
 				{
 					newLines.Add("<MotorCar>True</MotorCar>");
+					newLines.Add("<!-- Masses are in kg -->");
 					newLines.Add("<Mass>" + ConvertTrainDat.MotorCarMass + "</Mass>");
 				}
 				else
 				{
 					newLines.Add("<MotorCar>False</MotorCar>");
+					newLines.Add("<!-- Masses are in kg -->");
 					newLines.Add("<Mass>" + ConvertTrainDat.TrailerCarMass + "</Mass>");
 				}
 				newLines.Add("<FrontAxle>" + 0.4 * ConvertTrainDat.CarLength + "</FrontAxle>");
@@ -625,13 +499,16 @@ namespace CarXmlConvertor
 				newLines.Add("</Car>");
 			}
 			newLines.Add("<DriverCar>" + ConvertTrainDat.DriverCar + "</DriverCar>");
-			string pluginFile = ConvertAts.DllPath(System.IO.Path.GetDirectoryName(FileName));
+			string pluginFile = ConvertAts.DllPath(Path.GetDirectoryName(FileName));
 			if (!string.IsNullOrEmpty(pluginFile))
 			{
-				newLines.Add("<Plugin>" + pluginFile + "</Plugin>");
+				newLines.Add("<Plugin>");
+				newLines.Add("<File>" + pluginFile + "</File>");
+				newLines.Add("<LoadForAI>false</LoadForAI>");
+				newLines.Add("</Plugin>");
 			}
 			newLines.Add("<HeadlightStates>1</HeadlightStates>");
-			string trainTxt = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), "train.txt");
+			string trainTxt = Path.CombineFile(Path.GetDirectoryName(FileName), "train.txt");
 			if (File.Exists(trainTxt))
 			{
 				string desc = File.ReadAllText(trainTxt);
@@ -640,7 +517,7 @@ namespace CarXmlConvertor
 			newLines.Add("</Train>");
 			newLines.Add("</openBVE>");
 			// ReSharper disable once AssignNullToNotNullAttribute
-			string fileOut = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FileName), "Train.xml");
+			string fileOut = System.IO.Path.Combine(Path.GetDirectoryName(FileName), "Train.xml");
 			try
 			{
 				using (StreamWriter sw = new StreamWriter(fileOut))

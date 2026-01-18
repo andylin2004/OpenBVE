@@ -1,5 +1,4 @@
-﻿using System;
-using OpenBveApi.Routes;
+﻿using OpenBveApi.Routes;
 using OpenBveApi.Trains;
 using RouteManager2.Events;
 
@@ -19,9 +18,7 @@ namespace CsvRwRouteParser
 		{
 			if (TrackPosition >= StartingDistance & TrackPosition < EndingDistance)
 			{
-				int m = Element.Events.Length;
-				Array.Resize(ref Element.Events, m + 1);
-				Element.Events[m] = new RequestStopEvent(Plugin.CurrentRoute, StationIndex, MaxNumberOfCars, FullSpeed, OnTime, Early, Late);
+				Element.Events.Add(new RequestStopEvent(Plugin.CurrentRoute, StationIndex, MaxNumberOfCars, FullSpeed, OnTime, Early, Late));
 			}
 		}
 	}

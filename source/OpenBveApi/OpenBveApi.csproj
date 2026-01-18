@@ -54,6 +54,17 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <LangVersion>7</LangVersion>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GLMenu|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\GLMenu\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <DocumentationFile>..\..\bin_debug\OpenBveApi.xml</DocumentationFile>
+    <FileAlignment>4096</FileAlignment>
+    <DebugType>Full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <LangVersion>7</LangVersion>
+  </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
     <Reference Include="CSScriptLibrary, Version=3.30.3.0, Culture=neutral, PublicKeyToken=70fcc3d18c749033, processorArchitecture=MSIL">
@@ -111,11 +122,17 @@
     <Compile Include="Interface\Logging\LogMessage.cs" />
     <Compile Include="Interface\Logging\LogMessage.MessageType.cs" />
     <Compile Include="Interface\Time.cs" />
-    <Compile Include="Interface\Translations\Language.cs" />
+    <Compile Include="Interface\Translations\Language\InterfaceQuickReference.cs" />
+    <Compile Include="Interface\Translations\Language\Language.cs" />
+    <Compile Include="Interface\Translations\Language\TranslationGroup.cs" />
+    <Compile Include="Interface\Translations\Language\TranslationString.cs" />
+    <Compile Include="Math\Endianness.cs" />
+    <Compile Include="Math\Extensions.cs" />
     <Compile Include="Math\Matrix4.cs" />
     <Compile Include="Math\Quaternion.cs" />
     <Compile Include="Math\Vectors\Vector2f.cs" />
     <Compile Include="Math\Vectors\Vector3f.cs" />
+    <Compile Include="Math\Vectors\Vector3i.cs" />
     <Compile Include="Math\Vectors\Vector4.cs" />
     <Compile Include="Objects\FaceType.cs" />
     <Compile Include="Objects\Glow.cs" />
@@ -130,13 +147,24 @@
     <Compile Include="Objects\MeshMaterial.Flags.cs" />
     <Compile Include="Objects\ObjectInterface.cs" />
     <Compile Include="Objects\ObjectState.cs" />
-    <Compile Include="Objects\ObjectTypes\AnimatedObject.AnimatedObjectState.cs" />
-    <Compile Include="Objects\ObjectTypes\AnimatedObject.cs" />
-    <Compile Include="Objects\ObjectTypes\AnimatedObjectCollection.cs" />
-    <Compile Include="Objects\ObjectTypes\AnimatedWorldObject.cs" />
-    <Compile Include="Objects\ObjectTypes\AnimatedWorldObject.StateSound.cs" />
+    <Compile Include="Objects\ObjectTypes\AnimatedObject\AnimatedObject.cs" />
+    <Compile Include="Objects\ObjectTypes\AnimatedObject\AnimatedObjectCollection.cs" />
+    <Compile Include="Objects\ObjectTypes\AnimatedObject\AnimatedWorldObject.cs" />
+    <Compile Include="Objects\ObjectTypes\AnimatedObject\AnimatedWorldObject.StateSound.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\AbstractAnimation.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\Frames\AbstractFrame.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\Frames\QuaternionFrame.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\Frames\VectorFrame.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\LinearPos.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\SlerpRot.cs" />
+    <Compile Include="Objects\ObjectTypes\Animations\TcbKey.cs" />
+    <Compile Include="Objects\ObjectTypes\KeyframeAnimatedObject\KeyframeAnimatedObject.cs" />
+    <Compile Include="Objects\ObjectTypes\KeyframeAnimatedObject\KeyframeAnimation.cs" />
+    <Compile Include="Objects\ObjectTypes\KeyframeAnimatedObject\KeyframeMatrix.cs" />
+    <Compile Include="Objects\ObjectTypes\KeyframeAnimatedObject\KeyframeWorldObject.cs" />
+    <Compile Include="Objects\ObjectTypes\KeyframeAnimatedObject\PivotPoint.cs" />
     <Compile Include="Objects\ObjectTypes\StaticObject.cs" />
-    <Compile Include="Objects\ObjectTypes\TrackFollowingObject.cs" />
+    <Compile Include="Objects\ObjectTypes\AnimatedObject\TrackFollowingObject.cs" />
     <Compile Include="Objects\ObjectTypes\UnifiedObject.cs" />
     <Compile Include="Objects\ObjectTypes\WorldObject.cs" />
     <Compile Include="Objects\ObjectTypes\WorldSound.cs" />
@@ -156,6 +184,9 @@
     <Compile Include="Routes\Events.TriggerTypes.cs" />
     <Compile Include="Routes\LightDefinition.cs" />
     <Compile Include="Routes\ObjectDisposalMode.cs" />
+    <Compile Include="Routes\PowerSupply.cs" />
+    <Compile Include="Routes\PowerSupply.Types.cs" />
+    <Compile Include="Routes\PowerSupply.VoltageTypes.cs" />
     <Compile Include="Routes\QuadTree\QuadNode.cs" />
     <Compile Include="Routes\QuadTree\QuadNode.Internal.cs" />
     <Compile Include="Routes\QuadTree\QuadNode.Leaf.cs" />
@@ -195,13 +226,19 @@
     <Compile Include="Sounds\Sounds.SoundSourceState.cs" />
     <Compile Include="Sounds\Sounds.SoundType.cs" />
     <Compile Include="System\BaseOptions.cs" />
+    <Compile Include="System\BaseOptions.OptionsKey.cs" />
+    <Compile Include="System\BaseOptions.OptionsSection.cs" />
+    <Compile Include="System\BinaryExtensions.cs" />
+    <Compile Include="System\DictionaryExtensions.cs" />
     <Compile Include="System\Files.cs" />
     <Compile Include="System\FileSystem.cs" />
     <Compile Include="Graphics\InterpolationModes.cs" />
     <Compile Include="Graphics\TextAlignment.cs" />
     <Compile Include="Graphics\TransparencyModes.cs" />
     <Compile Include="System\GameMode.cs" />
-    <Compile Include="System\Hosts.cs" />
+    <Compile Include="System\Hosts\HostApplication.cs" />
+    <Compile Include="System\Hosts\HostPlatform.cs" />
+    <Compile Include="System\Hosts\HostInterface.cs" />
     <Compile Include="Interface\Input\Commands.CommandInfo.cs" />
     <Compile Include="Interface\Input\Commands.cs" />
     <Compile Include="Interface\Translations\InterfaceStrings.cs" />
@@ -212,25 +249,33 @@
     <Compile Include="Objects\Glow.AttenuationMode.cs" />
     <Compile Include="Objects\ObjectType.cs" />
     <Compile Include="System\Hosts.Plugins.cs" />
+    <Compile Include="System\Hosts\ProblemType.cs" />
     <Compile Include="System\Interop.cs" />
+    <Compile Include="System\Path.Filenames.cs" />
     <Compile Include="System\SimulationState.cs" />
     <Compile Include="System\TextEncoding.cs" />
     <Compile Include="System\Timers.cs" />
     <Compile Include="Textures\Textures.ByteArrayOrigin.cs" />
     <Compile Include="Textures\Textures.ImageSizeMode.cs" />
+    <Compile Include="Textures\Textures.PixelFormat.cs" />
     <Compile Include="Train\AbstractCar.cs" />
     <Compile Include="Train\AbstractTrain.cs" />
     <Compile Include="Train\Axle.cs" />
     <Compile Include="Train\CarBrightness.cs" />
     <Compile Include="Train\AbstractCoupler.cs" />
     <Compile Include="Train\GeneralAI.cs" />
+    <Compile Include="Train\Motor\ComponentTypes.cs" />
+    <Compile Include="Train\Motor\EngineType.cs" />
+    <Compile Include="Train\Motor\PantographState.cs" />
     <Compile Include="Train\RequestStop.cs" />
     <Compile Include="Train\StopSkipMode.cs" />
     <Compile Include="Train\TrainInterface.cs" />
     <Compile Include="Train\TrainStartMode.cs" />
     <Compile Include="Train\TrainState.cs" />
     <Compile Include="Train\TrainStopState.cs" />
+    <Compile Include="Train\TrainType.cs" />
     <Compile Include="Train\TravelDirection.cs" />
+    <Compile Include="Train\Wheels\Wheels.cs" />
     <Compile Include="World\Orientation3.cs" />
     <Compile Include="Packages\Packages.cs" />
     <Compile Include="Packages\Packages.Database.cs" />
@@ -261,11 +306,20 @@
     <Compile Include="World\Transformations.cs" />
     <Compile Include="Math\Vectors\Vector2.cs" />
     <Compile Include="Math\Vectors\Vector3.cs" />
+    <Compile Include="World\UnitConversions\Current.cs" />
     <Compile Include="World\UnitConversions\Force.cs" />
     <Compile Include="World\UnitConversions\Length.cs" />
+    <Compile Include="World\UnitConversions\Pressure.cs" />
+    <Compile Include="World\UnitConversions\Torque.cs" />
     <Compile Include="World\UnitConversions\UnitConvertor.cs" />
+    <Compile Include="World\UnitConversions\Velocity.cs" />
+    <Compile Include="World\UnitConversions\Volume.cs" />
     <Compile Include="World\UnitConversions\Weight.cs" />
-    <Compile Include="World\LightMappedVertex.cs" />
+    <Compile Include="World\Verticies\AnimatedVertex.cs" />
+    <Compile Include="World\Verticies\ColoredVertex.cs" />
+    <Compile Include="World\Verticies\LightMappedVertex.cs" />
+    <Compile Include="World\Verticies\Vertex.cs" />
+    <Compile Include="World\Verticies\VertexTemplate.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resource.resx">

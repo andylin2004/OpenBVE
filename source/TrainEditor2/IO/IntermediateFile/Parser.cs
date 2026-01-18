@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using System.Xml.XPath;
+using Formats.OpenBve;
 using OpenBveApi.Colors;
 using OpenBveApi.Interface;
+using OpenBveApi.Math;
 using TrainEditor2.Extensions;
 using TrainEditor2.Models.Panels;
 using TrainEditor2.Models.Sounds;
@@ -125,10 +127,9 @@ namespace TrainEditor2.IO.IntermediateFile
 			car.Move = ParseMoveNode(parent.Element("Move"));
 			car.Brake = ParseBrakeNode(parent.Element("Brake"));
 			car.Pressure = ParsePressureNode(parent.Element("Pressure"));
+			car.particleSources = new ObservableCollection<ParticleSource>(parent.Elements("ParticleSource").Select(ParseParticleSourceNode));
 
-			MotorCar motorCar = car as MotorCar;
-
-			if (motorCar != null)
+			if (car is MotorCar motorCar)
 			{
 				motorCar.Acceleration = ParseAccelerationNode(parent.Element("Acceleration"));
 				motorCar.Motor = ParseMotorNode(parent.Element("Motor"));
@@ -252,6 +253,26 @@ namespace TrainEditor2.IO.IntermediateFile
 			return track;
 		}
 
+		private static ParticleSource ParseParticleSourceNode(XElement parent)
+		{
+			string s = (string)parent.Element("InitialDirection");
+			Vector3.TryParse(s.Split(','), out Vector3 initialDirection);
+			s = (string)parent.Element("Location");
+			Vector3.TryParse(s.Split(','), out Vector3 sourceLocation);
+			return new ParticleSource()
+			{
+				InitialDirectionX = initialDirection.X,
+				InitialDirectionY = initialDirection.Y,
+				InitialDirectionZ = initialDirection.Z,
+				LocationX = sourceLocation.X,
+				LocationY = sourceLocation.Y,
+				LocationZ = sourceLocation.Z,
+				InitialSize = (double)parent.Element("MaximumSize"),
+				MaximiumSize = (double)parent.Element("MaximumGrownSize"),
+				TextureFile = (string)parent.Element("Texture")
+			};
+		}
+
 		private static void ParseVertexLineNode(XElement parent, out Motor.VertexLibrary vertices, out ObservableCollection<Motor.Line> lines)
 		{
 			vertices = new Motor.VertexLibrary();
@@ -306,10 +327,8 @@ namespace TrainEditor2.IO.IntermediateFile
 				DaytimeImage = (string)parent.Element("DaytimeImage"),
 				NighttimeImage = (string)parent.Element("NighttimeImage"),
 				TransparentColor = Color24.ParseHexColor((string)parent.Element("TransparentColor")),
-				CenterX = center[0],
-				CenterY = center[1],
-				OriginX = origin[0],
-				OriginY = origin[1]
+				Center = new Vector2(center[0], center[1]),
+				Origin = new Vector2(origin[0], origin[1])
 			};
 		}
 
@@ -362,8 +381,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new Models.Panels.PilotLampElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Subject = ParseSubjectNode(parent.Element("Subject")),
 				DaytimeImage = (string)parent.Element("DaytimeImage"),
@@ -379,8 +397,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new NeedleElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Subject = ParseSubjectNode(parent.Element("Subject")),
 				DaytimeImage = (string)parent.Element("DaytimeImage"),
@@ -390,8 +407,7 @@ namespace TrainEditor2.IO.IntermediateFile
 				Radius = (double)parent.Element("Radius"),
 				Color = Color24.ParseHexColor((string)parent.Element("Color")),
 				DefinedOrigin = (bool)parent.Element("DefinedOrigin"),
-				OriginX = origin[0],
-				OriginY = origin[1],
+				Origin = new Vector2(origin[0], origin[1]),
 				InitialAngle = (double)parent.Element("InitialAngle"),
 				LastAngle = (double)parent.Element("LastAngle"),
 				Minimum = (double)parent.Element("Minimum"),
@@ -411,8 +427,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new DigitalNumberElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Subject = ParseSubjectNode(parent.Element("Subject")),
 				DaytimeImage = (string)parent.Element("DaytimeImage"),
@@ -428,8 +443,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new DigitalGaugeElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Subject = ParseSubjectNode(parent.Element("Subject")),
 				Radius = (double)parent.Element("Radius"),
@@ -449,8 +463,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new LinearGaugeElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Subject = ParseSubjectNode(parent.Element("Subject")),
 				DaytimeImage = (string)parent.Element("DaytimeImage"),
@@ -458,8 +471,7 @@ namespace TrainEditor2.IO.IntermediateFile
 				TransparentColor = Color24.ParseHexColor((string)parent.Element("TransparentColor")),
 				Minimum = (double)parent.Element("Minimum"),
 				Maximum = (double)parent.Element("Maximum"),
-				DirectionX = direction[0],
-				DirectionY = direction[1],
+				Direction = new Vector2(direction[0], direction[1]),
 				Width = (int)parent.Element("Width")
 			};
 		}
@@ -470,8 +482,7 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			element = new TimetableElement
 			{
-				LocationX = location[0],
-				LocationY = location[1],
+				Location = new Vector2(location[0], location[1]),
 				Layer = (int)parent.Element("Layer"),
 				Width = (double)parent.Element("Width"),
 				Height = (double)parent.Element("Height"),
@@ -483,7 +494,7 @@ namespace TrainEditor2.IO.IntermediateFile
 		{
 			return new Subject
 			{
-				Base = (SubjectBase)Enum.Parse(typeof(SubjectBase), (string)parent.Element("Base")),
+				Base = (Panel2Subject)Enum.Parse(typeof(Panel2Subject), (string)parent.Element("Base")),
 				BaseOption = (int)parent.Element("BaseOption"),
 				Suffix = (SubjectSuffix)Enum.Parse(typeof(SubjectSuffix), (string)parent.Element("Suffix")),
 				SuffixOption = (int)parent.Element("SuffixOption")
@@ -497,10 +508,8 @@ namespace TrainEditor2.IO.IntermediateFile
 
 			Models.Panels.TouchElement element = new Models.Panels.TouchElement(screen)
 			{
-				LocationX = location[0],
-				LocationY = location[1],
-				SizeX = size[0],
-				SizeY = size[1],
+				Location = new Vector2(location[0], location[1]),
+				Size = new Vector2(size[0], size[1]),
 				JumpScreen = (int)parent.Element("JumpScreen")
 			};
 

@@ -1,4 +1,6 @@
-﻿using System;
+#pragma warning disable CS0618 // Type or member is obsolete
+
+using System;
 using System.Reflection;
 using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
@@ -97,7 +99,7 @@ namespace TrainManager.Trains
 			bool success = LoadPlugin(file, trainFolder);
 			if (success == false)
 			{
-				TrainManagerBase.PluginError = Translations.GetInterfaceString("errors_plugin_failure1").Replace("[plugin]", file);
+				TrainManagerBase.PluginError = Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"errors","plugin_failure1"}).Replace("[plugin]", file);
 			}
 			else
 			{
@@ -108,7 +110,7 @@ namespace TrainManager.Trains
 		}
 
 		/// <summary>Gets the vehicle specs for use in safety system plugins</summary>
-		public VehicleSpecs vehicleSpecs()
+		public VehicleSpecs GetVehicleSpecs()
 		{
 			BrakeTypes brakeType;
 			//Figure out the brake system type
@@ -142,7 +144,7 @@ namespace TrainManager.Trains
 
 			bool hasLocoBrake = Handles.HasLocoBrake;
 			int cars = Cars.Length;
-			return new VehicleSpecs(powerNotches, brakeType, brakeNotches, hasHoldBrake, hasLocoBrake, cars, SafetySystems.Headlights.NumberOfStates);
+			return new VehicleSpecs(powerNotches, brakeType, brakeNotches, hasHoldBrake, hasLocoBrake, cars, SafetySystems.Headlights?.NumberOfStates ?? 0);
 		}
 
 		/// <summary>Loads the specified plugin for the specified train.</summary>
@@ -187,7 +189,7 @@ namespace TrainManager.Trains
 					AssemblyName myAssembly = AssemblyName.GetAssemblyName(pluginFile);
 					if (IntPtr.Size != 4 && myAssembly.ProcessorArchitecture == ProcessorArchitecture.X86)
 					{
-						TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " can only be used with the 32-bit version of " + Translations.GetInterfaceString("program_title"));
+						TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " can only be used with the 32-bit version of " + Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"program","title"}));
 						return false;
 					}
 				}
@@ -222,6 +224,15 @@ namespace TrainManager.Trains
 
 				foreach (Type type in types)
 				{
+					/*
+					 * NOTE: This originally used:
+					 * --------------------------
+					 * IRuntime api = assembly.CreateInstance(type.FullName) as IRuntime;
+					 * --------------------------
+					 * This seems to fail when loading multiple copies of the some plugins
+					 * I don't see why, both should do exactly the same thing :/
+					 */
+
 					// IRawRuntime first as IRuntime is assignable from it
 					if (typeof(IRawRuntime).IsAssignableFrom(type))
 					{
@@ -230,9 +241,9 @@ namespace TrainManager.Trains
 							//Should never happen, but static code inspection suggests that it's possible....
 							throw new InvalidOperationException();
 						}
-						IRawRuntime api = assembly.CreateInstance(type.FullName) as IRawRuntime;
+						IRawRuntime api = Activator.CreateInstance(type) as IRawRuntime;
 						Plugin = new NetPlugin(pluginFile, trainFolder, api, this);
-						if (Plugin.Load(vehicleSpecs(), mode))
+						if (Plugin.Load(GetVehicleSpecs(), mode))
 						{
 							return true;
 						}
@@ -246,9 +257,9 @@ namespace TrainManager.Trains
 							//Should never happen, but static code inspection suggests that it's possible....
 							throw new InvalidOperationException();
 						}
-						IRuntime api = assembly.CreateInstance(type.FullName) as IRuntime;
+						IRuntime api = Activator.CreateInstance(type) as IRuntime;
 						Plugin = new NetPlugin(pluginFile, trainFolder, api, this);
-						if (Plugin.Load(vehicleSpecs(), mode))
+						if (Plugin.Load(GetVehicleSpecs(), mode))
 						{
 							return true;
 						}
@@ -257,7 +268,7 @@ namespace TrainManager.Trains
 					}
 				}
 
-				TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " does not export a train interface and therefore cannot be used with" + Translations.GetInterfaceString("program_title") + ".");
+				TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " does not export a train interface and therefore cannot be used with" + Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"program","title"}));
 				return false;
 			}
 
@@ -269,7 +280,7 @@ namespace TrainManager.Trains
 			{
 				if (!Win32Plugin.CheckHeader(pluginFile))
 				{
-					TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " is of an unsupported binary format and therefore cannot be used with "  + Translations.GetInterfaceString("program_title") + ".");
+					TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " is of an unsupported binary format and therefore cannot be used with "  + Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"program","title"}));
 					return false;
 				}
 			}
@@ -279,25 +290,33 @@ namespace TrainManager.Trains
 				return false;
 			}
 
-			if (TrainManagerBase.currentHost.Platform != HostPlatform.MicrosoftWindows | IntPtr.Size != 4)
+			switch (TrainManagerBase.currentHost.Platform)
 			{
-				if (TrainManagerBase.currentHost.Platform == HostPlatform.MicrosoftWindows && IntPtr.Size != 4)
-				{
-					//We can't load the plugin directly on x64 Windows, so use the proxy interface
-					Plugin = new ProxyPlugin(pluginFile, this);
-					if (Plugin.Load(vehicleSpecs(), mode))
+				case HostPlatform.WINE:
+					if (IntPtr.Size != 4)
 					{
-						return true;
+						TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "WINE does not support the WCF plugin proxy- Please use the 32-bit version of OpenBVE to load this train plugin.");
+						return false;
 					}
+					break;
+				case HostPlatform.MicrosoftWindows:
+					if (IntPtr.Size != 4)
+					{
+						//We can't load the plugin directly on x64 Windows, so use the proxy interface
+						Plugin = new ProxyPlugin(pluginFile, this);
+						if (Plugin.Load(GetVehicleSpecs(), mode))
+						{
+							return true;
+						}
 
-					Plugin = null;
-					TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " failed to load.");
+						Plugin = null;
+						TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " failed to load.");
+						return false;
+					}
+					break;
+				default:
+					TrainManagerBase.currentHost.AddMessage(MessageType.Warning, false, "Legacy Win32 train plugins " + pluginTitle + " can only be used on Microsoft Windows or compatible.");
 					return false;
-				}
-
-				//WINE doesn't seem to like the WCF proxy :(
-				TrainManagerBase.currentHost.AddMessage(MessageType.Warning, false, "The train plugin " + pluginTitle + " can only be used on Microsoft Windows or compatible.");
-				return false;
 			}
 
 			if (TrainManagerBase.currentHost.Platform == HostPlatform.MicrosoftWindows && !System.IO.File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\AtsPluginProxy.dll"))
@@ -307,16 +326,14 @@ namespace TrainManager.Trains
 			}
 
 			Plugin = new Win32Plugin(pluginFile, this);
-			if (Plugin.Load(vehicleSpecs(), mode))
+			if (Plugin.Load(GetVehicleSpecs(), mode))
 			{
 				return true;
 			}
-			else
-			{
-				Plugin = null;
-				TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " does not export a train interface and therefore cannot be used with" + Translations.GetInterfaceString("program_title") + ".");
-				return false;
-			}
+
+			Plugin = null;
+			TrainManagerBase.currentHost.AddMessage(MessageType.Error, false, "The train plugin " + pluginTitle + " does not export a train interface and therefore cannot be used with" + Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"program","title"}));
+			return false;
 		}
 
 		/// <summary>Loads the default plugin for the specified train.</summary>

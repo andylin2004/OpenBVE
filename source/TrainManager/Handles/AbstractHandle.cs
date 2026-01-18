@@ -11,8 +11,11 @@ namespace TrainManager.Handles
 		/// <summary>The notch set by the driver</summary>
 		public int Driver;
 
-		/// <summary>The notch set by the safety sytem</summary>
-		public int Safety;
+		/// <summary>The notch set by the safety system</summary>
+		public int Safety => safetyState;
+
+		/// <summary>Backing property for the safety state</summary>
+		protected int safetyState;
 
 		/// <summary>The actual notch, as used by the physics system etc.</summary>
 		public int Actual;
@@ -65,7 +68,7 @@ namespace TrainManager.Handles
 
 		internal readonly TrainBase baseTrain;
 
-		public abstract void Update();
+		public abstract void Update(double timeElapsed);
 
 		public virtual void ApplyState(int newState, bool relativeChange, bool isOverMaxDriverNotch = false)
 		{
@@ -76,6 +79,8 @@ namespace TrainManager.Handles
 		{
 
 		}
+
+		public abstract void ApplySafetyState(int newState);
 
 		public virtual void ResetSpring()
 		{
@@ -122,7 +127,7 @@ namespace TrainManager.Handles
 
 		internal NotchedHandle(TrainBase train) : base(train)
 		{
-
+			DelayedChanges = new HandleChange[] { };
 		}
 
 		/// <summary>Adds a delayed handle state change</summary>

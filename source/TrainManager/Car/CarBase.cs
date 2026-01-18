@@ -1,21 +1,28 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using LibRender2;
 using LibRender2.Camera;
 using LibRender2.Cameras;
+using LibRender2.Smoke;
 using LibRender2.Trains;
+using OpenBveApi;
 using OpenBveApi.Graphics;
 using OpenBveApi.Math;
+using OpenBveApi.Motor;
 using OpenBveApi.Objects;
 using OpenBveApi.Routes;
 using OpenBveApi.Runtime;
 using OpenBveApi.Trains;
 using OpenBveApi.World;
-using SoundManager;
+using TrainManager.Brake;
 using TrainManager.BrakeSystems;
 using TrainManager.Car.Systems;
 using TrainManager.Cargo;
+using TrainManager.Handles;
+using TrainManager.Motor;
 using TrainManager.Power;
+using TrainManager.SafetySystems;
 using TrainManager.Trains;
 
 namespace TrainManager.Car
@@ -36,13 +43,13 @@ namespace TrainManager.Car
 		/// <summary>The horns attached to this car</summary>
 		public Horn[] Horns;
 		/// <summary>Contains the physics properties for the car</summary>
-		public CarPhysics Specs;
+		public readonly CarPhysics Specs;
 		/// <summary>The car brake for this car</summary>
 		public CarBrake CarBrake;
 		/// <summary>The car sections (objects) attached to the car</summary>
-		public CarSection[] CarSections;
+		public Dictionary<CarSectionType, CarSection> CarSections;
 		/// <summary>The index of the current car section</summary>
-		public int CurrentCarSection;
+		public CarSectionType CurrentCarSection;
 		/// <summary>The driver's eye position within the car</summary>
 		public Vector3 Driver;
 		/// <summary>The current yaw of the driver's eyes</summary>
@@ -67,9 +74,9 @@ namespace TrainManager.Car
 		public CarConstSpeed ConstSpeed;
 		/// <summary>The readhesion device for this car</summary>
 		public AbstractReAdhesionDevice ReAdhesionDevice;
-		/// <summary>The position of the beacon reciever within the car</summary>
+		/// <summary>The position of the beacon receiver within the car</summary>
 		public double BeaconReceiverPosition;
-		/// <summary>The beacon reciever</summary>
+		/// <summary>The beacon receiver</summary>
 		public TrackFollower BeaconReceiver;
 		/// <summary>Stores the camera restriction mode for the interior view of this car</summary>
 		public CameraRestrictionMode CameraRestrictionMode = CameraRestrictionMode.NotSpecified;
@@ -85,21 +92,47 @@ namespace TrainManager.Car
 		public CarSounds Sounds;
 		/// <summary>The cargo carried by the car</summary>
 		public CargoBase Cargo;
+		/// <summary>The car suspension</summary>
+		public Suspension Suspension;
+		/// <summary>The flange sounds</summary>
+		public Flange Flange;
+		/// <summary>The run sounds</summary>
+		public RunSounds Run;
+		/// <summary>The traction model</summary>
+		public TractionModel TractionModel;
 
-		public CarBase(TrainBase train, int index, double CoefficientOfFriction, double CoefficientOfRollingResistance, double AerodynamicDragCoefficient)
+		public List<ParticleSource> ParticleSources;
+
+		public Dictionary<SafetySystem, AbstractSafetySystem> SafetySystems;
+
+		public override Dictionary<PowerSupplyTypes, PowerSupply> AvailablePowerSupplies
+		{
+			get
+			{
+				if (TractionModel.Components.TryGetTypedValue(EngineComponent.Pantograph, out Pantograph pantograph))
+				{
+					return pantograph.AvailablePowerSupplies;
+				}
+				return base.AvailablePowerSupplies;
+			}
+		}
+
+		private int trainCarIndex;
+
+		public CarBase(TrainBase train, int index, double coefficientOfFriction, double coefficientOfRollingResistance, double aerodynamicDragCoefficient)
 		{
 			Specs = new CarPhysics();
 			Brightness = new Brightness(this);
 			baseTrain = train;
-			Index = index;
-			CarSections = new CarSection[] { };
-			FrontAxle = new Axle(TrainManagerBase.currentHost, train, this, CoefficientOfFriction, CoefficientOfRollingResistance, AerodynamicDragCoefficient);
+			trainCarIndex = index;
+			CarSections = new Dictionary<CarSectionType, CarSection>();
+			FrontAxle = new BVEAxle(TrainManagerBase.currentHost, train, this, coefficientOfFriction, coefficientOfRollingResistance, aerodynamicDragCoefficient);
 			FrontAxle.Follower.TriggerType = index == 0 ? EventTriggerType.FrontCarFrontAxle : EventTriggerType.OtherCarFrontAxle;
-			RearAxle = new Axle(TrainManagerBase.currentHost, train, this, CoefficientOfFriction, CoefficientOfRollingResistance, AerodynamicDragCoefficient);
+			RearAxle = new BVEAxle(TrainManagerBase.currentHost, train, this, coefficientOfFriction, coefficientOfRollingResistance, aerodynamicDragCoefficient);
 			RearAxle.Follower.TriggerType = index == baseTrain.Cars.Length - 1 ? EventTriggerType.RearCarRearAxle : EventTriggerType.OtherCarRearAxle;
 			BeaconReceiver = new TrackFollower(TrainManagerBase.currentHost, train);
-			FrontBogie = new Bogie(train, this, false);
-			RearBogie = new Bogie(train, this, true);
+			FrontBogie = new Bogie(this, false);
+			RearBogie = new Bogie(this, true);
 			Doors = new Door[2];
 			Horns = new[]
 			{
@@ -108,23 +141,26 @@ namespace TrainManager.Car
 				new Horn(this)
 			};
 			Sounds = new CarSounds();
-			CurrentCarSection = -1;
 			ChangeCarSection(CarSectionType.NotVisible);
-			FrontBogie.ChangeSection(-1);
-			RearBogie.ChangeSection(-1);
 			Cargo = new Passengers(this);
+			Suspension = new Suspension(this);
+			Flange = new Flange(this);
+			Run = new RunSounds(this);
+			ParticleSources = new List<ParticleSource>();
+			SafetySystems = new Dictionary<SafetySystem, AbstractSafetySystem>();
 		}
 
 		public CarBase(TrainBase train, int index)
 		{
 			baseTrain = train;
-			Index = index;
-			CarSections = new CarSection[] { };
-			FrontAxle = new Axle(TrainManagerBase.currentHost, train, this);
-			RearAxle = new Axle(TrainManagerBase.currentHost, train, this);
+			trainCarIndex = index;
+			CarSections = new Dictionary<CarSectionType, CarSection>();
+			CurrentCarSection = CarSectionType.NotVisible;
+			FrontAxle = new BVEAxle(TrainManagerBase.currentHost, train, this);
+			RearAxle = new BVEAxle(TrainManagerBase.currentHost, train, this);
 			BeaconReceiver = new TrackFollower(TrainManagerBase.currentHost, train);
-			FrontBogie = new Bogie(train, this, false);
-			RearBogie = new Bogie(train, this, true);
+			FrontBogie = new Bogie(this, false);
+			RearBogie = new Bogie(this, true);
 			Doors = new Door[2];
 			Horns = new[]
 			{
@@ -134,28 +170,48 @@ namespace TrainManager.Car
 			};
 			Brightness = new Brightness(this);
 			Cargo = new Passengers(this);
+			Specs = new CarPhysics();
+			Suspension = new Suspension(this);
+			Flange = new Flange(this);
+			Run = new RunSounds(this);
+			Sounds = new CarSounds();
+			Coupler = new Coupler(0, 0, this, null);
+			ParticleSources = new List<ParticleSource>();
+			SafetySystems = new Dictionary<SafetySystem, AbstractSafetySystem>();
 		}
 
 		/// <summary>Moves the car</summary>
 		/// <param name="Delta">The delta to move</param>
 		public void Move(double Delta)
 		{
-			if (baseTrain.State != TrainState.Disposed)
+			if (baseTrain.State < TrainState.DisposePending)
 			{
 				FrontAxle.Follower.UpdateRelative(Delta, true, true);
 				FrontBogie.FrontAxle.Follower.UpdateRelative(Delta, true, true);
 				FrontBogie.RearAxle.Follower.UpdateRelative(Delta, true, true);
-				if (baseTrain.State != TrainState.Disposed)
+				if (baseTrain.State < TrainState.DisposePending)
 				{
 					RearAxle.Follower.UpdateRelative(Delta, true, true);
 					RearBogie.FrontAxle.Follower.UpdateRelative(Delta, true, true);
 					RearBogie.RearAxle.Follower.UpdateRelative(Delta, true, true);
-					if (baseTrain.State != TrainState.Disposed)
+					if (baseTrain.State < TrainState.DisposePending)
 					{
 						BeaconReceiver.UpdateRelative(Delta, true, false);
 					}
 				}
 			}
+		}
+
+		/// <summary>Moves the car as a result of a collision</summary>
+		/// <param name="Delta">The delta to move</param>
+		public void MoveDueToCollision(double Delta)
+		{
+			FrontAxle.Follower.UpdateRelative(Delta, false, false);
+			RearAxle.Follower.UpdateRelative(Delta, false, false);
+			FrontBogie.FrontAxle.Follower.UpdateRelative(Delta, false, false);
+			FrontBogie.RearAxle.Follower.UpdateRelative(Delta, false, false);
+			RearBogie.FrontAxle.Follower.UpdateRelative(Delta, false, false);
+			RearBogie.RearAxle.Follower.UpdateRelative(Delta, false, false);
 		}
 
 		/// <summary>Call this method to update all track followers attached to the car</summary>
@@ -179,9 +235,10 @@ namespace TrainManager.Car
 		/// <summary>Initializes the car</summary>
 		public void Initialize()
 		{
-			for (int i = 0; i < CarSections.Length; i++)
+			for (int i = 0; i < CarSections.Count; i++)
 			{
-				CarSections[i].Initialize(false);
+				CarSectionType k = CarSections.ElementAt(i).Key;
+				CarSections[k].Initialize(false);
 			}
 
 			for (int i = 0; i < FrontBogie.CarSections.Length; i++)
@@ -239,7 +296,24 @@ namespace TrainManager.Car
 		/// <summary>Backing property for the index of the car within the train</summary>
 		public override int Index
 		{
-			get;
+			get => trainCarIndex;
+			set
+			{
+				if (CarSections.TryGetTypedValue(CarSectionType.Interior, out CarSection interiorSection))
+				{
+					interiorSection.CorrectCarIndices(value - trainCarIndex);
+				}
+				if (CarSections.TryGetTypedValue(CarSectionType.Exterior, out CarSection exteriorSection))
+				{
+					exteriorSection.CorrectCarIndices(value - trainCarIndex);
+				}
+
+				for (int i = 0; i < ParticleSources.Count; i++)
+				{
+					ParticleSources[i].Controller.CorrectCarIndices(value - trainCarIndex);
+				}
+				trainCarIndex = value;
+			}
 		}
 
 		public override void Reverse(bool flipInterior = false)
@@ -250,23 +324,26 @@ namespace TrainManager.Car
 			RearAxle.Position = -temp;
 			if (flipInterior)
 			{
-				if (CarSections != null && CarSections.Length > 0)
+				if (CarSections != null && CarSections.Count > 0)
 				{
-					for (int i = 0; i < CarSections.Length; i++)
+					for (int i = 0; i < CarSections.Count; i++)
 					{
-						if (CarSections[i].Type == ObjectType.Overlay)
+						CarSectionType k = CarSections.ElementAt(i).Key;
+						if (CarSections[k].Type == ObjectType.Overlay)
 						{
-							for (int j = 0; j < CarSections[i].Groups.Length; j++)
+							for (int j = 0; j < CarSections[k].Groups.Length; j++)
 							{
-								CarSections[i].Groups[j].Reverse(Driver);
+								CarSections[k].Groups[j].Reverse(Driver, TrainManagerBase.Renderer.Camera.CurrentRestriction == CameraRestrictionMode.NotAvailable); // restriction not available must equal 3D cab
 							}
 						}
 						else
 						{
-							foreach (AnimatedObject animatedObject in CarSections[i].Groups[0].Elements)
+							foreach (AnimatedObject animatedObject in CarSections[k].Groups[0].Elements)
 							{
 								animatedObject.Reverse();
-							}	
+							}
+
+							CarSections[k].Groups[0].Keyframes?.Reverse();
 						}
 						
 					}
@@ -276,20 +353,25 @@ namespace TrainManager.Car
 			}
 			else
 			{
-				int idxToReverse = HasInteriorView ? 1 : 0;
-				if (CarSections != null && CarSections.Length > 0)
+				if (CarSections.TryGetValue(CarSectionType.Exterior, out CarSection sectionToReverse))
 				{
-					foreach (AnimatedObject animatedObject in CarSections[idxToReverse].Groups[0].Elements)
+					foreach (AnimatedObject animatedObject in sectionToReverse.Groups[0].Elements)
 					{
 						animatedObject.Reverse();
 					}
+
+					for (int i = 0; i < sectionToReverse.Groups.Length; i++)
+					{
+						if (sectionToReverse.Groups[i].Keyframes != null)
+						{
+							sectionToReverse.Groups[i].Keyframes.Reverse();
+						}
+					}
 				}	
 			}
-			
 
-			Bogie b = RearBogie;
-			RearBogie = FrontBogie;
-			FrontBogie = b;
+
+			(FrontBogie, RearBogie) = (RearBogie, FrontBogie);
 			FrontBogie.Reverse();
 			RearBogie.Reverse();
 			FrontBogie.FrontAxle.Follower.UpdateAbsolute(FrontAxle.Position + FrontBogie.FrontAxle.Position, true, false);
@@ -347,6 +429,155 @@ namespace TrainManager.Car
 			}
 		}
 
+		public override void Uncouple(bool Front, bool Rear)
+		{
+			lock (baseTrain.updateLock)
+			{
+				if (!Front && !Rear)
+					return;
+
+				// Create new train
+				TrainBase newTrain = new TrainBase(TrainState.Available, TrainType.StaticCars);
+				UncouplingBehaviour uncouplingBehaviour = UncouplingBehaviour.Emergency;
+				newTrain.Handles.Power = new PowerHandle(0, newTrain);
+				newTrain.Handles.Brake = new BrakeHandle(0, newTrain.Handles.EmergencyBrake, newTrain);
+				newTrain.Handles.HoldBrake = new HoldBrakeHandle(newTrain);
+				if (Front)
+				{
+					int totalPreceedingCars = trainCarIndex;
+					newTrain.Cars = new CarBase[trainCarIndex];
+					for (int i = 0; i < totalPreceedingCars; i++)
+					{
+						newTrain.Cars[i] = baseTrain.Cars[i];
+						newTrain.Cars[i].baseTrain = newTrain;
+					}
+
+					for (int i = totalPreceedingCars; i < baseTrain.Cars.Length; i++)
+					{
+						baseTrain.Cars[i - totalPreceedingCars] = baseTrain.Cars[i];
+						baseTrain.Cars[i].Index = i - totalPreceedingCars;
+					}
+
+					Array.Resize(ref baseTrain.Cars, baseTrain.Cars.Length - totalPreceedingCars);
+					baseTrain.Cars[baseTrain.Cars.Length - 1].Coupler.UncoupleSound.Play(baseTrain.Cars[baseTrain.Cars.Length - 1], false);
+					uncouplingBehaviour = baseTrain.Cars[baseTrain.Cars.Length - 1].Coupler.UncouplingBehaviour;
+					TrainManagerBase.currentHost.AddTrain(baseTrain, newTrain, false);
+
+					if (baseTrain.DriverCar - totalPreceedingCars >= 0)
+					{
+						baseTrain.DriverCar -= totalPreceedingCars;
+					}
+				}
+
+				if (Rear)
+				{
+					int totalFollowingCars = baseTrain.Cars.Length - (Index + 1);
+					if (totalFollowingCars > 0)
+					{
+						newTrain.Cars = new CarBase[totalFollowingCars];
+						// Move following cars to new train
+						for (int i = 0; i < totalFollowingCars; i++)
+						{
+							newTrain.Cars[i] = baseTrain.Cars[Index + i + 1];
+							newTrain.Cars[i].baseTrain = newTrain;
+							newTrain.Cars[i].Index = i;
+						}
+
+						Array.Resize(ref baseTrain.Cars, baseTrain.Cars.Length - totalFollowingCars);
+						baseTrain.Cars[baseTrain.Cars.Length - 1].Coupler.ConnectedCar = baseTrain.Cars[baseTrain.Cars.Length - 1];
+					}
+					else
+					{
+						return;
+					}
+
+					Coupler.UncoupleSound.Play(this, false);
+					uncouplingBehaviour = Coupler.UncouplingBehaviour;
+					TrainManagerBase.currentHost.AddTrain(baseTrain, newTrain, true);
+				}
+
+				for (int i = 0; i < newTrain.Cars.Length; i++)
+				{
+					/*
+					 * Make visible if not part of player train
+					 * Otherwise uncoupling from cab then changing to exterior, they will still be hidden
+					 *
+					 * Need to do this after everything has been done in case objects refer to other bits
+					 */
+					newTrain.Cars[i].ChangeCarSection(CarSectionType.Exterior);
+				}
+
+				if (baseTrain.DriverCar >= baseTrain.Cars.Length)
+				{
+					/*
+					 * The driver car is no longer in the train
+					 *
+					 * Look for a car with an interior view to substitute
+					 * If not found, this will stop at Car 0
+					 */
+
+					for (int i = baseTrain.Cars.Length; i > 0; i--)
+					{
+						baseTrain.DriverCar = i - 1;
+						if (!baseTrain.Cars[i - 1].HasInteriorView)
+						{
+							/*
+							 * Set the eye position to something vaguely sensible, rather than leaving it on the rails
+							 * Whilst there will be no cab, at least it's a bit more usable like this
+							 */
+							baseTrain.Cars[i - 1].InteriorCamera = new CameraAlignment()
+							{
+								Position = new Vector3(0, 2, 0.5 * Length)
+							};
+						}
+						else
+						{
+							break;
+						}
+					}
+				}
+
+				if (Front)
+				{
+					// Uncoupling the front will always make the car our first
+					baseTrain.CameraCar = 0;
+				}
+				else
+				{
+					if (baseTrain.CameraCar >= baseTrain.Cars.Length)
+					{
+						baseTrain.CameraCar = baseTrain.DriverCar;
+					}
+				}
+
+				switch (uncouplingBehaviour)
+				{
+					case UncouplingBehaviour.Emergency:
+						baseTrain.Handles.EmergencyBrake.Apply();
+						newTrain.Handles.EmergencyBrake.Apply();
+						break;
+					case UncouplingBehaviour.EmergencyUncoupledConsist:
+						newTrain.Handles.EmergencyBrake.Apply();
+						break;
+					case UncouplingBehaviour.EmergencyPlayer:
+						baseTrain.Handles.EmergencyBrake.Apply();
+						break;
+					case UncouplingBehaviour.Released:
+						baseTrain.Handles.Brake.ApplyState(0, false);
+						baseTrain.Handles.EmergencyBrake.Release();
+						newTrain.Handles.Brake.ApplyState(0, false);
+						newTrain.Handles.EmergencyBrake.Release();
+						break;
+					case UncouplingBehaviour.ReleasedUncoupledConsist:
+						newTrain.Handles.Brake.ApplyState(0, false);
+						newTrain.Handles.EmergencyBrake.Release();
+						break;
+				}
+
+				baseTrain.Cars[baseTrain.DriverCar].Sounds.UncoupleCab?.Play(1.0, 1.0, baseTrain.Cars[baseTrain.DriverCar], false);
+			}
+		}
+
 		/// <summary>Returns the combination of door states what encountered at the specified car in a train.</summary>
 		/// <param name="Left">Whether to include left doors.</param>
 		/// <param name="Right">Whether to include right doors.</param>
@@ -383,167 +614,91 @@ namespace TrainManager.Car
 			return Result;
 		}
 
-		public void UpdateRunSounds(double TimeElapsed)
-		{
-			if (Sounds.Run == null || Sounds.Run.Count == 0)
-			{
-				return;
-			}
-
-			const double factor = 0.04; // 90 km/h -> m/s -> 1/x
-			double speed = Math.Abs(CurrentSpeed);
-			if (Derailed)
-			{
-				speed = 0.0;
-			}
-
-			double pitch = speed * factor;
-			double basegain;
-			if (CurrentSpeed == 0.0)
-			{
-				if (Index != 0)
-				{
-					Sounds.RunNextReasynchronizationPosition = baseTrain.Cars[0].FrontAxle.Follower.TrackPosition;
-				}
-			}
-			else if (Sounds.RunNextReasynchronizationPosition == double.MaxValue & FrontAxle.RunIndex >= 0)
-			{
-				double distance = Math.Abs(FrontAxle.Follower.TrackPosition - TrainManagerBase.Renderer.CameraTrackFollower.TrackPosition);
-				const double minDistance = 150.0;
-				const double maxDistance = 750.0;
-				if (distance > minDistance)
-				{
-					if (Sounds.Run.ContainsKey(FrontAxle.RunIndex))
-					{
-						SoundBuffer buffer = Sounds.Run[FrontAxle.RunIndex].Buffer;
-						if (buffer != null)
-						{
-							if (buffer.Duration > 0.0)
-							{
-								double offset = distance > maxDistance ? 25.0 : 300.0;
-								Sounds.RunNextReasynchronizationPosition = buffer.Duration * Math.Ceiling((baseTrain.Cars[0].FrontAxle.Follower.TrackPosition + offset) / buffer.Duration);
-							}
-						}
-					}
-				}
-			}
-
-			if (FrontAxle.Follower.TrackPosition >= Sounds.RunNextReasynchronizationPosition)
-			{
-				Sounds.RunNextReasynchronizationPosition = double.MaxValue;
-				basegain = 0.0;
-			}
-			else
-			{
-				basegain = speed < 2.77777777777778 ? 0.36 * speed : 1.0;
-			}
-
-			for (int j = 0; j < Sounds.Run.Count; j++)
-			{
-				int key = Sounds.Run.ElementAt(j).Key;
-				if (key == FrontAxle.RunIndex | key == RearAxle.RunIndex)
-				{
-					Sounds.Run[key].TargetVolume += 3.0 * TimeElapsed;
-					if (Sounds.Run[key].TargetVolume > 1.0) Sounds.Run[key].TargetVolume = 1.0;
-				}
-				else
-				{
-					Sounds.Run[key].TargetVolume -= 3.0 * TimeElapsed;
-					if (Sounds.Run[key].TargetVolume < 0.0) Sounds.Run[key].TargetVolume = 0.0;
-				}
-
-				double gain = basegain * Sounds.Run[key].TargetVolume;
-				if (Sounds.Run[key].IsPlaying)
-				{
-					if (pitch > 0.01 & gain > 0.001)
-					{
-						Sounds.Run[key].Source.Pitch = pitch;
-						Sounds.Run[key].Source.Volume = gain;
-					}
-					else
-					{
-						TrainManagerBase.currentHost.StopSound(Sounds.Run[key].Source);
-					}
-				}
-				else if (pitch > 0.02 & gain > 0.01)
-				{
-					Sounds.Run[key].Play(pitch, gain, this, true);
-				}
-			}
-		}
-		
-		/// <summary>Loads Car Sections (Exterior objects etc.) for this car</summary>
-		/// <param name="currentObject">The object to add to the car sections array</param>
-		/// <param name="visibleFromInterior">Wether this is visible from the interior of other cars</param>
-		public void LoadCarSections(UnifiedObject currentObject, bool visibleFromInterior)
-		{
-			int j = CarSections.Length;
-			Array.Resize(ref CarSections, j + 1);
-			CarSections[j] = new CarSection(TrainManagerBase.currentHost, ObjectType.Dynamic, visibleFromInterior, currentObject);
-		}
-
 		/// <summary>Changes the currently visible car section</summary>
 		/// <param name="newCarSection">The type of new car section to display</param>
 		/// <param name="trainVisible">Whether the train is visible</param>
 		/// <param name="forceChange">Whether to force a show / rehide</param>
 		public void ChangeCarSection(CarSectionType newCarSection, bool trainVisible = false, bool forceChange = false)
 		{
-			if(CurrentCarSection == (int)newCarSection && !forceChange)
+			if(CurrentCarSection == newCarSection && !forceChange)
 			{
 				return;
 			}
 			if (trainVisible)
 			{
-				if (CurrentCarSection != -1 && CarSections[CurrentCarSection].VisibleFromInterior)
+				if (CurrentCarSection != CarSectionType.NotVisible && CarSections[CurrentCarSection].VisibleFromInterior)
 				{
 					return;
 				}
 			}
 
-			for (int i = 0; i < CarSections.Length; i++)
+			if (CarSections.TryGetValue(CurrentCarSection, out CarSection currentCarSection))
 			{
-				for (int j = 0; j < CarSections[i].Groups.Length; j++)
+				for (int j = 0; j < currentCarSection.Groups.Length; j++)
 				{
-					for (int k = 0; k < CarSections[i].Groups[j].Elements.Length; k++)
+					for (int k = 0; k < currentCarSection.Groups[j].Elements.Length; k++)
 					{
-						TrainManagerBase.currentHost.HideObject(CarSections[i].Groups[j].Elements[k].internalObject);
+						TrainManagerBase.currentHost.HideObject(currentCarSection.Groups[j].Elements[k].internalObject);
+					}
+
+					if (currentCarSection.Groups[j].Keyframes != null)
+					{
+						for (int k = 0; k < currentCarSection.Groups[0].Keyframes.Objects.Length; k++)
+						{
+							TrainManagerBase.currentHost.HideObject(currentCarSection.Groups[j].Keyframes.Objects[k]);
+						}
 					}
 				}
 			}
 
+			// HACK: Bogies are only visible in exterior views, hidden in all others, so do it once here to avoid duplication
+			FrontBogie.ChangeSection(-1);
+			RearBogie.ChangeSection(-1);
+			Coupler?.ChangeSection(-1);
 			switch (newCarSection)
 			{
 				case CarSectionType.NotVisible:
-					this.CurrentCarSection = -1;
+					this.CurrentCarSection = CarSectionType.NotVisible;
 					break;
 				case CarSectionType.Interior:
-					if (this.HasInteriorView && this.CarSections.Length > 0)
+					if (CarSections.TryGetValue(CarSectionType.Interior, out CarSection interiorCarSection))
 					{
-						this.CurrentCarSection = 0;
-						this.CarSections[0].Initialize(false);
-						CarSections[0].Show();
-						break;
+						CurrentCarSection = CarSectionType.Interior;
+						interiorCarSection.Initialize(false);
+						interiorCarSection.Show();
+						TrainManagerBase.Renderer.Camera.CurrentRestriction = CameraRestrictionMode;
 					}
-
-					this.CurrentCarSection = -1;
 					break;
 				case CarSectionType.Exterior:
-					if (this.HasInteriorView && this.CarSections.Length > 1)
+					if (CarSections.TryGetValue(CarSectionType.Exterior, out CarSection exteriorCarSection))
 					{
-						this.CurrentCarSection = 1;
-						this.CarSections[1].Initialize(false);
-						CarSections[1].Show();
-						break;
+						CurrentCarSection = CarSectionType.Exterior;
+						exteriorCarSection.Initialize(false);
+						exteriorCarSection.Show();
 					}
-					else if (!this.HasInteriorView && this.CarSections.Length > 0)
+					else
 					{
-						this.CurrentCarSection = 0;
-						this.CarSections[0].Initialize(false);
-						CarSections[0].Show();
-						break;
+						CurrentCarSection = CarSectionType.NotVisible;
 					}
-
-					this.CurrentCarSection = -1;
+					FrontBogie.ChangeSection(0);
+					RearBogie.ChangeSection(0);
+					Coupler?.ChangeSection(0);
+					break;
+				case CarSectionType.HeadOutLeft:
+					if (CarSections.TryGetValue(CarSectionType.HeadOutLeft, out CarSection headOutLeftCarSection))
+					{
+						CurrentCarSection = CarSectionType.HeadOutLeft;
+						headOutLeftCarSection.Initialize(false);
+						headOutLeftCarSection.Show();
+					}
+					break;
+				case CarSectionType.HeadOutRight:
+					if (CarSections.TryGetValue(CarSectionType.HeadOutRight, out CarSection headOutRightCarSection))
+					{
+						CurrentCarSection = CarSectionType.HeadOutRight;
+						headOutRightCarSection.Initialize(false);
+						headOutRightCarSection.Show();
+					}
 					break;
 			}
 
@@ -586,44 +741,51 @@ namespace TrainManager.Car
 			// Updates the brightness value
 			byte dnb = (byte)Brightness.CurrentBrightness(TrainManagerBase.Renderer.Lighting.DynamicCabBrightness, 0.0);
 			// update current section
-			int cs = CurrentCarSection;
-			if (cs >= 0 && cs < CarSections.Length)
+			if (CarSections.TryGetValue(CurrentCarSection, out CarSection currentCarSection))
 			{
-				if (CarSections[cs].Groups.Length > 0)
+				if (currentCarSection.Groups.Length > 0)
 				{
-					for (int i = 0; i < CarSections[cs].Groups[0].Elements.Length; i++)
+					for (int i = 0; i < currentCarSection.Groups[0].Elements.Length; i++)
 					{
-						UpdateCarSectionElement(cs, 0, i, p, d, s, CurrentlyVisible, TimeElapsed, ForceUpdate, EnableDamping);
+						UpdateCarSectionElement(currentCarSection, 0, i, p, d, s, CurrentlyVisible, TimeElapsed, ForceUpdate, EnableDamping);
 
 						// brightness change
-						if (CarSections[cs].Groups[0].Elements[i].internalObject != null)
+						if (currentCarSection.Groups[0].Elements[i].internalObject != null)
 						{
-							CarSections[cs].Groups[0].Elements[i].internalObject.DaytimeNighttimeBlend = dnb;
+							currentCarSection.Groups[0].Elements[i].internalObject.DaytimeNighttimeBlend = dnb;
 						}
 					}
 				}
 
-				int add = CarSections[cs].CurrentAdditionalGroup + 1;
-				if (add < CarSections[cs].Groups.Length)
+				int add = currentCarSection.CurrentAdditionalGroup + 1;
+				if (add < currentCarSection.Groups.Length)
 				{
-					for (int i = 0; i < CarSections[cs].Groups[add].Elements.Length; i++)
+					for (int i = 0; i < currentCarSection.Groups[add].Elements.Length; i++)
 					{
-						UpdateCarSectionElement(cs, add, i, p, d, s, CurrentlyVisible, TimeElapsed, ForceUpdate, EnableDamping);
+						UpdateCarSectionElement(currentCarSection, add, i, p, d, s, CurrentlyVisible, TimeElapsed, ForceUpdate, EnableDamping);
 
 						// brightness change
-						if (CarSections[cs].Groups[add].Elements[i].internalObject != null)
+						if (currentCarSection.Groups[add].Elements[i].internalObject != null)
 						{
-							CarSections[cs].Groups[add].Elements[i].internalObject.DaytimeNighttimeBlend = dnb;
+							currentCarSection.Groups[add].Elements[i].internalObject.DaytimeNighttimeBlend = dnb;
 						}
 					}
 
-					if (CarSections[cs].Groups[add].TouchElements != null)
+					if (currentCarSection.Groups[add].TouchElements != null)
 					{
-						for (int i = 0; i < CarSections[cs].Groups[add].TouchElements.Length; i++)
+						for (int i = 0; i < currentCarSection.Groups[add].TouchElements.Length; i++)
 						{
-							UpdateCarSectionTouchElement(cs, add, i, p, d, s, false, TimeElapsed, ForceUpdate, EnableDamping);
+							UpdateCarSectionTouchElement(currentCarSection, add, i, p, d, s, false, TimeElapsed, ForceUpdate, EnableDamping);
 						}
 					}
+				}
+				if (currentCarSection.Groups[0].Keyframes != null)
+				{
+					currentCarSection.Groups[0].Keyframes.Update(TrackPosition, p, d, Up, s, TimeElapsed);
+				}
+				if (currentCarSection.CurrentAdditionalGroup + 1 < currentCarSection.Groups.Length)
+				{
+					currentCarSection.Groups[currentCarSection.CurrentAdditionalGroup + 1].Keyframes?.Update(TrackPosition, p, d, Up, s, TimeElapsed);
 				}
 			}
 			//Update camera restriction
@@ -637,10 +799,11 @@ namespace TrainManager.Car
 			CameraRestriction.AbsoluteTopRight += Driver;
 			CameraRestriction.AbsoluteTopRight.Rotate(new Transformation(d, Up, s));
 			CameraRestriction.AbsoluteTopRight.Translate(p);
+			
 		}
 
 		/// <summary>Updates the given car section element</summary>
-		/// <param name="SectionIndex">The car section</param>
+		/// <param name="CarSection">The car section</param>
 		/// <param name="GroupIndex">The group within the car section</param>
 		/// <param name="ElementIndex">The element within the group</param>
 		/// <param name="Position"></param>
@@ -650,10 +813,10 @@ namespace TrainManager.Car
 		/// <param name="TimeElapsed"></param>
 		/// <param name="ForceUpdate"></param>
 		/// <param name="EnableDamping"></param>
-		private void UpdateCarSectionElement(int SectionIndex, int GroupIndex, int ElementIndex, Vector3 Position, Vector3 Direction, Vector3 Side, bool Show, double TimeElapsed, bool ForceUpdate, bool EnableDamping)
+		private void UpdateCarSectionElement(CarSection CarSection, int GroupIndex, int ElementIndex, Vector3 Position, Vector3 Direction, Vector3 Side, bool Show, double TimeElapsed, bool ForceUpdate, bool EnableDamping)
 		{
 			Vector3 p;
-			if (CarSections[SectionIndex].Type == ObjectType.Overlay & (TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.NotAvailable && TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.Restricted3D))
+			if (CarSection.Type == ObjectType.Overlay & (TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.NotAvailable && TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.Restricted3D))
 			{
 				p = new Vector3(Driver.X, Driver.Y, Driver.Z);
 			}
@@ -664,25 +827,25 @@ namespace TrainManager.Car
 
 			double timeDelta;
 			bool updatefunctions;
-			if (CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].RefreshRate != 0.0)
+			if (CarSection.Groups[GroupIndex].Elements[ElementIndex].RefreshRate != 0.0)
 			{
-				if (CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate >= CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].RefreshRate)
+				if (CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate >= CarSection.Groups[GroupIndex].Elements[ElementIndex].RefreshRate)
 				{
-					timeDelta = CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate;
-					CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate = TimeElapsed;
+					timeDelta = CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate;
+					CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate = TimeElapsed;
 					updatefunctions = true;
 				}
 				else
 				{
 					timeDelta = TimeElapsed;
-					CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate += TimeElapsed;
+					CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate += TimeElapsed;
 					updatefunctions = false;
 				}
 			}
 			else
 			{
-				timeDelta = CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate;
-				CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate = TimeElapsed;
+				timeDelta = CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate;
+				CarSection.Groups[GroupIndex].Elements[ElementIndex].SecondsSinceLastUpdate = TimeElapsed;
 				updatefunctions = true;
 			}
 
@@ -691,17 +854,17 @@ namespace TrainManager.Car
 				updatefunctions = true;
 			}
 
-			CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].Update(baseTrain, Index, FrontAxle.Follower.TrackPosition - FrontAxle.Position, p, Direction, Up, Side, updatefunctions, Show, timeDelta, EnableDamping, false, CarSections[SectionIndex].Type == ObjectType.Overlay ? TrainManagerBase.Renderer.Camera : null);
-			if (!TrainManagerBase.Renderer.ForceLegacyOpenGL && CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].UpdateVAO)
+			CarSection.Groups[GroupIndex].Elements[ElementIndex].Update(baseTrain, Index, FrontAxle.Follower.TrackPosition - FrontAxle.Position, p, Direction, Up, Side, updatefunctions, Show, timeDelta, EnableDamping, false, CarSection.Type == ObjectType.Overlay ? TrainManagerBase.Renderer.Camera : null);
+			if (!TrainManagerBase.Renderer.ForceLegacyOpenGL && CarSection.Groups[GroupIndex].Elements[ElementIndex].UpdateVAO)
 			{
-				VAOExtensions.CreateVAO(ref CarSections[SectionIndex].Groups[GroupIndex].Elements[ElementIndex].internalObject.Prototype.Mesh, true, TrainManagerBase.Renderer.DefaultShader.VertexLayout, TrainManagerBase.Renderer);
+				VAOExtensions.CreateVAO(CarSection.Groups[GroupIndex].Elements[ElementIndex].internalObject.Prototype.Mesh, true, TrainManagerBase.Renderer.DefaultShader.VertexLayout, TrainManagerBase.Renderer);
 			}
 		}
 
-		private void UpdateCarSectionTouchElement(int SectionIndex, int GroupIndex, int ElementIndex, Vector3 Position, Vector3 Direction, Vector3 Side, bool Show, double TimeElapsed, bool ForceUpdate, bool EnableDamping)
+		private void UpdateCarSectionTouchElement(CarSection CarSection, int GroupIndex, int ElementIndex, Vector3 Position, Vector3 Direction, Vector3 Side, bool Show, double TimeElapsed, bool ForceUpdate, bool EnableDamping)
 		{
 			Vector3 p;
-			if (CarSections[SectionIndex].Type == ObjectType.Overlay & (TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.NotAvailable && TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.Restricted3D))
+			if (CarSection.Type == ObjectType.Overlay & (TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.NotAvailable && TrainManagerBase.Renderer.Camera.CurrentRestriction != CameraRestrictionMode.Restricted3D))
 			{
 				p = new Vector3(Driver.X, Driver.Y, Driver.Z);
 			}
@@ -712,25 +875,25 @@ namespace TrainManager.Car
 
 			double timeDelta;
 			bool updatefunctions;
-			if (CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.RefreshRate != 0.0)
+			if (CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.RefreshRate != 0.0)
 			{
-				if (CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate >= CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.RefreshRate)
+				if (CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate >= CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.RefreshRate)
 				{
-					timeDelta = CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate;
-					CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate = TimeElapsed;
+					timeDelta = CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate;
+					CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate = TimeElapsed;
 					updatefunctions = true;
 				}
 				else
 				{
 					timeDelta = TimeElapsed;
-					CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate += TimeElapsed;
+					CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate += TimeElapsed;
 					updatefunctions = false;
 				}
 			}
 			else
 			{
-				timeDelta = CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate;
-				CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate = TimeElapsed;
+				timeDelta = CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate;
+				CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.SecondsSinceLastUpdate = TimeElapsed;
 				updatefunctions = true;
 			}
 
@@ -739,28 +902,24 @@ namespace TrainManager.Car
 				updatefunctions = true;
 			}
 
-			CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.Update(baseTrain, Index, FrontAxle.Follower.TrackPosition - FrontAxle.Position, p, Direction, Up, Side, updatefunctions, Show, timeDelta, EnableDamping, true, CarSections[SectionIndex].Type == ObjectType.Overlay ? TrainManagerBase.Renderer.Camera : null);
-			if (!TrainManagerBase.Renderer.ForceLegacyOpenGL && CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.UpdateVAO)
+			CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.Update(baseTrain, Index, FrontAxle.Follower.TrackPosition - FrontAxle.Position, p, Direction, Up, Side, updatefunctions, Show, timeDelta, EnableDamping, true, CarSection.Type == ObjectType.Overlay ? TrainManagerBase.Renderer.Camera : null);
+			if (!TrainManagerBase.Renderer.ForceLegacyOpenGL && CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.UpdateVAO)
 			{
-				VAOExtensions.CreateVAO(ref CarSections[SectionIndex].Groups[GroupIndex].TouchElements[ElementIndex].Element.internalObject.Prototype.Mesh, true, TrainManagerBase.Renderer.DefaultShader.VertexLayout, TrainManagerBase.Renderer);
+				VAOExtensions.CreateVAO(CarSection.Groups[GroupIndex].TouchElements[ElementIndex].Element.internalObject.Prototype.Mesh, true, TrainManagerBase.Renderer.DefaultShader.VertexLayout, TrainManagerBase.Renderer);
 			}
 		}
 
 		public void UpdateTopplingCantAndSpring(double TimeElapsed)
 		{
 			// get direction, up and side vectors
-			Vector3 d = new Vector3(FrontAxle.Follower.WorldPosition - RearAxle.Follower.WorldPosition);
-			Vector3 s;
-			{
-				double t = 1.0 / d.Norm();
-				d *= t;
-				t = 1.0 / Math.Sqrt(d.X * d.X + d.Z * d.Z);
-				double ex = d.X * t;
-				double ez = d.Z * t;
-				s = new Vector3(ez, 0.0, -ex);
-				Up = Vector3.Cross(d, s);
-			}
-
+			Vector3 d = FrontAxle.Follower.WorldPosition == RearAxle.Follower.WorldPosition ? FrontAxle.Follower.WorldPosition : new Vector3(FrontAxle.Follower.WorldPosition - RearAxle.Follower.WorldPosition);
+			double t = d.Magnitude();
+			d *= t;
+			t = 1.0 / Math.Sqrt(d.X * d.X + d.Z * d.Z);
+			double ex = d.X * t;
+			double ez = d.Z * t;
+			Vector3 s = new Vector3(ez, 0.0, -ex);
+			Up = Vector3.Cross(d, s);
 			double r = 0.0, rs = 0.0;
 			if (FrontAxle.Follower.CurveRadius != 0.0 & RearAxle.Follower.CurveRadius != 0.0)
 			{
@@ -779,124 +938,104 @@ namespace TrainManager.Car
 			}
 
 			// roll due to shaking
+			double a0 = Specs.RollDueToShakingAngle;
+			double a1 = 0.0;
+			if (Specs.RollShakeDirection != 0.0)
 			{
-
-				double a0 = Specs.RollDueToShakingAngle;
-				double a1 = 0.0;
-				if (Specs.RollShakeDirection != 0.0)
+				const double c0 = 0.03;
+				const double c1 = 0.15;
+				a1 = c1 * Math.Atan(c0 * Specs.RollShakeDirection);
+				double dr = 0.5 + Specs.RollShakeDirection * Specs.RollShakeDirection;
+				if (Specs.RollShakeDirection < 0.0)
 				{
-					const double c0 = 0.03;
-					const double c1 = 0.15;
-					a1 = c1 * Math.Atan(c0 * Specs.RollShakeDirection);
-					double dr = 0.5 + Specs.RollShakeDirection * Specs.RollShakeDirection;
-					if (Specs.RollShakeDirection < 0.0)
-					{
-						Specs.RollShakeDirection += dr * TimeElapsed;
-						if (Specs.RollShakeDirection > 0.0) Specs.RollShakeDirection = 0.0;
-					}
-					else
-					{
-						Specs.RollShakeDirection -= dr * TimeElapsed;
-						if (Specs.RollShakeDirection < 0.0) Specs.RollShakeDirection = 0.0;
-					}
-				}
-
-				double SpringAcceleration;
-				if (!Derailed)
-				{
-					SpringAcceleration = 15.0 * Math.Abs(a1 - a0);
+					Specs.RollShakeDirection += dr * TimeElapsed;
+					if (Specs.RollShakeDirection > 0.0) Specs.RollShakeDirection = 0.0;
 				}
 				else
 				{
-					SpringAcceleration = 1.5 * Math.Abs(a1 - a0);
+					Specs.RollShakeDirection -= dr * TimeElapsed;
+					if (Specs.RollShakeDirection < 0.0) Specs.RollShakeDirection = 0.0;
 				}
-
-				double SpringDeceleration = 0.25 * SpringAcceleration;
-				Specs.RollDueToShakingAngularSpeed += Math.Sign(a1 - a0) * SpringAcceleration * TimeElapsed;
-				double x = Math.Sign(Specs.RollDueToShakingAngularSpeed) * SpringDeceleration * TimeElapsed;
-				if (Math.Abs(x) < Math.Abs(Specs.RollDueToShakingAngularSpeed))
-				{
-					Specs.RollDueToShakingAngularSpeed -= x;
-				}
-				else
-				{
-					Specs.RollDueToShakingAngularSpeed = 0.0;
-				}
-
-				a0 += Specs.RollDueToShakingAngularSpeed * TimeElapsed;
-				Specs.RollDueToShakingAngle = a0;
 			}
+
+			double springAcceleration = Derailed ? 15.0 : 1.5 * Math.Abs(a1 - a0);
+			double springDeceleration = 0.25 * springAcceleration;
+
+			Specs.RollDueToShakingAngularSpeed += Math.Sign(a1 - a0) * springAcceleration * TimeElapsed;
+			double x = Math.Sign(Specs.RollDueToShakingAngularSpeed) * springDeceleration * TimeElapsed;
+			if (Math.Abs(x) < Math.Abs(Specs.RollDueToShakingAngularSpeed))
+			{
+				Specs.RollDueToShakingAngularSpeed -= x;
+			}
+			else
+			{
+				Specs.RollDueToShakingAngularSpeed = 0.0;
+			}
+
+			a0 += Specs.RollDueToShakingAngularSpeed * TimeElapsed;
+			Specs.RollDueToShakingAngle = a0;
 			// roll due to cant (incorporates shaking)
-			{
-				double cantAngle = Math.Atan(Math.Tan(0.5 * (Math.Atan(FrontAxle.Follower.CurveCant) + Math.Atan(RearAxle.Follower.CurveCant))) / TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge);
-				Specs.RollDueToCantAngle = cantAngle + Specs.RollDueToShakingAngle;
-			}
+			double cantAngle = Math.Atan(Math.Tan(0.5 * (Math.Atan(FrontAxle.Follower.CurveCant) + Math.Atan(RearAxle.Follower.CurveCant))) / TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge);
+			Specs.RollDueToCantAngle = cantAngle + Specs.RollDueToShakingAngle;
 			// pitch due to acceleration
+			for (int i = 0; i < 3; i++)
 			{
-				for (int i = 0; i < 3; i++)
+				double a, v, j;
+				switch (i)
 				{
-					double a, v, j;
-					switch (i)
-					{
-						case 0:
-							a = Specs.Acceleration;
-							v = Specs.PitchDueToAccelerationFastValue;
-							j = 1.8;
-							break;
-						case 1:
-							a = Specs.PitchDueToAccelerationFastValue;
-							v = Specs.PitchDueToAccelerationMediumValue;
-							j = 1.2;
-							break;
-						default:
-							a = Specs.PitchDueToAccelerationFastValue;
-							v = Specs.PitchDueToAccelerationSlowValue;
-							j = 1.0;
-							break;
-					}
-
-					double da = a - v;
-					if (da < 0.0)
-					{
-						v -= j * TimeElapsed;
-						if (v < a) v = a;
-					}
-					else
-					{
-						v += j * TimeElapsed;
-						if (v > a) v = a;
-					}
-
-					switch (i)
-					{
-						case 0:
-							Specs.PitchDueToAccelerationFastValue = v;
-							break;
-						case 1:
-							Specs.PitchDueToAccelerationMediumValue = v;
-							break;
-						default:
-							Specs.PitchDueToAccelerationSlowValue = v;
-							break;
-					}
+					case 0:
+						a = Specs.Acceleration;
+						v = Specs.PitchDueToAccelerationFastValue;
+						j = 1.8;
+						break;
+					case 1:
+						a = Specs.PitchDueToAccelerationFastValue;
+						v = Specs.PitchDueToAccelerationMediumValue;
+						j = 1.2;
+						break;
+					default:
+						a = Specs.PitchDueToAccelerationFastValue;
+						v = Specs.PitchDueToAccelerationSlowValue;
+						j = 1.0;
+						break;
 				}
 
+				double da = a - v;
+				if (da < 0.0)
 				{
-					double da = Specs.PitchDueToAccelerationSlowValue - Specs.PitchDueToAccelerationFastValue;
-					Specs.PitchDueToAccelerationTargetAngle = 0.03 * Math.Atan(da);
+					v -= j * TimeElapsed;
+					if (v < a) v = a;
 				}
+				else
 				{
-					double a = 3.0 * Math.Sign(Specs.PitchDueToAccelerationTargetAngle - Specs.PitchDueToAccelerationAngle);
-					Specs.PitchDueToAccelerationAngularSpeed += a * TimeElapsed;
-					double ds = Math.Abs(Specs.PitchDueToAccelerationTargetAngle - Specs.PitchDueToAccelerationAngle);
-					if (Math.Abs(Specs.PitchDueToAccelerationAngularSpeed) > ds)
-					{
-						Specs.PitchDueToAccelerationAngularSpeed = ds * Math.Sign(Specs.PitchDueToAccelerationAngularSpeed);
-					}
+					v += j * TimeElapsed;
+					if (v > a) v = a;
+				}
 
-					Specs.PitchDueToAccelerationAngle += Specs.PitchDueToAccelerationAngularSpeed * TimeElapsed;
+				switch (i)
+				{
+					case 0:
+						Specs.PitchDueToAccelerationFastValue = v;
+						break;
+					case 1:
+						Specs.PitchDueToAccelerationMediumValue = v;
+						break;
+					default:
+						Specs.PitchDueToAccelerationSlowValue = v;
+						break;
 				}
 			}
+
+			Specs.PitchDueToAccelerationTargetAngle = 0.03 * Math.Atan(Specs.PitchDueToAccelerationSlowValue - Specs.PitchDueToAccelerationFastValue);
+			double aa = 3.0 * Math.Sign(Specs.PitchDueToAccelerationTargetAngle - Specs.PitchDueToAccelerationAngle);
+			Specs.PitchDueToAccelerationAngularSpeed += aa * TimeElapsed;
+			double ds = Math.Abs(Specs.PitchDueToAccelerationTargetAngle - Specs.PitchDueToAccelerationAngle);
+			if (Math.Abs(Specs.PitchDueToAccelerationAngularSpeed) > ds)
+			{
+				Specs.PitchDueToAccelerationAngularSpeed = ds * Math.Sign(Specs.PitchDueToAccelerationAngularSpeed);
+			}
+
+			Specs.PitchDueToAccelerationAngle += Specs.PitchDueToAccelerationAngularSpeed * TimeElapsed;
 			// derailment
 			if (TrainManagerBase.Derailments & !Derailed)
 			{
@@ -911,7 +1050,6 @@ namespace TrainManager.Car
 			// toppling roll
 			if (TrainManagerBase.Toppling | Derailed)
 			{
-				double a = Specs.RollDueToTopplingAngle;
 				double ab = Specs.RollDueToTopplingAngle + Specs.RollDueToCantAngle;
 				double h = Specs.CenterOfGravityHeight;
 				double sr = Math.Abs(CurrentSpeed);
@@ -954,20 +1092,18 @@ namespace TrainManager.Car
 					if (td < 0.1) td = 0.1;
 				}
 
-				if (a > ta)
+				if (Specs.RollDueToTopplingAngle > ta)
 				{
-					double da = a - ta;
+					double da = Specs.RollDueToTopplingAngle - ta;
 					if (td > da) td = da;
-					a -= td * TimeElapsed;
+					Specs.RollDueToTopplingAngle -= td * TimeElapsed;
 				}
-				else if (a < ta)
+				else if (Specs.RollDueToTopplingAngle < ta)
 				{
-					double da = ta - a;
+					double da = ta - Specs.RollDueToTopplingAngle;
 					if (td > da) td = da;
-					a += td * TimeElapsed;
+					Specs.RollDueToTopplingAngle += td * TimeElapsed;
 				}
-
-				Specs.RollDueToTopplingAngle = a;
 			}
 			else
 			{
@@ -975,141 +1111,38 @@ namespace TrainManager.Car
 			}
 
 			// apply position due to cant/toppling
-			{
-				double a = Specs.RollDueToTopplingAngle + Specs.RollDueToCantAngle;
-				double x = Math.Sign(a) * 0.5 * TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge * (1.0 - Math.Cos(a));
-				double y = Math.Abs(0.5 * TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge * Math.Sin(a));
-				Vector3 cc = new Vector3(s.X * x + Up.X * y, s.Y * x + Up.Y * y, s.Z * x + Up.Z * y);
-				FrontAxle.Follower.WorldPosition += cc;
-				RearAxle.Follower.WorldPosition += cc;
-			}
+			double ca = Specs.RollDueToTopplingAngle + Specs.RollDueToCantAngle;
+			double cx = Math.Sign(ca) * 0.5 * TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge * (1.0 - Math.Cos(ca));
+			double cy = Math.Abs(0.5 * TrainManagerBase.currentHost.Tracks[FrontAxle.Follower.TrackIndex].RailGauge * Math.Sin(ca));
+			Vector3 cc = new Vector3(s.X * cx + Up.X * cy, s.Y * cx + Up.Y * cy, s.Z * cx + Up.Z * cy);
+			FrontAxle.Follower.WorldPosition += cc;
+			RearAxle.Follower.WorldPosition += cc;
 			// apply rolling
-			{
-				s.Rotate(d, -Specs.RollDueToTopplingAngle - Specs.RollDueToCantAngle);
-				Up.Rotate(d, -Specs.RollDueToTopplingAngle - Specs.RollDueToCantAngle);
-			}
+			s.Rotate(d, -Specs.RollDueToTopplingAngle - Specs.RollDueToCantAngle);
+			Up.Rotate(d, -Specs.RollDueToTopplingAngle - Specs.RollDueToCantAngle);
 			// apply pitching
 			if (CurrentCarSection >= 0 && CarSections[CurrentCarSection].Type == ObjectType.Overlay)
 			{
 				d.Rotate(s, Specs.PitchDueToAccelerationAngle);
 				Up.Rotate(s, Specs.PitchDueToAccelerationAngle);
-				Vector3 cc = new Vector3(0.5 * (FrontAxle.Follower.WorldPosition + RearAxle.Follower.WorldPosition));
-				FrontAxle.Follower.WorldPosition -= cc;
-				RearAxle.Follower.WorldPosition -= cc;
+				Vector3 pc = new Vector3(0.5 * (FrontAxle.Follower.WorldPosition + RearAxle.Follower.WorldPosition));
+				FrontAxle.Follower.WorldPosition -= pc;
+				RearAxle.Follower.WorldPosition -= pc;
 				FrontAxle.Follower.WorldPosition.Rotate(s, Specs.PitchDueToAccelerationAngle);
 				RearAxle.Follower.WorldPosition.Rotate(s, Specs.PitchDueToAccelerationAngle);
-				FrontAxle.Follower.WorldPosition += cc;
-				RearAxle.Follower.WorldPosition += cc;
+				FrontAxle.Follower.WorldPosition += pc;
+				RearAxle.Follower.WorldPosition += pc;
 			}
 
-			// spring sound
-			{
-				double a = Specs.RollDueToShakingAngle;
-				double diff = a - Sounds.SpringPlayedAngle;
-				const double angleTolerance = 0.001;
-				if (diff < -angleTolerance)
-				{
-					if (Sounds.SpringL != null && !Sounds.SpringL.IsPlaying)
-					{
-						Sounds.SpringL.Play(this, false);
-					}
-
-					Sounds.SpringPlayedAngle = a;
-				}
-				else if (diff > angleTolerance)
-				{
-					if (Sounds.SpringR != null && !Sounds.SpringR.IsPlaying)
-					{
-						Sounds.SpringR.Play(this, false);
-					}
-
-					Sounds.SpringPlayedAngle = a;
-				}
-			}
-			// flange sound
-			if (Sounds.Flange != null && Sounds.Flange.Count != 0)
-			{
-				/*
-				 * This determines the amount of flange noise as a result of the angle at which the
-				 * line that forms between the axles hits the rail, i.e. the less perpendicular that
-				 * line is to the rails, the more flange noise there will be.
-				 * */
-				Vector3 df = FrontAxle.Follower.WorldPosition - RearAxle.Follower.WorldPosition;
-				df.Normalize();
-				double b0 = df.X * RearAxle.Follower.WorldSide.X + df.Y * RearAxle.Follower.WorldSide.Y + df.Z * RearAxle.Follower.WorldSide.Z;
-				double b1 = df.X * FrontAxle.Follower.WorldSide.X + df.Y * FrontAxle.Follower.WorldSide.Y + df.Z * FrontAxle.Follower.WorldSide.Z;
-				double spd = Math.Abs(CurrentSpeed);
-				double pitch = 0.5 + 0.04 * spd;
-				double b2 = Math.Abs(b0) + Math.Abs(b1);
-				double basegain = 0.5 * b2 * b2 * spd * spd;
-				/*
-				 * This determines additional flange noise as a result of the roll angle of the car
-				 * compared to the roll angle of the rails, i.e. if the car bounces due to inaccuracies,
-				 * there will be additional flange noise.
-				 * */
-				double cdti = Math.Abs(FrontAxle.Follower.CantDueToInaccuracy) + Math.Abs(RearAxle.Follower.CantDueToInaccuracy);
-				basegain += 0.2 * spd * spd * cdti * cdti;
-				/*
-				 * This applies the settings.
-				 * */
-				if (basegain < 0.0) basegain = 0.0;
-				if (basegain > 0.75) basegain = 0.75;
-				if (pitch > Sounds.FlangePitch)
-				{
-					Sounds.FlangePitch += TimeElapsed;
-					if (Sounds.FlangePitch > pitch) Sounds.FlangePitch = pitch;
-				}
-				else
-				{
-					Sounds.FlangePitch -= TimeElapsed;
-					if (Sounds.FlangePitch < pitch) Sounds.FlangePitch = pitch;
-				}
-
-				pitch = Sounds.FlangePitch;
-				for (int i = 0; i < Sounds.Flange.Count; i++)
-				{
-					int key = Sounds.Flange.ElementAt(i).Key;
-					if(Sounds.Flange[key] == null)
-					{
-						continue;
-					}
-					if (key == this.FrontAxle.FlangeIndex | key == this.RearAxle.FlangeIndex)
-					{
-						Sounds.Flange[key].TargetVolume += TimeElapsed;
-						if (Sounds.Flange[key].TargetVolume > 1.0) Sounds.Flange[key].TargetVolume = 1.0;
-					}
-					else
-					{
-						Sounds.Flange[key].TargetVolume -= TimeElapsed;
-						if (Sounds.Flange[key].TargetVolume < 0.0) Sounds.Flange[key].TargetVolume = 0.0;
-					}
-
-					double gain = basegain * Sounds.Flange[key].TargetVolume;
-					if (Sounds.Flange[key].IsPlaying)
-					{
-						if (pitch > 0.01 & gain > 0.0001)
-						{
-							Sounds.Flange[key].Source.Pitch = pitch;
-							Sounds.Flange[key].Source.Volume = gain;
-						}
-						else
-						{
-							Sounds.Flange[key].Stop();
-						}
-					}
-					else if (pitch > 0.02 & gain > 0.01)
-					{
-						Sounds.Flange[key].Play(pitch, gain, this, true);
-					}
-				}
-			}
+			Suspension.Update(TimeElapsed);
+			Flange.Update(TimeElapsed);
 		}
 
 		/// <summary>Updates the position of the camera relative to this car</summary>
 		public void UpdateCamera()
 		{
 			Vector3 direction = new Vector3(FrontAxle.Follower.WorldPosition - RearAxle.Follower.WorldPosition);
-			direction *= 1.0 / direction.Norm();
+			direction *= direction.Magnitude();
 			double sx = direction.Z * Up.Y - direction.Y * Up.Z;
 			double sy = direction.X * Up.Z - direction.Z * Up.X;
 			double sz = direction.Y * Up.X - direction.X * Up.Y;
@@ -1117,7 +1150,7 @@ namespace TrainManager.Car
 			double ry = 0.5 * (FrontAxle.Follower.WorldPosition.Y + RearAxle.Follower.WorldPosition.Y);
 			double rz = 0.5 * (FrontAxle.Follower.WorldPosition.Z + RearAxle.Follower.WorldPosition.Z);
 			Vector3 cameraPosition;
-			Vector3 driverPosition = this.HasInteriorView ? Driver : this.baseTrain.Cars[this.baseTrain.DriverCar].Driver;
+			Vector3 driverPosition = HasInteriorView ? Driver : baseTrain.Cars[baseTrain.DriverCar].Driver;
 			cameraPosition.X = rx + sx * driverPosition.X + Up.X * driverPosition.Y + direction.X * driverPosition.Z;
 			cameraPosition.Y = ry + sy * driverPosition.X + Up.Y * driverPosition.Y + direction.Y * driverPosition.Z;
 			cameraPosition.Z = rz + sz * driverPosition.X + Up.Z * driverPosition.Y + direction.Z * driverPosition.Z;
@@ -1127,6 +1160,11 @@ namespace TrainManager.Car
 			TrainManagerBase.Renderer.CameraTrackFollower.WorldUp = new Vector3(Up);
 			TrainManagerBase.Renderer.CameraTrackFollower.WorldSide = new Vector3(sx, sy, sz);
 			double f = (Driver.Z - RearAxle.Position) / (FrontAxle.Position - RearAxle.Position);
+			if (double.IsNaN(f))
+			{
+				// car with both axles at zero and a driver position of zero creates NaN (guarded against in original BVE parser)
+				f = 0;
+			}
 			double tp = (1.0 - f) * RearAxle.Follower.TrackPosition + f * FrontAxle.Follower.TrackPosition;
 			TrainManagerBase.Renderer.CameraTrackFollower.UpdateAbsolute(tp, false, false);
 		}
@@ -1139,16 +1177,22 @@ namespace TrainManager.Car
 			{
 				double a = FrontAxle.Follower.WorldDirection.Y;
 				double b = RearAxle.Follower.WorldDirection.Y;
-				PowerRollingCouplerAcceleration =
-					-0.5 * (a + b) * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity;
+				PowerRollingCouplerAcceleration = -0.5 * (a + b) * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity;
 			}
 			// friction
 			double FrictionBrakeAcceleration;
 			{
 				double v = Math.Abs(CurrentSpeed);
 				double t = Index == 0 & CurrentSpeed >= 0.0 || Index == baseTrain.NumberOfCars - 1 & CurrentSpeed <= 0.0 ? Specs.ExposedFrontalArea : Specs.UnexposedFrontalArea;
+
+				if (t == 0)
+				{
+					// if frontal area is zero, multiplication creates NaN so use default BVE value (guarded against in original BVE parser)
+					t = 5.616;
+				}
+
 				double a = FrontAxle.GetResistance(v, t, TrainManagerBase.CurrentRoute.Atmosphere.GetAirDensity(FrontAxle.Follower.WorldPosition.Y), TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity);
-				double b = RearAxle.GetResistance(v, t, TrainManagerBase.CurrentRoute.Atmosphere.GetAirDensity(FrontAxle.Follower.WorldPosition.Y), TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity);
+				double b = RearAxle.GetResistance(v, t, TrainManagerBase.CurrentRoute.Atmosphere.GetAirDensity(RearAxle.Follower.WorldPosition.Y), TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity);
 				FrictionBrakeAcceleration = 0.5 * (a + b);
 			}
 			// power
@@ -1168,83 +1212,62 @@ namespace TrainManager.Car
 			if (DecelerationDueToMotor == 0.0)
 			{
 				double a;
-				if (Specs.IsMotorCar)
+				if (DecelerationDueToMotor == 0.0 || !TractionModel.ProvidesPower)
 				{
-					if (DecelerationDueToMotor == 0.0)
+					if (baseTrain.Handles.Reverser.Actual != 0 & baseTrain.Handles.Power.Actual > 0 &
+					    !baseTrain.Handles.HoldBrake.Actual &
+					    !baseTrain.Handles.EmergencyBrake.Actual)
 					{
-						if (baseTrain.Handles.Reverser.Actual != 0 & baseTrain.Handles.Power.Actual > 0 &
-						    !baseTrain.Handles.HoldBrake.Actual &
-						    !baseTrain.Handles.EmergencyBrake.Actual)
+						// target acceleration
+						a = TractionModel.TargetAcceleration;
+						
+						// readhesion device
+						if (ReAdhesionDevice is BveReAdhesionDevice device)
 						{
-							// target acceleration
-							if (baseTrain.Handles.Power.Actual - 1 < Specs.AccelerationCurves.Length)
+							if (a > device.MaximumAccelerationOutput)
 							{
-								// Load factor is a constant 1.0 for anything prior to BVE5
-								// This will need to be changed when the relevant branch is merged in
-								a = Specs.AccelerationCurves[baseTrain.Handles.Power.Actual - 1]
-									.GetAccelerationOutput(
-										(double) baseTrain.Handles.Reverser.Actual * CurrentSpeed,
-										1.0);
+								a = device.MaximumAccelerationOutput;
 							}
-							else
-							{
-								a = 0.0;
-							}
-
-							// readhesion device
-							if (ReAdhesionDevice is BveReAdhesionDevice device)
-							{
-								if (a > device.MaximumAccelerationOutput)
-								{
-									a = device.MaximumAccelerationOutput;
-								}
-							}
-							else if (ReAdhesionDevice is Sanders sanders)
+						}
+						else if (ReAdhesionDevice is Sanders sanders)
+						{
+							if (sanders.State == SandersState.Active && CurrentSpeed < sanders.MaximumSpeed)
 							{
 								wheelSlipAccelerationMotorFront *= 2.0;
 								wheelSlipAccelerationMotorRear *= 2.0;
 								wheelSlipAccelerationBrakeFront *= 2.0;
 								wheelSlipAccelerationBrakeRear *= 2.0;
 							}
-							
+						}
 
-							// wheel slip
-							if (a < wheelSlipAccelerationMotorFront)
-							{
-								FrontAxle.CurrentWheelSlip = false;
-							}
-							else
-							{
-								FrontAxle.CurrentWheelSlip = true;
-								wheelspin += (double) baseTrain.Handles.Reverser.Actual * a * CurrentMass;
-							}
 
-							if (a < wheelSlipAccelerationMotorRear)
-							{
-								RearAxle.CurrentWheelSlip = false;
-							}
-							else
-							{
-								RearAxle.CurrentWheelSlip = true;
-								wheelspin += (double) baseTrain.Handles.Reverser.Actual * a * CurrentMass;
-							}
-
-							// Update readhesion device
-							this.ReAdhesionDevice.Update(a);
-							// Update constant speed device
-
-							this.ConstSpeed.Update(ref a, baseTrain.Specs.CurrentConstSpeed,
-								baseTrain.Handles.Reverser.Actual);
-
-							// finalize
-							if (wheelspin != 0.0) a = 0.0;
+						// wheel slip
+						if (a < wheelSlipAccelerationMotorFront)
+						{
+							FrontAxle.CurrentWheelSlip = false;
 						}
 						else
 						{
-							a = 0.0;
-							FrontAxle.CurrentWheelSlip = false;
+							FrontAxle.CurrentWheelSlip = true;
+							wheelspin += (double)baseTrain.Handles.Reverser.Actual * a * CurrentMass;
+						}
+
+						if (a < wheelSlipAccelerationMotorRear)
+						{
 							RearAxle.CurrentWheelSlip = false;
 						}
+						else
+						{
+							RearAxle.CurrentWheelSlip = true;
+							wheelspin += (double)baseTrain.Handles.Reverser.Actual * a * CurrentMass;
+						}
+
+						TractionModel.MaximumCurrentAcceleration = a;
+						// Update constant speed device
+						ConstSpeed?.Update(ref a);
+
+						// finalize
+						if (wheelspin != 0.0) a = 0.0;
 					}
 					else
 					{
@@ -1255,75 +1278,79 @@ namespace TrainManager.Car
 				}
 				else
 				{
+					// HACK: Use special value here to inform the BVE readhesion device it shouldn't update this frame
+					TractionModel.MaximumCurrentAcceleration = -1;
 					a = 0.0;
 					FrontAxle.CurrentWheelSlip = false;
 					RearAxle.CurrentWheelSlip = false;
 				}
 
+
 				if (!Derailed)
 				{
-					if (Specs.MotorAcceleration < a)
+					if (TractionModel.CurrentAcceleration < a)
 					{
-						if (Specs.MotorAcceleration < 0.0)
+						if (TractionModel.CurrentAcceleration < 0.0)
 						{
-							Specs.MotorAcceleration += CarBrake.JerkDown * TimeElapsed;
+							TractionModel.CurrentAcceleration += CarBrake.JerkDown * TimeElapsed;
 						}
 						else
 						{
-							Specs.MotorAcceleration += Specs.JerkPowerUp * TimeElapsed;
+							TractionModel.CurrentAcceleration += Specs.JerkPowerUp * TimeElapsed;
 						}
 
-						if (Specs.MotorAcceleration > a)
+						if (TractionModel.CurrentAcceleration > a)
 						{
-							Specs.MotorAcceleration = a;
+							TractionModel.CurrentAcceleration = a;
 						}
 					}
 					else
 					{
-						Specs.MotorAcceleration -= Specs.JerkPowerDown * TimeElapsed;
-						if (Specs.MotorAcceleration < a)
+						TractionModel.CurrentAcceleration -= Specs.JerkPowerDown * TimeElapsed;
+						if (TractionModel.CurrentAcceleration < a)
 						{
-							Specs.MotorAcceleration = a;
+							TractionModel.CurrentAcceleration = a;
 						}
 					}
 				}
 				else
 				{
-					Specs.MotorAcceleration = 0.0;
+					TractionModel.CurrentAcceleration = 0.0;
 				}
 			}
 
+			ReAdhesionDevice?.Update(TimeElapsed);
 			// brake
 			bool wheellock = wheelspin == 0.0 & Derailed;
 			if (!Derailed & wheelspin == 0.0)
 			{
 				double a;
 				// motor
-				if (Specs.IsMotorCar & DecelerationDueToMotor != 0.0)
+				if (TractionModel.ProvidesPower & DecelerationDueToMotor != 0.0)
 				{
 					a = -DecelerationDueToMotor;
-					if (Specs.MotorAcceleration > a)
+					if (TractionModel.CurrentAcceleration > a)
 					{
-						if (Specs.MotorAcceleration > 0.0)
+						if (TractionModel.CurrentAcceleration > 0.0)
 						{
-							Specs.MotorAcceleration -= Specs.JerkPowerDown * TimeElapsed;
+							TractionModel.CurrentAcceleration -= Specs.JerkPowerDown * TimeElapsed;
 						}
 						else
 						{
-							Specs.MotorAcceleration -= CarBrake.JerkUp * TimeElapsed;
+							TractionModel.CurrentAcceleration -= CarBrake.JerkUp * TimeElapsed;
 						}
 
-						if (Specs.MotorAcceleration < a)
+						if (TractionModel.CurrentAcceleration < a)
 						{
-							Specs.MotorAcceleration = a;
+							TractionModel.CurrentAcceleration = a;
 						}
 					}
 					else
 					{
-						Specs.MotorAcceleration += CarBrake.JerkDown * TimeElapsed;
-						if (Specs.MotorAcceleration > a)
+						TractionModel.CurrentAcceleration += CarBrake.JerkDown * TimeElapsed;
+						if (TractionModel.CurrentAcceleration > a)
 						{
-							Specs.MotorAcceleration = a;
+							TractionModel.CurrentAcceleration = a;
 						}
 					}
 				}
@@ -1334,12 +1361,16 @@ namespace TrainManager.Car
 				{
 					double rf = FrontAxle.Follower.WorldDirection.Y;
 					double rr = RearAxle.Follower.WorldDirection.Y;
-					double ra = Math.Abs(0.5 * (rf + rr) *
-					                     TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity);
-					if (a > ra) a = ra;
+					double ra = Math.Abs(0.5 * (rf + rr) * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity);
+					if (ra != 0 && a > ra) a = ra;
 				}
 
-				double factor = EmptyMass / CurrentMass;
+				double factor = 1.0;
+				if (EmptyMass != 0 && CurrentMass != 0)
+				{
+					// zero weight bugs out the factor
+					factor = EmptyMass / CurrentMass;
+				}
 				if (a >= wheelSlipAccelerationBrakeFront)
 				{
 					wheellock = true;
@@ -1360,22 +1391,25 @@ namespace TrainManager.Car
 			}
 			else if (Derailed)
 			{
-				FrictionBrakeAcceleration += TrainBase.CoefficientOfGroundFriction *
-				                             TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity;
+				FrictionBrakeAcceleration += TrainBase.CoefficientOfGroundFriction * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity;
 			}
 
 			// motor
 			if (baseTrain.Handles.Reverser.Actual != 0)
 			{
-				double factor = EmptyMass / CurrentMass;
-				if (Specs.MotorAcceleration > 0.0)
+				double factor = 1.0;
+				if (EmptyMass != 0 && CurrentMass != 0)
 				{
-					PowerRollingCouplerAcceleration +=
-						(double) baseTrain.Handles.Reverser.Actual * Specs.MotorAcceleration * factor;
+					// zero weight bugs out the factor
+					factor = EmptyMass / CurrentMass;
+				}
+				if (TractionModel.CurrentAcceleration > 0.0)
+				{
+					PowerRollingCouplerAcceleration += (double) baseTrain.Handles.Reverser.Actual * TractionModel.CurrentAcceleration * factor;
 				}
 				else
 				{
-					double a = -Specs.MotorAcceleration;
+					double a = -TractionModel.CurrentAcceleration;
 					if (a >= wheelSlipAccelerationMotorFront)
 					{
 						FrontAxle.CurrentWheelSlip = true;
@@ -1397,7 +1431,7 @@ namespace TrainManager.Car
 			}
 			else
 			{
-				Specs.MotorAcceleration = 0.0;
+				TractionModel.CurrentAcceleration = 0.0;
 			}
 
 			// perceived speed
@@ -1417,8 +1451,7 @@ namespace TrainManager.Car
 				}
 
 				double diff = target - Specs.PerceivedSpeed;
-				double rate = (diff < 0.0 ? 5.0 : 1.0) * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity *
-				              TimeElapsed;
+				double rate = (diff < 0.0 ? 5.0 : 1.0) * TrainManagerBase.CurrentRoute.Atmosphere.AccelerationDueToGravity * TimeElapsed;
 				rate *= 1.0 - 0.7 / (diff * diff + 1.0);
 				double factor = rate * rate;
 				factor = 1.0 - factor / (factor + 1000.0);
@@ -1433,37 +1466,20 @@ namespace TrainManager.Car
 				}
 			}
 			// calculate new speed
+			if (Math.Abs(PowerRollingCouplerAcceleration) < FrictionBrakeAcceleration)
 			{
-				int d = Math.Sign(CurrentSpeed);
-				double a = PowerRollingCouplerAcceleration;
-				double b = FrictionBrakeAcceleration;
-				if (Math.Abs(a) < b)
+				if (Math.Sign(PowerRollingCouplerAcceleration) == Math.Sign(CurrentSpeed))
 				{
-					if (Math.Sign(a) == d)
+					if (CurrentSpeed == 0)
 					{
-						if (d == 0)
-						{
-							Speed = 0.0;
-						}
-						else
-						{
-							double c = (b - Math.Abs(a)) * TimeElapsed;
-							if (Math.Abs(CurrentSpeed) > c)
-							{
-								Speed = CurrentSpeed - d * c;
-							}
-							else
-							{
-								Speed = 0.0;
-							}
-						}
+						Speed = 0.0;
 					}
 					else
 					{
-						double c = (Math.Abs(a) + b) * TimeElapsed;
+						double c = (FrictionBrakeAcceleration - Math.Abs(PowerRollingCouplerAcceleration)) * TimeElapsed;
 						if (Math.Abs(CurrentSpeed) > c)
 						{
-							Speed = CurrentSpeed - d * c;
+							Speed = CurrentSpeed - Math.Sign(CurrentSpeed) * c;
 						}
 						else
 						{
@@ -1473,8 +1489,20 @@ namespace TrainManager.Car
 				}
 				else
 				{
-					Speed = CurrentSpeed + (a - b * d) * TimeElapsed;
+					double c = (Math.Abs(PowerRollingCouplerAcceleration) + FrictionBrakeAcceleration) * TimeElapsed;
+					if (Math.Abs(CurrentSpeed) > c)
+					{
+						Speed = CurrentSpeed - Math.Sign(CurrentSpeed) * c;
+					}
+					else
+					{
+						Speed = 0.0;
+					}
 				}
+			}
+			else
+			{
+				Speed = CurrentSpeed + (PowerRollingCouplerAcceleration - FrictionBrakeAcceleration * Math.Sign(CurrentSpeed)) * TimeElapsed;
 			}
 		}
 
@@ -1540,6 +1568,11 @@ namespace TrainManager.Car
 			 * */
 			Specs.DoorOpenPitch = 1.0;
 			Specs.DoorClosePitch = 1.0;
+		}
+
+		public override void Derail()
+		{
+			baseTrain.Derail(this, 0.0);
 		}
 	}
 }

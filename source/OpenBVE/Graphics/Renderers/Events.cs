@@ -5,6 +5,9 @@ using OpenBveApi.Routes;
 using OpenBveApi.Textures;
 using OpenTK.Graphics.OpenGL;
 using RouteManager2.Events;
+using RouteManager2.Tracks;
+using System;
+using System.Collections.Generic;
 
 namespace OpenBve.Graphics.Renderers
 {
@@ -26,12 +29,15 @@ namespace OpenBve.Graphics.Renderers
 		private Texture RunSoundTexture;
 		private Texture LightingEventTexture;
 		private Texture WeatherEventTexture;
+		private Texture SwitchEventTexture;
+		private readonly List<Guid> renderedSwitches = new List<Guid>();
 
-		private bool Initialized;
+		internal double LastTrackPosition;
 
 		internal Events(BaseRenderer renderer)
 		{
 			this.renderer = renderer;
+			Init();
 		}
 
 		private void Init()
@@ -51,100 +57,80 @@ namespace OpenBve.Graphics.Renderers
 			renderer.TextureManager.RegisterTexture(Path.CombineFile(Folder, "runsound.png"), out RunSoundTexture);
 			renderer.TextureManager.RegisterTexture(Path.CombineFile(Folder, "lighting.png"), out LightingEventTexture);
 			renderer.TextureManager.RegisterTexture(Path.CombineFile(Folder, "weather.png"), out WeatherEventTexture);
-			Initialized = true;
+			renderer.TextureManager.RegisterTexture(Path.CombineFile(Folder, "switchevent.png"), out SwitchEventTexture);
 		}
 
-		/// <summary>Renders a graphical visualisation of any events within camera range</summary>
-		/// <param name="Camera">The absolute camera position</param>
-		internal void Render(Vector3 Camera)
+		/// <summary>Finds visible events on a rail index</summary>
+		/// <param name="railIndex">The rail index</param>
+		internal void FindEvents(int railIndex)
 		{
-			if (Interface.CurrentOptions.ShowEvents == false || Program.CurrentRoute.Tracks[0].Elements == null)
+			if (Program.CurrentRoute.Tracks[railIndex].Elements == null)
 			{
 				return;
-			}
-
-			if (!Initialized)
-			{
-				Init();
 			}
 
 			GL.Enable(EnableCap.CullFace);
 			GL.Enable(EnableCap.DepthTest);
 			GL.DepthMask(true);
-			renderer.OptionLighting = false;
 
 			double da = -renderer.Camera.BackwardViewingDistance - renderer.Camera.ExtraViewingDistance;
 			double db = renderer.Camera.ForwardViewingDistance + renderer.Camera.ExtraViewingDistance;
 			bool[] sta = new bool[Program.CurrentRoute.Stations.Length];
 
 			// events
-			for (int i = 0; i < Program.CurrentRoute.Tracks[0].Elements.Length; i++)
+			for (int i = 0; i < Program.CurrentRoute.Tracks[railIndex].Elements.Length; i++)
 			{
-				double p = Program.CurrentRoute.Tracks[0].Elements[i].StartingTrackPosition;
-				double d = p - Program.Renderer.CameraTrackFollower.TrackPosition;
+				double p = Program.CurrentRoute.Tracks[railIndex].Elements[i].StartingTrackPosition;
+				double d = p - renderer.CameraTrackFollower.TrackPosition;
 
 				if (d >= da & d <= db)
 				{
-					foreach (GeneralEvent e in Program.CurrentRoute.Tracks[0].Elements[i].Events)
+					foreach (GeneralEvent e in Program.CurrentRoute.Tracks[railIndex].Elements[i].Events)
 					{
 						double dy, dx = 0.0, dz = 0.0;
-						double s;
 						Texture t;
 
 						if (e is BrightnessChangeEvent)
 						{
-							s = 0.15;
 							dy = 4.0;
 							t = BrightnessChangeTexture;
 						}
 						else if (e is BackgroundChangeEvent)
 						{
-							s = 0.25;
 							dy = 3.5;
 							t = BackgroundChangeTexture;
 						}
 						else if (e is StationStartEvent startEvent)
 						{
-							s = 0.25;
 							dy = 1.6;
 							t = StationStartTexture;
 							sta[startEvent.StationIndex] = true;
 						}
 						else if (e is StationEndEvent endEvent)
 						{
-							s = 0.25;
 							dy = 1.6;
 							t = StationEndTexture;
 							sta[endEvent.StationIndex] = true;
 						}
 						else if (e is LimitChangeEvent)
 						{
-							s = 0.2;
 							dy = 1.1;
 							t = LimitTexture;
 						}
 						else if (e is SectionChangeEvent)
 						{
-							s = 0.2;
 							dy = 0.8;
 							t = SectionTexture;
 						}
 						else if (e is TransponderEvent transponderEvent)
 						{
-							s = 0.15;
 							dy = 0.4;
-							/*
-							 * NOTE:
-							 * Beacon 21 is used by legacy beacon based BVE4 weather events
-							 * e.g. OS_ATS, UK* family of plugins etc.
-							 * Use the weather event texture in this case
-							 */
+							// beacon type 21 is reserved for legacy weather events
 							t = transponderEvent.Type == 21 ? WeatherEventTexture : TransponderTexture;
 
 						}
 						else if (e is SoundEvent soundEvent)
 						{
-							s = 0.2;
 							dx = soundEvent.Position.X;
 							dy = soundEvent.Position.Y < 0.1 ? 0.1 : soundEvent.Position.Y;
 							dz = soundEvent.Position.Z;
@@ -152,7 +138,6 @@ namespace OpenBve.Graphics.Renderers
 						}
 						else if (e is PointSoundEvent)
 						{
-							s = 0.2;
 							dx = 0;
 							dy = 0.2;
 							dz = 0;
@@ -160,21 +145,25 @@ namespace OpenBve.Graphics.Renderers
 						}
 						else if (e is RailSoundsChangeEvent)
 						{
-							s = 0.2;
 							dy = 0.8;
 							t = RunSoundTexture;
 						}
 						else if (e is LightingChangeEvent)
 						{
-							s = 0.2;
 							dy = 1.5;
 							t = LightingEventTexture;
 						}
 						else
 						{
-							s = 0.2;
 							dy = 1.0;
 							t = null;
+						}
+
+						if (e is SwitchEvent sw && !renderedSwitches.Contains(sw.Index))
+						{
+							dy = 0.8;
+							t = SwitchEventTexture;
+							renderedSwitches.Add(sw.Index); // as otherwise we'll render the cube once for each track and z-fight
 						}
 
 						if (t != null)
@@ -182,17 +171,35 @@ namespace OpenBve.Graphics.Renderers
 							TrackFollower f = new TrackFollower(Program.CurrentHost)
 							{
 								TriggerType = EventTriggerType.None,
-								TrackPosition = p
+								TrackPosition = p,
+								TrackIndex = railIndex
 							};
-							f.UpdateAbsolute(p + e.TrackPositionDelta, true, false);
-							f.WorldPosition.X += dx * f.WorldSide.X + dy * f.WorldUp.X + dz * f.WorldDirection.X;
-							f.WorldPosition.Y += dx * f.WorldSide.Y + dy * f.WorldUp.Y + dz * f.WorldDirection.Y;
-							f.WorldPosition.Z += dx * f.WorldSide.Z + dy * f.WorldUp.Z + dz * f.WorldDirection.Z;
 
-							renderer.Cube.Draw(f.WorldPosition, f.WorldDirection, f.WorldUp, f.WorldSide, s, Camera, t);
+							f.UpdateAbsolute(p + e.TrackPositionDelta, true, false);
+							Vector3 cubePos = new Vector3(f.WorldPosition);
+							cubePos.X += dx * f.WorldSide.X + dy * f.WorldUp.X + dz * f.WorldDirection.X;
+							cubePos.Y += dx * f.WorldSide.Y + dy * f.WorldUp.Y + dz * f.WorldDirection.Y;
+							cubePos.Z += dx * f.WorldSide.Z + dy * f.WorldUp.Z + dz * f.WorldDirection.Z;
+
+							if (!renderer.CubesToDraw.ContainsKey(t))
+							{
+								renderer.CubesToDraw.Add(t, new HashSet<Vector3>());
+							}
+
+							renderer.CubesToDraw[t].Add(cubePos);
 						}
 					}
 				}
+
+				if (d > db)
+				{
+					break;
+				}
+			}
+
+			if (railIndex != 0)
+			{
+				return;
 			}
 
 			// stops
@@ -215,15 +222,15 @@ namespace OpenBve.Graphics.Renderers
 						f.WorldPosition.Y += dy * f.WorldUp.Y;
 						f.WorldPosition.Z += dy * f.WorldUp.Z;
 
-						renderer.Cube.Draw(f.WorldPosition, f.WorldDirection, f.WorldUp, f.WorldSide, s, Camera, StopTexture);
+						renderer.Cube.Draw(f.WorldPosition, f.WorldDirection, f.WorldUp, f.WorldSide, s, renderer.Camera.AbsolutePosition, StopTexture);
 					}
 				}
 			}
 
 			// buffers
-			foreach (double p in Program.CurrentRoute.BufferTrackPositions)
+			foreach (BufferStop stop in Program.CurrentRoute.BufferTrackPositions)
 			{
-				double d = p - Program.Renderer.CameraTrackFollower.TrackPosition;
+				double d = stop.TrackPosition - Program.Renderer.CameraTrackFollower.TrackPosition;
 
 				if (d >= da & d <= db)
 				{
@@ -232,18 +239,17 @@ namespace OpenBve.Graphics.Renderers
 					TrackFollower f = new TrackFollower(Program.CurrentHost)
 					{
 						TriggerType = EventTriggerType.None,
-						TrackPosition = p
+						TrackPosition = stop.TrackPosition,
+						TrackIndex = stop.TrackIndex
 					};
-					f.UpdateAbsolute(p, true, false);
+					f.UpdateAbsolute(stop.TrackPosition, true, false);
 					f.WorldPosition.X += dy * f.WorldUp.X;
 					f.WorldPosition.Y += dy * f.WorldUp.Y;
 					f.WorldPosition.Z += dy * f.WorldUp.Z;
 
-					renderer.Cube.Draw(f.WorldPosition, f.WorldDirection, f.WorldUp, f.WorldSide, s, Camera, BufferTexture);
+					renderer.Cube.Draw(f.WorldPosition, f.WorldDirection, f.WorldUp, f.WorldSide, s, renderer.Camera.AbsolutePosition, BufferTexture);
 				}
 			}
-
-			renderer.OptionLighting = true;
 		}
 	}
 }

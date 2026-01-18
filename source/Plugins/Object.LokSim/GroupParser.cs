@@ -61,7 +61,7 @@ namespace Plugin
 			};
 			try
 			{
-				currentXML.Load(FileName);
+				currentXML.SanitizeAndLoadXml(FileName);
 			}
 			catch (Exception ex)
 			{
@@ -130,7 +130,7 @@ namespace Plugin
 				}
 			}
 
-			string BaseDir = System.IO.Path.GetDirectoryName(FileName);
+			string BaseDir = Path.GetDirectoryName(FileName);
 
 			GruppenObject[] CurrentObjects = new GruppenObject[0];
 			//Check for null
@@ -180,8 +180,7 @@ namespace Plugin
 														}
 														break;
 													case "Rotation":
-														Vector3 r;
-														if (!Vector3.TryParse(attribute.Value, ';', out r))
+														if (!Vector3.TryParse(attribute.Value, ';', out Vector3 r))
 														{
 															Plugin.currentHost.AddMessage(MessageType.Warning, true, "Invalid rotation vector " + attribute.Value + " supplied in Ls3d object file.");
 														}
@@ -191,7 +190,11 @@ namespace Plugin
 														//Defines when the object should be shown
 														try
 														{
-															Object.FunctionScript = FunctionScriptNotation.GetPostfixNotationFromInfixNotation(GetAnimatedFunction(attribute.Value, false));
+															if (GetAnimatedFunction(attribute.Value, false, out string func))
+															{
+																Object.FunctionScript = FunctionScriptNotation.GetPostfixNotationFromInfixNotation(func);
+															}
+															
 														}
 														catch
 														{
@@ -203,7 +206,10 @@ namespace Plugin
 														//Defines when the object should be hidden
 														try
 														{
-															Object.FunctionScript = FunctionScriptNotation.GetPostfixNotationFromInfixNotation(GetAnimatedFunction(attribute.Value, true));
+															if (GetAnimatedFunction(attribute.Value, false, out string func))
+															{
+																Object.FunctionScript = FunctionScriptNotation.GetPostfixNotationFromInfixNotation(func);
+															}
 														}
 														catch
 														{
@@ -250,7 +256,7 @@ namespace Plugin
 							}
 							else
 							{
-								throw new Exception("Format " + System.IO.Path.GetExtension(CurrentObjects[i].Name) + " is not currently supported by the Loksim3D object parser");
+								throw new Exception("Format " + Path.GetExtension(CurrentObjects[i].Name) + " is not currently supported by the Loksim3D object parser");
 							}
 						}
 						catch (Exception ex) {
@@ -266,7 +272,7 @@ namespace Plugin
 								obj[obj.Length - 1] = Object;
 								int aL = Result.Objects.Length;
 								Array.Resize(ref Result.Objects, aL + 1);
-								AnimatedObject a = new AnimatedObject(Plugin.currentHost);
+								AnimatedObject a = new AnimatedObject(Plugin.currentHost, FileName);
 								ObjectState aos = new ObjectState
 								{
 									Prototype = Object,
@@ -303,7 +309,7 @@ namespace Plugin
 								}
 								else
 								{
-									Result.Objects[o] = new AnimatedObject(Plugin.currentHost);
+									Result.Objects[o] = new AnimatedObject(Plugin.currentHost, FileName);
 								}
 							}
 						}
@@ -311,7 +317,7 @@ namespace Plugin
 					if (staticObject != null)
 					{
 						Array.Resize(ref Result.Objects, Result.Objects.Length + 1);
-						AnimatedObject a = new AnimatedObject(Plugin.currentHost);
+						AnimatedObject a = new AnimatedObject(Plugin.currentHost, FileName);
 						ObjectState aos = new ObjectState(staticObject);
 						a.States = new [] { aos };
 						Result.Objects[Result.Objects.Length - 1] = a;
@@ -324,10 +330,10 @@ namespace Plugin
 			return null;
 		}
 
-		private static string GetAnimatedFunction(string Value, bool Hidden)
+		private static bool GetAnimatedFunction(string Value, bool Hidden, out string script)
 		{
 			string[] splitStrings = Value.Split(new char[] { });
-			string script = string.Empty;
+			script = string.Empty;
 			for (int i = 0; i < splitStrings.Length; i++)
 			{
 				splitStrings[i] = splitStrings[i].Trim(new char[] { }).ToLowerInvariant();
@@ -338,22 +344,22 @@ namespace Plugin
 						//Appears to be HEADLIGHTS (F)
 						script += Hidden ? "reversernotch != -1" : "reversernotch == -1";
 					}
-					if (splitStrings[i].StartsWith("schlusslicht1-an"))
+					else if (splitStrings[i].StartsWith("schlusslicht1-an"))
 					{
 						//Appears to be TAILLIGHTS (F)
 						script += Hidden ? "reversernotch != 1" : "reversernotch == 1";
 					}
-					if (splitStrings[i].StartsWith("spitzenlicht2-an"))
+					else if (splitStrings[i].StartsWith("spitzenlicht2-an"))
 					{
 						//Appears to be HEADLIGHTS (R)
 						script += Hidden ? "reversernotch != 1" : "reversernotch == 1";
 					}
-					if (splitStrings[i].StartsWith("schlusslicht2-an"))
+					else if (splitStrings[i].StartsWith("schlusslicht2-an"))
 					{
 						//Appears to be TAILLIGHTS (R)
 						script += Hidden ? "reversernotch != -1" : "reversernotch == -1";
 					}
-					if (splitStrings[i].StartsWith("tür") && splitStrings[i].EndsWith("offen"))
+					else if (splitStrings[i].StartsWith("tür") && splitStrings[i].EndsWith("offen"))
 					{
 						switch (splitStrings[i][3])
 						{
@@ -375,7 +381,7 @@ namespace Plugin
 								break;
 						}
 					}
-					if (splitStrings[i].StartsWith("rauch"))
+					else if (splitStrings[i].StartsWith("rauch"))
 					{
 						//Smoke (e.g. steam loco)
 						string[] finalStrings = splitStrings[i].Split(new[] { '_'});
@@ -400,6 +406,11 @@ namespace Plugin
 								break;
 						}
 					}
+					else
+					{
+						// not currently supported function
+						return false;
+					}
 				}
 				else
 				{
@@ -414,7 +425,7 @@ namespace Plugin
 					}
 				}
 			}
-			return script;
+			return true;
 		}
 	}
 }

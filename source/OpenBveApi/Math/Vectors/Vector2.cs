@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Globalization;
+
+#pragma warning disable IDE0064
 using System.Runtime.InteropServices;
+// ReSharper disable MergeCastWithTypeCheck
 
 namespace OpenBveApi.Math {
 	/// <summary>Represents a two-dimensional vector.</summary>
@@ -33,6 +37,13 @@ namespace OpenBveApi.Math {
 			this.Y = v.Y;
 		}
 
+		/// <summary>Converts a Vector2 to a Vector2f</summary>
+		///	<remarks>This discards the double precision</remarks>
+		public static implicit operator Vector2f(Vector2 v)
+		{
+			return new Vector2f(v.X, v.Y);
+		}
+
 		/// <summary>Parses a Vector2 from a list of strings</summary>
 		/// <param name="arguments">The list of strings</param>
 		/// <param name="v">The out Vector</param>
@@ -48,13 +59,13 @@ namespace OpenBveApi.Math {
 				switch (i)
 				{
 					case 0:
-						if (!double.TryParse(arguments[i], out v.X))
+						if (!double.TryParse(arguments[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.X))
 						{
 							success = false;
 						}
 						break;
 					case 1:
-						if (!double.TryParse(arguments[i], out v.Y))
+						if (!double.TryParse(arguments[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.Y))
 						{
 							success = false;
 						}
@@ -63,7 +74,14 @@ namespace OpenBveApi.Math {
 			}
 			return success;
 		}
-		
+
+		/// <summary>Unconditionally parses a vector stored in string format</summary>
+		/// <param name="v">The string</param>
+		public static Vector2 Parse(string v)
+		{
+			TryParse(v.Split(','), out Vector2 vv);
+			return vv;
+		}
 		
 		// --- arithmetic operators ---
 		
@@ -279,13 +297,33 @@ namespace OpenBveApi.Math {
 			double y = sineOfAngle * this.X + cosineOfAngle * this.Y;
 			this = new Vector2(x, y);
 		}
-		
+
+		/// <summary>Rotates the vector by the specified angle.</summary>
+		/// <param name="angle">The angle.</param>
+		public void Rotate(double angle)
+		{
+			if (angle == 0)
+			{
+				return;
+			}
+			double cosineOfAngle = System.Math.Cos(angle);
+			double sineOfAngle = System.Math.Sin(angle);
+			Rotate(cosineOfAngle, sineOfAngle);
+		}
+
 		/// <summary>Checks whether the vector is a null vector.</summary>
 		/// <returns>A boolean indicating whether the vector is a null vector.</returns>
 		public bool IsNullVector() {
 			return this.X == 0.0 & this.Y == 0.0;
 		}
-		
+
+		/// <summary>Tests to see whether the vector is finite (no components are double or infinity.</summary>
+		/// <returns>A boolean indicating whether the vector is finite</returns>
+		public static bool IsFinite(Vector2 Vector)
+		{
+			return !double.IsNaN(Vector.X) && !double.IsInfinity(Vector.X) && !double.IsNaN(Vector.Y) && !double.IsInfinity(Vector.Y);
+		}
+
 		/// <summary>Checks whether the vector is considered a null vector.</summary>
 		/// <param name="tolerance">The highest absolute value that each component of the vector may have before the vector is not considered a null vector.</param>
 		/// <returns>A boolean indicating whether the vector is considered a null vector.</returns>
@@ -319,7 +357,16 @@ namespace OpenBveApi.Math {
 		public static double Dot(Vector2 a, Vector2 b) {
 			return a.X * b.X + a.Y * b.Y;
 		}
-		
+
+		/// <summary>Gives the determinant product of two vectors.</summary>
+		/// <param name="a">The first vector.</param>
+		/// <param name="b">The second vector.</param>
+		/// <returns>The determinant product of the two vectors.</returns>
+		public static double Determinant(Vector2 a, Vector2 b)
+		{
+			return a.X * b.Y - a.Y * b.X;
+		}
+
 		/// <summary>Normalizes a vector.</summary>
 		/// <param name="vector">The vector.</param>
 		/// <returns>The normalized vector.</returns>
@@ -410,7 +457,8 @@ namespace OpenBveApi.Math {
 		/// <summary>Returns the representation of the vector in string format</summary>
 		public override string ToString()
 		{
-			string toString = this.X + " , " + this.Y;
+			CultureInfo c = CultureInfo.InvariantCulture;
+			string toString = this.X.ToString(c) + " , " + this.Y.ToString(c);
 			return toString;
 		}
 		

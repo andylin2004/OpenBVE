@@ -1,4 +1,4 @@
-﻿//Simplified BSD License (BSD-2-Clause)
+//Simplified BSD License (BSD-2-Clause)
 //
 //Copyright (c) 2020, Christopher Lees, The OpenBVE Project
 //
@@ -22,6 +22,8 @@
 //(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 //SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// ReSharper disable UnusedMember.Global
+// ReSharper disable InconsistentNaming
 namespace OpenBve.Formats.DirectX
 {
 	public enum TemplateID : uint
@@ -51,6 +53,10 @@ namespace OpenBve.Formats.DirectX
 		MaterialWrap,
 		MeshFaceWraps,
 		Template,
+		// https://learn.microsoft.com/en-us/windows/win32/direct3d9/fvfdata
+		FVFData,
+		// https://learn.microsoft.com/en-us/windows/win32/direct3d9/decldata
+		DeclData,
 
 		//Templates below this are not in the Microsoft DirectX specification
 		//However, the X file format is extensible by declaring the template structure at the top
@@ -65,7 +71,7 @@ namespace OpenBve.Formats.DirectX
 
 		//Source: Mesquioa zipped txt
 		VertexDuplicationIndices,
-
+		
 		//Special case handler
 		//Not actually a block, just the key of the root block
 		TextureKey

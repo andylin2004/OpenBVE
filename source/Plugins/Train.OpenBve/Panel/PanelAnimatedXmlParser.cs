@@ -5,14 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
-using LibRender2.Cursors;
+using Formats.OpenBve;
+using LibRender2;
 using LibRender2.Trains;
 using OpenBveApi;
 using OpenBveApi.Colors;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Objects;
-using OpenBveApi.Textures;
 using TrainManager.Trains;
 using Path = OpenBveApi.Path;
 
@@ -50,10 +50,10 @@ namespace Train.OpenBve
 				throw new InvalidDataException(FileName + " does not appear to be a valid XML file.");
 			}
 
-			IEnumerable<XElement> DocumentElements = CurrentXML.Root.Elements("PanelAnimated");
+			List<XElement> DocumentElements = CurrentXML.Root.Elements("PanelAnimated").ToList();
 
 			// Check this file actually contains OpenBVE panel definition elements
-			if (DocumentElements == null || !DocumentElements.Any())
+			if (DocumentElements == null || DocumentElements.Count == 0)
 			{
 				// We couldn't find any valid XML, so return false
 				throw new InvalidDataException(FileName + " is not a valid PanelAnimatedXML file.");
@@ -61,7 +61,7 @@ namespace Train.OpenBve
 
 			foreach (XElement element in DocumentElements)
 			{
-				ParsePanelAnimatedNode(element, FileName, Train.TrainFolder, Train.Cars[Car].CarSections[0], 0);
+				ParsePanelAnimatedNode(element, FileName, Train.TrainFolder, Train.Cars[Car].CarSections[CarSectionType.Interior], 0);
 			}
 		}
 
@@ -82,27 +82,27 @@ namespace Train.OpenBve
 					if (Plugin.Cancel) return;
 				}
 
-				string Section = SectionElement.Name.LocalName;
 
-				switch (SectionElement.Name.LocalName.ToLowerInvariant())
+				Enum.TryParse(SectionElement.Name.LocalName, true, out Panel2Sections Section);
+				switch (Section)
 				{
-					case "group":
+					case Panel2Sections.Group:
 						if (GroupIndex == 0)
 						{
 							int n = 0;
 
 							foreach (XElement KeyNode in SectionElement.Elements())
 							{
-								string Key = KeyNode.Name.LocalName;
 								string Value = KeyNode.Value;
 								int LineNumber = ((IXmlLineInfo) KeyNode).LineNumber;
+								Enum.TryParse(KeyNode.Name.LocalName, true, out Panel2Key key);
 
-								switch (Key.ToLowerInvariant())
+								switch (key)
 								{
-									case "number":
+									case Panel2Key.Number:
 										if (Value.Length != 0 && !NumberFormats.TryParseIntVb6(Value, out n))
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 										}
 										break;
 								}
@@ -117,7 +117,7 @@ namespace Train.OpenBve
 							ParsePanelAnimatedNode(SectionElement, FileName, TrainPath, CarSection, n + 1);
 						}
 						break;
-					case "touch":
+					case Panel2Sections.Touch:
 						if (GroupIndex > 0)
 						{
 							Vector3 Position = Vector3.Zero;
@@ -129,42 +129,42 @@ namespace Train.OpenBve
 							Bitmap cursorTexture = null;
 							foreach (XElement KeyNode in SectionElement.Elements())
 							{
-								string Key = KeyNode.Name.LocalName;
 								string Value = KeyNode.Value;
 								int LineNumber = ((IXmlLineInfo) KeyNode).LineNumber;
+								Enum.TryParse(KeyNode.Name.LocalName, true, out Panel2Key key);
 
-								switch (Key.ToLowerInvariant())
+								switch (key)
 								{
-									case "position":
+									case Panel2Key.Position:
 										if (!Vector3.TryParse(KeyNode.Value, ',', out Position))
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, "Position is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Position is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 										}
 										break;
-									case "size":
+									case Panel2Key.Size:
 										if (!Vector3.TryParse(KeyNode.Value, ',', out Size))
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, "Size is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Size is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 										}
 										break;
-									case "jumpscreen":
+									case Panel2Key.JumpScreen:
 										if (Value.Length != 0 && !NumberFormats.TryParseIntVb6(Value, out JumpScreen))
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 										}
 										break;
-									case "soundindex":
+									case Panel2Key.SoundIndex:
 										if (Value.Length != 0)
 										{
 											if (!NumberFormats.TryParseIntVb6(Value, out var SoundIndex))
 											{
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 												break;
 											}
 											SoundIndices.Add(SoundIndex);
 										}
 										break;
-									case "command":
+									case Panel2Key.Command:
 										{
 											if (!CommandEntries.Contains(CommandEntry))
 											{
@@ -176,25 +176,17 @@ namespace Train.OpenBve
 												break;
 											}
 
-											int i;
-											for (i = 0; i < Translations.CommandInfos.Length; i++)
+											if (Enum.TryParse(Value.Replace("_", string.Empty), true, out Translations.Command command))
 											{
-												if (string.Compare(Value, Translations.CommandInfos[i].Name, StringComparison.OrdinalIgnoreCase) == 0)
-												{
-													break;
-												}
-											}
-											if (i == Translations.CommandInfos.Length || Translations.CommandInfos[i].Type != Translations.CommandType.Digital)
-											{
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+												CommandEntry.Command = command;
 											}
 											else
 											{
-												CommandEntry.Command = Translations.CommandInfos[i].Command;
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 											}
 										}
 										break;
-									case "commandoption":
+									case Panel2Key.CommandOption:
 										if (!CommandEntries.Contains(CommandEntry))
 										{
 											CommandEntries.Add(CommandEntry);
@@ -202,32 +194,32 @@ namespace Train.OpenBve
 
 										if (Value.Length != 0 && !NumberFormats.TryParseIntVb6(Value, out CommandEntry.Option))
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 										}
 										break;
-									case "soundentries":
+									case Panel2Key.SoundEntries:
 										if (!KeyNode.HasElements)
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, $"An empty list of touch sound indices was defined at line {((IXmlLineInfo)KeyNode).LineNumber} in XML file {FileName}");
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"An empty list of touch sound indices was defined at line {((IXmlLineInfo)KeyNode).LineNumber} in XML file {FileName}");
 											break;
 										}
 
 										ParseTouchSoundEntryNode(FileName, KeyNode, SoundIndices);
 										break;
-									case "commandentries":
+									case Panel2Key.CommandEntries:
 										if (!KeyNode.HasElements)
 										{
-											Plugin.currentHost.AddMessage(MessageType.Error, false, $"An empty list of touch commands was defined at line {((IXmlLineInfo)KeyNode).LineNumber} in XML file {FileName}");
+											Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"An empty list of touch commands was defined at line {((IXmlLineInfo)KeyNode).LineNumber} in XML file {FileName}");
 											break;
 										}
 
 										ParseTouchCommandEntryNode(FileName, KeyNode, CommandEntries);
 										break;
-									case "cursor":
-										string File = Path.CombineFile(TrainPath, Value);
-										if (System.IO.File.Exists(File))
+									case Panel2Key.Cursor:
+										string cursorFile = Path.CombineFile(TrainPath, Value);
+										if (File.Exists(cursorFile))
 										{
-											cursorTexture = (Bitmap)Bitmap.FromFile(File);
+											cursorTexture = (Bitmap)Image.FromFile(cursorFile);
 										}
 										break;
 								}
@@ -239,35 +231,35 @@ namespace Train.OpenBve
 							}
 						}
 						break;
-					case "include":
+					case Panel2Sections.Include:
 						{
 							foreach (XElement KeyNode in SectionElement.Elements())
 							{
-								string Key = KeyNode.Name.LocalName;
 								string Value = KeyNode.Value;
 								int LineNumber = ((IXmlLineInfo)KeyNode).LineNumber;
+								Enum.TryParse(KeyNode.Name.LocalName, true, out Panel2Key key);
 
-								switch (Key.ToLowerInvariant())
+								switch (key)
 								{
-									case "filename":
+									case Panel2Key.FileName:
 										{
-											string File = Path.CombineFile(TrainPath, Value);
-											if (System.IO.File.Exists(File))
+											string includeFile = Path.CombineFile(TrainPath, Value);
+											if (File.Exists(includeFile))
 											{
-												System.Text.Encoding e = TextEncoding.GetSystemEncodingFromFile(File);
-												Plugin.currentHost.LoadObject(File, e, out var currentObject);
+												System.Text.Encoding e = TextEncoding.GetSystemEncodingFromFile(includeFile);
+												Plugin.CurrentHost.LoadObject(includeFile, e, out var currentObject);
 												var a = (AnimatedObjectCollection)currentObject;
 												if (a != null)
 												{
 													for (int i = 0; i < a.Objects.Length; i++)
 													{
-														Plugin.currentHost.CreateDynamicObject(ref a.Objects[i].internalObject);
+														Plugin.CurrentHost.CreateDynamicObject(ref a.Objects[i].internalObject);
 													}
 													CarSection.Groups[GroupIndex].Elements = a.Objects;
 												}
 												else
 												{
-													Plugin.currentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + Key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
+													Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Value is invalid in " + key + " in " + Section + " at line " + LineNumber.ToString(Culture) + " in " + FileName);
 												}
 											}
 										}
@@ -277,6 +269,8 @@ namespace Train.OpenBve
 						}
 						break;
 				}
+
+				currentSectionElement++;
 			}
 		}
 
@@ -286,7 +280,7 @@ namespace Train.OpenBve
 			{
 				if (childNode.Name.LocalName.ToLowerInvariant() != "entry")
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, $"Invalid entry node {childNode.Name.LocalName} in XML node {parent.Name.LocalName} at line {((IXmlLineInfo)childNode).LineNumber}");
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"Invalid entry node {childNode.Name.LocalName} in XML node {parent.Name.LocalName} at line {((IXmlLineInfo)childNode).LineNumber}");
 				}
 				else
 				{
@@ -296,18 +290,18 @@ namespace Train.OpenBve
 
 					foreach (XElement keyNode in childNode.Elements())
 					{
-						string key = keyNode.Name.LocalName;
 						string value = keyNode.Value;
 						int lineNumber = ((IXmlLineInfo)keyNode).LineNumber;
+						Enum.TryParse(keyNode.Name.LocalName, true, out Panel2Key key);
 
-						switch (keyNode.Name.LocalName.ToLowerInvariant())
+						switch (key)
 						{
-							case "index":
+							case Panel2Key.Index:
 								if (value.Any())
 								{
 									if (!NumberFormats.TryParseIntVb6(value, out var index))
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
 										break;
 									}
 
@@ -326,7 +320,7 @@ namespace Train.OpenBve
 			{
 				if (childNode.Name.LocalName.ToLowerInvariant() != "entry")
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, $"Invalid entry node {childNode.Name.LocalName} in XML node {parent.Name.LocalName} at line {((IXmlLineInfo)childNode).LineNumber}");
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"Invalid entry node {childNode.Name.LocalName} in XML node {parent.Name.LocalName} at line {((IXmlLineInfo)childNode).LineNumber}");
 				}
 				else
 				{
@@ -337,43 +331,33 @@ namespace Train.OpenBve
 
 					foreach (XElement keyNode in childNode.Elements())
 					{
-						string key = keyNode.Name.LocalName;
 						string value = keyNode.Value;
 						int lineNumber = ((IXmlLineInfo)keyNode).LineNumber;
+						Enum.TryParse(keyNode.Name.LocalName, true, out Panel2Key key);
 
-						switch (keyNode.Name.LocalName.ToLowerInvariant())
+						switch (key)
 						{
-							case "name":
+							case Panel2Key.Name:
 								if (string.Compare(value, "N/A", StringComparison.InvariantCultureIgnoreCase) == 0)
 								{
 									break;
 								}
 
-								int i;
-
-								for (i = 0; i < Translations.CommandInfos.Length; i++)
+								if (Enum.TryParse(value.Replace("_", string.Empty), true, out Translations.Command command))
 								{
-									if (string.Compare(value, Translations.CommandInfos[i].Name, StringComparison.OrdinalIgnoreCase) == 0)
-									{
-										break;
-									}
-								}
-
-								if (i == Translations.CommandInfos.Length || Translations.CommandInfos[i].Type != Translations.CommandType.Digital)
-								{
-									Plugin.currentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
+									entry.Command = command;
 								}
 								else
 								{
-									entry.Command = Translations.CommandInfos[i].Command;
+									Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
 								}
 								break;
-							case "option":
+							case Panel2Key.Option:
 								if (value.Any())
 								{
 									if (!NumberFormats.TryParseIntVb6(value, out var option))
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"value is invalid in {key} in {section} at line {lineNumber.ToString(culture)} in {fileName}");
 										break;
 									}
 									entry.Option = option;
@@ -397,7 +381,7 @@ namespace Train.OpenBve
             Vertex t5 = new Vertex(Size.X, -Size.Y, Size.Z);
             Vertex t6 = new Vertex(-Size.X, -Size.Y, Size.Z);
             Vertex t7 = new Vertex(-Size.X, Size.Y, Size.Z);
-			StaticObject Object = new StaticObject(Plugin.currentHost);
+			StaticObject Object = new StaticObject(Plugin.CurrentHost);
 			Object.Mesh.Vertices = new VertexTemplate[] { t0, t1, t2, t3, t4, t5, t6, t7 };
             Object.Mesh.Faces = new[] { new MeshFace(new[] { 0, 1, 2, 3 }), new MeshFace(new[] { 0, 4, 5, 1 }), new MeshFace(new[] { 0, 3, 7, 4 }), new MeshFace(new[] { 6, 5, 4, 7 }), new MeshFace(new[] { 6, 7, 3, 2 }), new MeshFace(new[] { 6, 2, 1, 5 }) };
 			Object.Mesh.Materials = new MeshMaterial[1];
@@ -412,29 +396,25 @@ namespace Train.OpenBve
 				Group.TouchElements = new TouchElement[0];
 			}
 			int n = Group.TouchElements.Length;
-			Array.Resize(ref Group.TouchElements, n + 1);
-			Group.TouchElements[n] = new TouchElement
-			{
-				Element = new AnimatedObject(Plugin.currentHost),
-				JumpScreenIndex = ScreenIndex,
-				SoundIndices = SoundIndices,
-				ControlIndices = new int[CommandEntries.Length]
-			};
-			Group.TouchElements[n].Element.States = new [] { new ObjectState() };
-			Group.TouchElements[n].Element.States[0].Translation = Matrix4D.CreateTranslation(Position.X, Position.Y, -Position.Z);
-			Group.TouchElements[n].Element.States[0].Prototype = Object;
-			Group.TouchElements[n].Element.CurrentState = 0;
-			Group.TouchElements[n].Element.internalObject = new ObjectState(Object);
-			Plugin.currentHost.CreateDynamicObject(ref Group.TouchElements[n].Element.internalObject);
 			int m = Plugin.CurrentControls.Length;
 			Array.Resize(ref Plugin.CurrentControls, m + CommandEntries.Length);
+			int[] controlIndicies = new int[CommandEntries.Length];
 			for (int i = 0; i < CommandEntries.Length; i++)
 			{
 				Plugin.CurrentControls[m + i].Command = CommandEntries[i].Command;
 				Plugin.CurrentControls[m + i].Method = ControlMethod.Touch;
 				Plugin.CurrentControls[m + i].Option = CommandEntries[i].Option;
-				Group.TouchElements[n].ControlIndices[i] = m + i;
+				controlIndicies[i] = m + i;
 			}
+			Array.Resize(ref Group.TouchElements, n + 1);
+			Group.TouchElements[n] = new TouchElement(new AnimatedObject(Plugin.CurrentHost), ScreenIndex, SoundIndices, controlIndicies);
+			Group.TouchElements[n].Element.States = new [] { new ObjectState() };
+			Group.TouchElements[n].Element.States[0].Translation = Matrix4D.CreateTranslation(Position.X, Position.Y, -Position.Z);
+			Group.TouchElements[n].Element.States[0].Prototype = Object;
+			Group.TouchElements[n].Element.CurrentState = 0;
+			Group.TouchElements[n].Element.internalObject = new ObjectState(Object);
+			Plugin.CurrentHost.CreateDynamicObject(ref Group.TouchElements[n].Element.internalObject);
+			
 		}
 	}
 }

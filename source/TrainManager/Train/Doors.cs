@@ -251,24 +251,18 @@ namespace TrainManager.Trains
 				}
 			}
 
-			if (SafetySystems.PilotLamp != null)
-			{
-				SafetySystems.PilotLamp.Update(newState);
-			}
+			SafetySystems.PilotLamp?.Update(newState);
 
 			if (oldState != newState)
 			{
-				if (Plugin != null)
-				{
-					Plugin.DoorChange(oldState, newState);
-				}
+				Plugin?.DoorChange(oldState, newState);
 				if (IsPlayerTrain)
 				{
 					for (int j = 0; j < InputDevicePlugin.AvailablePluginInfos.Count; j++)
 					{
-						if (InputDevicePlugin.AvailablePluginInfos[j].Status == InputDevicePlugin.PluginInfo.PluginStatus.Enable && InputDevicePlugin.AvailablePlugins[j] is ITrainInputDevice)
+						if (InputDevicePlugin.AvailablePluginInfos[j].Status == InputDevicePlugin.PluginInfo.PluginStatus.Enable 
+							&& InputDevicePlugin.AvailablePlugins[j] is ITrainInputDevice trainInputDevice)
 						{
-							ITrainInputDevice trainInputDevice = (ITrainInputDevice)InputDevicePlugin.AvailablePlugins[j];
 							trainInputDevice.DoorChange(oldState, newState);
 						}
 					}

@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using LibRender2;
 using LibRender2.MotionBlurs;
 using LibRender2.Objects;
+using LibRender2.Overlays;
 using LibRender2.Screens;
 using LibRender2.Shaders;
 using LibRender2.Viewports;
@@ -17,30 +15,20 @@ using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Objects;
 using OpenBveApi.Routes;
+using OpenBveApi.Textures;
 using OpenBveApi.World;
 using OpenTK.Graphics.OpenGL;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using TrainManager;
+using TrainManager.Trains;
 using Vector3 = OpenBveApi.Math.Vector3;
 
 namespace OpenBve.Graphics
 {
 	internal class NewRenderer : BaseRenderer
 	{
-		// interface options
-		internal enum GradientDisplayMode
-		{
-			Percentage, UnitOfChange, Permil, None
-		}
-
-		internal enum SpeedDisplayMode
-		{
-			None, Kmph, Mph
-		}
-
-		internal enum DistanceToNextStationDisplayMode
-		{
-			None, Km, Mile
-		}
-
 		internal bool OptionClock = false;
 		internal GradientDisplayMode OptionGradient = GradientDisplayMode.None;
 		internal SpeedDisplayMode OptionSpeed = SpeedDisplayMode.None;
@@ -87,22 +75,21 @@ namespace OpenBve.Graphics
 			Program.FileSystem.AppendToLogFile("Renderer initialised successfully.");
 		}
 		
-		internal int CreateStaticObject(UnifiedObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, ObjectDisposalMode AccurateObjectDisposal, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double BlockLength, double TrackPosition, double Brightness)
+		internal int CreateStaticObject(UnifiedObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, ObjectDisposalMode AccurateObjectDisposal, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double BlockLength, double TrackPosition)
 		{
-			StaticObject obj = Prototype as StaticObject;
-			if (obj == null)
+			if (!(Prototype is StaticObject obj))
 			{
 				Interface.AddMessage(MessageType.Error, false, "Attempted to use an animated object where only static objects are allowed.");
 				return -1;
 			}
-			return base.CreateStaticObject(obj, Position, WorldTransformation, LocalTransformation, AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, BlockLength, TrackPosition, Brightness);
+			return base.CreateStaticObject(obj, Position, WorldTransformation, LocalTransformation, AccurateObjectDisposal, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, BlockLength, TrackPosition);
 		}
 
-		public override void UpdateViewport(int Width, int Height)
+		protected override void UpdateViewport(int width, int height)
 		{
 			_programLogo = null;
-			Screen.Width = Width;
-			Screen.Height = Height;
+			Screen.Width = width;
+			Screen.Height = height;
 			GL.Viewport(0, 0, Screen.Width, Screen.Height);
 
 			Screen.AspectRatio = Screen.Width / (double)Screen.Height;
@@ -145,6 +132,10 @@ namespace OpenBve.Graphics
 					GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 				}
 			}
+			else
+			{
+				GL.ClearColor(0.67f, 0.67f, 0.67f, 1.0f);
+			}
 
 			GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
@@ -184,7 +175,7 @@ namespace OpenBve.Graphics
 				Program.CurrentRoute.CurrentFog.Color.B = (byte)(Program.CurrentRoute.PreviousFog.Color.B * frc + Program.CurrentRoute.NextFog.Color.B * fr);
 				if (!Program.CurrentRoute.CurrentFog.IsLinear)
 				{
-					Program.CurrentRoute.CurrentFog.Density = (byte)(Program.CurrentRoute.PreviousFog.Density * frc + Program.CurrentRoute.NextFog.Density * fr);
+					Program.CurrentRoute.CurrentFog.Density = Program.CurrentRoute.PreviousFog.Density * frc + Program.CurrentRoute.NextFog.Density * fr;
 				}
 			}
 			else
@@ -192,33 +183,32 @@ namespace OpenBve.Graphics
 				Program.CurrentRoute.CurrentFog = Program.CurrentRoute.PreviousFog;
 			}
 
+			if (AvailableNewRenderer)
+			{
+				DefaultShader.Activate();
+			}
+
 			// render background
 			GL.Disable(EnableCap.DepthTest);
 			Program.CurrentRoute.UpdateBackground(TimeElapsed, Program.Renderer.CurrentInterface != InterfaceType.Normal);
-
-			events.Render(Camera.AbsolutePosition);
-
+			
 			// fog
 			float aa = Program.CurrentRoute.CurrentFog.Start;
 			float bb = Program.CurrentRoute.CurrentFog.End;
 
 			if (aa < bb & aa < Program.CurrentRoute.CurrentBackground.BackgroundImageDistance)
 			{
-				OptionFog = true;
+				Fog.Enabled = true;
 				Fog.Start = aa;
 				Fog.End = bb;
 				Fog.Color = Program.CurrentRoute.CurrentFog.Color;
 				Fog.Density = Program.CurrentRoute.CurrentFog.Density;
 				Fog.IsLinear = Program.CurrentRoute.CurrentFog.IsLinear;
-				if (!AvailableNewRenderer)
-				{
-					Fog.SetForImmediateMode();
-				}
-				
+				Fog.Set();
 			}
 			else
 			{
-				OptionFog = false;
+				Fog.Enabled = false;
 			}
 
 			// world layer
@@ -226,7 +216,6 @@ namespace OpenBve.Graphics
 			if (AvailableNewRenderer)
 			{
 				//Setup the shader for rendering the scene
-				DefaultShader.Activate();
 				if (OptionLighting)
 				{
 					DefaultShader.SetIsLight(true);
@@ -236,11 +225,7 @@ namespace OpenBve.Graphics
 					DefaultShader.SetLightSpecular(Lighting.OptionSpecularColor);
 					DefaultShader.SetLightModel(Lighting.LightModel);
 				}
-				if (OptionFog)
-				{
-					DefaultShader.SetIsFog(true);
-					DefaultShader.SetFog(Fog);
-				}
+				Fog.Set();
 				DefaultShader.SetTexture(0);
 				DefaultShader.SetCurrentProjectionMatrix(CurrentProjectionMatrix);
 			}
@@ -253,7 +238,7 @@ namespace OpenBve.Graphics
 				overlayOpaqueFaces = VisibleObjects.OverlayOpaqueFaces.ToList();
 				overlayAlphaFaces = VisibleObjects.GetSortedPolygons(true);
 			}
-			
+
 			foreach (FaceState face in opaqueFaces)
 			{
 				face.Draw();
@@ -304,8 +289,6 @@ namespace OpenBve.Graphics
 							UnsetAlphaFunc();
 							additive = true;
 						}
-
-						face.Draw();
 					}
 					else
 					{
@@ -314,8 +297,8 @@ namespace OpenBve.Graphics
 							SetAlphaFunc();
 							additive = false;
 						}
-						face.Draw();
 					}
+					face.Draw();
 				}
 			}
 
@@ -334,9 +317,52 @@ namespace OpenBve.Graphics
 				}
 				MotionBlur.RenderFullscreen(Interface.CurrentOptions.MotionBlur, FrameRate, Math.Abs(Camera.CurrentSpeed));
 			}
-			// overlay layer
-			OptionFog = false;
+
+			// particle sources
+			SetBlendFunc();
+			SetAlphaFunc(AlphaFunction.Greater, 0.0f);
+			if(CurrentInterface != InterfaceType.GLMainMenu)
+			{
+				foreach (TrainBase train in Program.TrainManager.Trains)
+				{
+					train.UpdateParticleSources(TimeElapsed);
+				}
+
+				// ReSharper disable once PossibleInvalidCastExceptionInForeachLoop
+				foreach (ScriptedTrain scriptedTrain in Program.TrainManager.TFOs)
+				{
+					scriptedTrain.UpdateParticleSources(TimeElapsed);
+				}
+				
+			}
+
+			if (Interface.CurrentOptions.ShowEvents)
+			{
+				if (Math.Abs(CameraTrackFollower.TrackPosition - events.LastTrackPosition) > 50)
+				{
+					events.LastTrackPosition = CameraTrackFollower.TrackPosition;
+					CubesToDraw.Clear();
+					for (int i = 0; i < Program.CurrentRoute.Tracks.Count; i++)
+					{
+						int railIndex = Program.CurrentRoute.Tracks.ElementAt(i).Key;
+						events.FindEvents(railIndex);
+					}
+				}
+
+				for (int i = 0; i < CubesToDraw.Count; i++)
+				{
+					Texture T = CubesToDraw.ElementAt(i).Key;
+					foreach (Vector3 v in CubesToDraw[T])
+					{
+						Cube.Draw(v, Camera.AbsoluteDirection, Camera.AbsoluteUp, Camera.AbsoluteSide, 0.2, Camera.AbsolutePosition, T);
+					}
+				}
+			}
+
+			// overlay (cab / interior) layer
+			Fog.Enabled = false;
 			UpdateViewport(ViewportChangeMode.ChangeToCab);
+			
 			if (AvailableNewRenderer)
 			{
 				/*
@@ -425,8 +451,6 @@ namespace OpenBve.Graphics
 								UnsetAlphaFunc();
 								additive = true;
 							}
-
-							face.Draw();
 						}
 						else
 						{
@@ -435,9 +459,8 @@ namespace OpenBve.Graphics
 								SetAlphaFunc();
 								additive = false;
 							}
-
-							face.Draw();
 						}
+						face.Draw();
 					}
 				}
 
@@ -477,10 +500,20 @@ namespace OpenBve.Graphics
 			SetBlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); //FIXME: Remove when text switches between two renderer types
 			GL.Disable(EnableCap.DepthTest);
 			overlays.Render(RealTimeElapsed);
+			switch (CurrentInterface)
+			{
+				case InterfaceType.Menu:
+				case InterfaceType.GLMainMenu:
+					Game.Menu.Draw(TimeElapsed);
+					break;
+				case InterfaceType.SwitchChangeMap:
+					Game.SwitchChangeDialog.Draw();
+					break;
+			}
 			OptionLighting = true;
 		}
 
-		public NewRenderer(HostInterface CurrentHost, BaseOptions CurrentOptions, FileSystem FileSystem) : base(CurrentHost, CurrentOptions, FileSystem)
+		public NewRenderer(HostInterface currentHost, BaseOptions currentOptions, FileSystem fileSystem) : base(currentHost, currentOptions, fileSystem)
 		{
 		}
 	}

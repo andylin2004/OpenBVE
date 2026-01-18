@@ -79,15 +79,9 @@ namespace SanYingInput
 		private int _notchPosition = 0;
 		private int _reverserPosition = 0;
 
-		public ConfigFormSaveData Configuration
-		{
-			get
-			{
-				return m_saveData;
-			}
-		}
+		public ConfigFormSaveData Configuration => m_saveData;
 
-		public void loadConfigurationFile(string path)
+		public void LoadConfigurationFile(string path)
 		{
 			m_configFilePath = path;
 
@@ -100,10 +94,11 @@ namespace SanYingInput
 			}
 			catch
 			{
+				// ignored
 			}
 		}
 
-		public void saveConfigurationFile(string path)
+		public void SaveConfigurationFile(string path)
 		{
 			if (!Directory.Exists(path))
 			{
@@ -123,15 +118,16 @@ namespace SanYingInput
 		{
 			InitializeComponent();
 
-			List<string> axisArray = new List<string>();
-
-			axisArray.Add("OFF");
-			axisArray.Add("X");
-			axisArray.Add("Y");
-			axisArray.Add("Z");
-			axisArray.Add("Rx");
-			axisArray.Add("Ry");
-			axisArray.Add("Rz");
+			List<string> axisArray = new List<string>()
+			{
+				"OFF",
+				"X",
+				"Y",
+				"Z",
+				"Rx",
+				"Ry",
+				"Rz",
+			};
 
 			m_saveData = new ConfigFormSaveData();
 
@@ -182,7 +178,7 @@ namespace SanYingInput
 			}
 		}
 
-		private void restoreConfiguration(ConfigFormSaveData saveData)
+		private void RestoreConfiguration(ConfigFormSaveData saveData)
 		{
 			txtSwS.Text = toSwitchString(saveData.switchS);
 			txtSwA1.Text = toSwitchString(saveData.switchA1);
@@ -209,11 +205,11 @@ namespace SanYingInput
 			txtSwConstSpeed.Text = toSwitchString(saveData.switchConstSpeed);
 		}
 
-		private ConfigFormSaveData saveConfiguration()
+		private ConfigFormSaveData SaveConfiguration()
 		{
 			ConfigFormSaveData saveData = new ConfigFormSaveData();
 
-			if (JoystickApi.currentDevice != -1)
+			if (JoystickApi.CurrentDevice != -1)
 			{
 				saveData.guid = JoystickApi.GetGuid();
 			}
@@ -245,7 +241,7 @@ namespace SanYingInput
 			return saveData;
 		}
 
-		public void enumerateDevices()
+		public void EnumerateDevices()
 		{
 			JoystickApi.EnumerateJoystick();
 			int joyNum = JoystickManager.AttachedJoysticks.Length;
@@ -300,8 +296,8 @@ namespace SanYingInput
 
 		private void btnSave_Click(object sender, EventArgs e)
 		{
-			m_saveData = saveConfiguration();
-			saveConfigurationFile(m_configFilePath);
+			m_saveData = SaveConfiguration();
+			SaveConfigurationFile(m_configFilePath);
 			this.Close();
 		}
 
@@ -428,10 +424,10 @@ namespace SanYingInput
 		{
 			JoystickApi.Update();
 
-			if (JoystickApi.currentDevice != -1)
+			if (JoystickApi.CurrentDevice != -1)
 			{
 				var buttonsState = JoystickApi.GetButtonsState();
-				var axises = JoystickApi.GetAxises();
+				var axises = JoystickApi.GetAxisStates();
 
 				int lastNotchPosition = _notchPosition;
 				if (InputTranslator.TranslateNotchPosition(buttonsState, out _notchPosition))
@@ -441,9 +437,7 @@ namespace SanYingInput
 				InputTranslator.TranslateReverserPosition(axises, out _reverserPosition);
 
 				{
-					uint notchButtonsState;
-
-					InputTranslator.MakeBitFromNotchButtons(buttonsState, out notchButtonsState);
+					InputTranslator.MakeBitFromNotchButtons(buttonsState, out uint notchButtonsState);
 
 					txtInfoBt7.Text = ((notchButtonsState & (uint)InputTranslator.BT7_10_Pressed.BT7) != 0) ? "1" : "0";
 					txtInfoBt8.Text = ((notchButtonsState & (uint)InputTranslator.BT7_10_Pressed.BT8) != 0) ? "1" : "0";
@@ -474,18 +468,11 @@ namespace SanYingInput
 
 				if (_notchPosition > 0)
 				{
-					notchPositionString = string.Format("P{0}", _notchPosition);
+					notchPositionString = $"P{_notchPosition}";
 				}
 				else if (_notchPosition < 0)
 				{
-					if (_notchPosition > -9)
-					{
-						notchPositionString = string.Format("B{0}", _notchPosition);
-					}
-					else
-					{
-						notchPositionString = "EB";
-					}
+					notchPositionString = _notchPosition > -9 ? $"B{_notchPosition}" : "EB";
 				}
 				else
 				{
@@ -512,7 +499,7 @@ namespace SanYingInput
 			}
 			else
 			{
-				enumerateDevices();
+				EnumerateDevices();
 			}
 		}
 
@@ -525,8 +512,8 @@ namespace SanYingInput
 		{
 			timer1.Enabled = true;
 
-			enumerateDevices();
-			restoreConfiguration(m_saveData);
+			EnumerateDevices();
+			RestoreConfiguration(m_saveData);
 		}
 
 		private void cmbJoySelect_SelectedIndexChanged(object sender, EventArgs e)

@@ -85,6 +85,8 @@ using OpenBveApi.Objects;
 using IndexArray = System.Collections.Generic.List<uint>;
 using GroupMap = System.Collections.Generic.SortedDictionary<string, System.Collections.Generic.List<uint>>;
 
+#pragma warning disable IDE0052
+
 namespace AssimpNET.Obj
 {
 	// ------------------------------------------------------------------------------------------------
@@ -94,7 +96,7 @@ namespace AssimpNET.Obj
 	public class Face
 	{
 		//! Primitive type
-		PrimitiveType PrimitiveType;
+		readonly PrimitiveType PrimitiveType;
 		//! Vertex indices
 		public IndexArray Vertices = new IndexArray();
 		//! Normal indices
@@ -117,20 +119,14 @@ namespace AssimpNET.Obj
 	// ------------------------------------------------------------------------------------------------
 	public class WavefrontObject
 	{
-		enum ObjectType
-		{
-			ObjType,
-			GroupType
-		};
-
 		//! Object name
 		public readonly string ObjName;
 		//! Transformation matrix, stored in OpenGL format
-#pragma warning disable 169
+#pragma warning disable 169, IDE0051
 		Matrix4D Transformation;
-#pragma warning restore 169
+#pragma warning restore 169, IDE0051
 		//! All sub-objects referenced by this object
-		List<WavefrontObject> SubObjects = new List<WavefrontObject>();
+		readonly List<WavefrontObject> SubObjects = new List<WavefrontObject>();
 		/// Assigned meshes
 		public List<uint> Meshes = new List<uint>();
 		public WavefrontObject(string objName)
@@ -185,13 +181,13 @@ namespace AssimpNET.Obj
 		public bool[] Clamp = Enumerable.Repeat(false, (int)TextureType.TextureTypeCount).ToArray();
 
 		//! Ambient color
-		public Color128 Ambient;
+		public Color96 Ambient;
 		//! Diffuse color
 		public Color128 Diffuse = Color128.White;
 		//! Specular color
-		public Color128 Specular;
+		public Color96 Specular;
 		//! Emissive color
-		public Color128 Emissive;
+		public Color96 Emissive;
 		//! Alpha value
 		public float Alpha = 1.0f;
 		//! Shineness factor
@@ -201,7 +197,7 @@ namespace AssimpNET.Obj
 		//! Index of refraction
 		public float Ior = 1.0f;
 		//! Transparency color
-		public Color128 Transparent = Color128.White;
+		public Color96 Transparent = Color96.White;
 
 		public bool TransparentUsed = false;
 
@@ -221,7 +217,7 @@ namespace AssimpNET.Obj
 
 		public const uint NoMaterial = ~0u;
 		/// The name for the mesh
-		string Name;
+		readonly string Name;
 		/// Array with pointer to all stored faces
 		public List<Face> Faces = new List<Face>();
 		/// Assigned material
@@ -232,8 +228,6 @@ namespace AssimpNET.Obj
 		public uint[] UVCoordinates = Enumerable.Repeat(0u, (int)AI_MAX_NUMBER_OF_TEXTURECOORDS).ToArray();
 		/// Material index.
 		public uint MaterialIndex = NoMaterial;
-		/// True, if normals are stored.
-		public bool HasNormals = false;
 		/// True, if vertex colors are stored.
 #pragma warning disable 169
 		bool HasVertexColors;
@@ -291,6 +285,9 @@ namespace AssimpNET.Obj
 		public Model(string modelName)
 		{
 			ModelName = modelName;
+			DefaultMaterial = new Material(Material.AI_DEFAULT_MATERIAL_NAME);
+			MaterialLib.Add(Material.AI_DEFAULT_MATERIAL_NAME);
+			MaterialMap[Material.AI_DEFAULT_MATERIAL_NAME] = DefaultMaterial;
 		}
 	}
 }

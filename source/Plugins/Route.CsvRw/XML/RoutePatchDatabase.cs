@@ -10,7 +10,7 @@ using XmlElement = System.Xml.XmlElement;
 
 namespace CsvRwRouteParser
 {
-	class RoutePatchDatabaseParser
+	internal class RoutePatchDatabaseParser
 	{
 		internal static void LoadRoutePatchDatabase(ref Dictionary<string, RoutefilePatch> routePatches, string databaseFile = "")
 		{
@@ -48,7 +48,7 @@ namespace CsvRwRouteParser
 										}
 										break;
 									case "PatchList":
-										string folder = System.IO.Path.GetDirectoryName(databaseFile);
+										string folder = Path.GetDirectoryName(databaseFile);
 										string newFile = Path.CombineFile(folder, childNode.InnerText);
 										if (File.Exists(newFile))
 										{
@@ -128,8 +128,7 @@ namespace CsvRwRouteParser
 						break;
 					case "Expression":
 						t = childNode.Attributes["Number"].InnerText;
-						int expressionNumber;
-						if (NumberFormats.TryParseIntVb6(t, out expressionNumber))
+						if (NumberFormats.TryParseIntVb6(t, out int expressionNumber))
 						{
 							currentPatch.ExpressionFixes.Add(expressionNumber, childNode.InnerText);
 						}
@@ -152,8 +151,7 @@ namespace CsvRwRouteParser
 						string[] splitString = childNode.InnerText.Split(',');
 						for (int i = 0; i < splitString.Length; i++)
 						{
-							int rt;
-							if (NumberFormats.TryParseIntVb6(splitString[i], out rt))
+							if (NumberFormats.TryParseIntVb6(splitString[i], out int rt))
 							{
 								currentPatch.DummyRailTypes.Add(rt);
 							}
@@ -163,8 +161,7 @@ namespace CsvRwRouteParser
 						splitString = childNode.InnerText.Split(',');
 						for (int i = 0; i < splitString.Length; i++)
 						{
-							int gt;
-							if (NumberFormats.TryParseIntVb6(splitString[i], out gt))
+							if (NumberFormats.TryParseIntVb6(splitString[i], out int gt))
 							{
 								currentPatch.DummyGroundTypes.Add(gt);
 							}
@@ -185,11 +182,11 @@ namespace CsvRwRouteParser
 						t = childNode.InnerText.Trim().ToLowerInvariant();
 						if (t == "0" || t == "false")
 						{
-							currentPatch.Derailments = false;
+							currentPatch.Toppling = false;
 						}
 						else
 						{
-							currentPatch.Derailments = true;
+							currentPatch.Toppling = true;
 						}
 						break;
 					case "SignalSet":
@@ -280,6 +277,17 @@ namespace CsvRwRouteParser
 						else
 						{
 							currentPatch.Incompatible = false;
+						}
+						break;
+					case "DelayedAnimatedUpdates":
+						t = childNode.InnerText.Trim().ToLowerInvariant();
+						if (t == "1" || t == "true")
+						{
+							currentPatch.DelayedAnimatedUpdates = true;
+						}
+						else
+						{
+							currentPatch.DelayedAnimatedUpdates = false;
 						}
 						break;
 				}

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using OpenBveApi;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
+using Route.CsvRw;
 
 namespace CsvRwRouteParser
 {
@@ -248,9 +249,9 @@ namespace CsvRwRouteParser
 								case "$if":
 									if (j != 0) {
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The $If directive must not appear within another statement" + Epilog);
-									} else {
-										double num;
-										if (double.TryParse(s, NumberStyles.Float, Culture, out num)) {
+									} else
+									{
+										if (double.TryParse(s, NumberStyles.Float, Culture, out double num)) {
 											openIfs++;
 											Expressions[i].Text = string.Empty;
 											if (num == 0.0) {
@@ -287,9 +288,8 @@ namespace CsvRwRouteParser
 											}
 											continueWithNextExpression = true;
 											break;
-										} else {
-											Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The $If condition does not evaluate to a number" + Epilog);
 										}
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The $If condition does not evaluate to a number" + Epilog);
 									}
 									continueWithNextExpression = true;
 									break;
@@ -374,7 +374,7 @@ namespace CsvRwRouteParser
 
 										try
 										{
-											files[ia] = Path.CombineFile(System.IO.Path.GetDirectoryName(FileName), file);
+											files[ia] = Path.CombineFile(Path.GetDirectoryName(FileName), file);
 										}
 										catch
 										{
@@ -436,7 +436,6 @@ namespace CsvRwRouteParser
 												break;
 											}
 										}
-										Expression[] expr;
 										//Get the text encoding of our $Include file
 										System.Text.Encoding includeEncoding = TextEncoding.GetSystemEncodingFromFile(files[chosenIndex]);
 										if (!includeEncoding.Equals(Encoding) && includeEncoding.WindowsCodePage != Encoding.WindowsCodePage)
@@ -446,7 +445,7 @@ namespace CsvRwRouteParser
 											Plugin.CurrentHost.AddMessage(MessageType.Warning, false, "The text encoding of the $Include file " + files[chosenIndex] + " does not match that of the base routefile.");
 										}
 										List<string> lines = System.IO.File.ReadAllLines(files[chosenIndex], includeEncoding).ToList();
-										PreprocessSplitIntoExpressions(files[chosenIndex], lines, out expr, false, offsets[chosenIndex] + Expressions[i].TrackPositionOffset);
+										PreprocessSplitIntoExpressions(files[chosenIndex], lines, out Expression[] expr, false, offsets[chosenIndex] + Expressions[i].TrackPositionOffset);
 										int length = Expressions.Length;
 										if (expr.Length == 0) {
 											for (int ia = i; ia < Expressions.Length - 1; ia++) {
@@ -469,8 +468,7 @@ namespace CsvRwRouteParser
 								case "$chr":
 								case "$chruni":
 									{
-										int x;
-										if (NumberFormats.TryParseIntVb6(s, out x)) {
+										if (NumberFormats.TryParseIntVb6(s, out int x)) {
 											if (x < 0)
 											{
 												//Must be non-negative
@@ -489,8 +487,7 @@ namespace CsvRwRouteParser
 									} break;
 								case "$chrascii":
 								{
-									int x;
-									if (NumberFormats.TryParseIntVb6(s, out x))
+									if (NumberFormats.TryParseIntVb6(s, out int x))
 									{
 										if (x < 0 || x > 127)
 										{
@@ -517,8 +514,8 @@ namespace CsvRwRouteParser
 										{
 											string s1 = s.Substring(0, m).TrimEnd();
 											string s2 = s.Substring(m + 1).TrimStart();
-											int x; if (NumberFormats.TryParseIntVb6(s1, out x)) {
-												int y; if (NumberFormats.TryParseIntVb6(s2, out y)) {
+											if (NumberFormats.TryParseIntVb6(s1, out int x)) {
+												if (NumberFormats.TryParseIntVb6(s2, out int y)) {
 													int z = x + (int)Math.Floor(Plugin.RandomNumberGenerator.NextDouble() * (y - x + 1));
 													Expressions[i].Text = Expressions[i].Text.Substring(0, j) + z.ToString(Culture) + Expressions[i].Text.Substring(h + 1);
 												} else {
@@ -565,8 +562,7 @@ namespace CsvRwRouteParser
 												}
 												if (l < 0) break;
 											}
-											int x;
-											if (NumberFormats.TryParseIntVb6(s, out x)) {
+											if (NumberFormats.TryParseIntVb6(s, out int x)) {
 												if (x >= 0) {
 													while (x >= Subs.Length) {
 														Array.Resize(ref Subs, Subs.Length << 1);
@@ -582,17 +578,18 @@ namespace CsvRwRouteParser
 												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Index is invalid in " + t + Epilog);
 											}
 										} else {
-											int x;
-											if (NumberFormats.TryParseIntVb6(s, out x)) {
+											if (NumberFormats.TryParseIntVb6(s, out int x)) {
 												if (x >= 0 && x < Subs.Length && Subs[x] != null) {
 													Expressions[i].Text = Expressions[i].Text.Substring(0, j) + Subs[x] + Expressions[i].Text.Substring(h + 1);
 												} else {
 													continueWithNextExpression = true;
 													Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Index is out of range in " + t + Epilog);
+													Expressions[i].Text = Expressions[i].Text.Substring(0, j) + "" + Expressions[i].Text.Substring(h + 1);
 												}
 											} else {
 												continueWithNextExpression = true;
 												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Index is invalid in " + t + Epilog);
+												Expressions[i].Text = Expressions[i].Text.Substring(0, j) + "" + Expressions[i].Text.Substring(h + 1);
 											}
 										}
 										
@@ -633,22 +630,20 @@ namespace CsvRwRouteParser
 			}
 		}
 
-		private void PreprocessSortByTrackPosition(double[] UnitFactors, ref Expression[] Expressions) {
-			PositionedExpression[] p = new PositionedExpression[Expressions.Length];
-			int n = 0;
-			double a = -1.0;
-			bool NumberCheck = !IsRW;
+		private void PreprocessSortByTrackPosition(double[] unitFactors, ref Expression[] Expressions) {
+			SortedList<double, Expression> positionedExpressions = new SortedList<double, Expression>(new DuplicateLessThanKeyComparer<double>());
+			double a = -1.0, pa = -1.0;
+			bool numberCheck = !IsRW;
 			for (int i = 0; i < Expressions.Length; i++) {
 				if (IsRW) {
 					// only check for track positions in the railway section for RW routes
 					if (Expressions[i].Text.StartsWith("[", StringComparison.Ordinal) && Expressions[i].Text.EndsWith("]", StringComparison.Ordinal))
 					{
 						string s = Expressions[i].Text.Substring(1, Expressions[i].Text.Length - 2).Trim();
-						NumberCheck = string.Compare(s, "Railway", StringComparison.OrdinalIgnoreCase) == 0;
+						numberCheck = string.Compare(s, "Railway", StringComparison.OrdinalIgnoreCase) == 0;
 					}
 				}
-				double x;
-				if (NumberCheck && NumberFormats.TryParseDouble(Expressions[i].Text, UnitFactors, out x)) {
+				if (numberCheck && NumberFormats.TryParseDouble(Expressions[i].Text, unitFactors, out double x)) {
 					x += Expressions[i].TrackPositionOffset;
 					if (x >= 0.0) {
 						if (Plugin.CurrentOptions.EnableBveTsHacks)
@@ -677,36 +672,15 @@ namespace CsvRwRouteParser
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Negative track position encountered at line " + Expressions[i].Line.ToString(Culture) + ", column " + Expressions[i].Column.ToString(Culture) + " in file " + Expressions[i].File);
 					}
 				} else {
-					p[n].TrackPosition = a;
-					p[n].Expression = Expressions[i];
-					int j = n;
-					n++;
-					while (j > 0) {
-						if (p[j].TrackPosition < p[j - 1].TrackPosition) {
-							PositionedExpression t = p[j];
-							p[j] = p[j - 1];
-							p[j - 1] = t;
-							j--;
-						} else {
-							break;
-						}
+					if (pa != a)
+					{
+						positionedExpressions.Add(a, new Expression(string.Empty, (a / unitFactors[unitFactors.Length - 1]).ToString(Culture), -1, -1, -1));
+						pa = a;
 					}
+					positionedExpressions.Add(a, Expressions[i]);
 				}
 			}
-			a = -1.0;
-			Expression[] e = new Expression[Expressions.Length];
-			int m = 0;
-			for (int i = 0; i < n; i++) {
-				if (p[i].TrackPosition != a) {
-					a = p[i].TrackPosition;
-					e[m] = new Expression(string.Empty, (a / UnitFactors[UnitFactors.Length - 1]).ToString(Culture), -1, -1, -1);
-					m++;
-				}
-				e[m] = p[i].Expression;
-				m++;
-			}
-			Array.Resize(ref e, m);
-			Expressions = e;
+			Expressions = positionedExpressions.Values.ToArray();
 		}
 	}
 }

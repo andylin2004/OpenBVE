@@ -69,6 +69,7 @@ namespace TrainManager.Car
 		/// <param name="TimeElapsed">The time elapsed since the previous call to this method</param>
 		public void Update(double TimeElapsed)
 		{
+			Wipers.Update(TimeElapsed);
 			if (RainDrops == null || RainDrops.Length == 0)
 			{
 				return;
@@ -91,8 +92,7 @@ namespace TrainManager.Car
 						RainDrops[nextDrop].Visible = true;
 						if (!legacyRainEvents)
 						{
-							int snowProbability = TrainManagerBase.RandomNumberGenerator.Next(100);
-							if ((snowProbability < Car.FrontAxle.Follower.SnowIntensity) || Car.FrontAxle.Follower.RainIntensity == 0)
+							if (TrainManagerBase.RandomNumberGenerator.Next(100) < Car.FrontAxle.Follower.SnowIntensity || Car.FrontAxle.Follower.RainIntensity == 0)
 							{
 								//Either we've met the snow probability roll (mixed snow and rain) or not raining
 								RainDrops[nextDrop].IsSnowFlake = true;
@@ -117,7 +117,6 @@ namespace TrainManager.Car
 					RainDrops[i].RemainingLife = 0.5 * TrainManagerBase.RandomNumberGenerator.NextDouble() * DropLife;
 				}
 			}
-			Wipers.Update(TimeElapsed);
 		}
 
 		private int PickDrop()

@@ -1,6 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="12.0">
   <PropertyGroup>
+    <NoWarn>$(NoWarn),IDE1006</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.50727</ProductVersion>
@@ -58,9 +61,21 @@
         .dll.config
     </AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GLMenu|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>..\..\bin_debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <FileAlignment>4096</FileAlignment>
+    <NoWarn>,IDE1006</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <LangVersion>7.0</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
   <ItemGroup>
-    <Reference Include="OpenTK, Version=3.3.3.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\OpenTK-OpenBVE.1.0.2\lib\net20\OpenTK.dll</HintPath>
+    <Reference Include="OpenTK, Version=3.3.2.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\OpenTK-OpenBVE.1.0.4\lib\net20\OpenTK.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -91,6 +106,8 @@
       <DependentUpon>formRailPaths.cs</DependentUpon>
     </Compile>
     <Compile Include="FunctionScripts.cs" />
+    <Compile Include="Game\Menu.cs" />
+    <Compile Include="Game\Menu.SingleMenu.cs" />
     <Compile Include="Game\MessageManager.cs" />
     <Compile Include="LoadingR.cs" />
     <Compile Include="GameR.cs" />
@@ -148,6 +165,11 @@
     <ProjectReference Include="..\OpenBveApi\OpenBveApi.csproj">
       <Project>{27134980-4415-4375-A564-40A9014DFA5F}</Project>
       <Name>OpenBveApi</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Plugins\Formats.OpenBve\Formats.OpenBve.csproj">
+      <Project>{7ed7b285-fae6-4b34-acc5-87399f27c8bc}</Project>
+      <Name>Formats.OpenBve</Name>
+      <Private>False</Private>
     </ProjectReference>
     <ProjectReference Include="..\RouteManager2\RouteManager2.csproj">
       <Project>{4ef680d7-df17-4978-9872-133edc169b4b}</Project>

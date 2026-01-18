@@ -1,8 +1,9 @@
-﻿using System;
-using System.Globalization;
-using System.Reactive.Linq;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
+using System;
+using System.Globalization;
+using System.Reactive.Linq;
+using Formats.OpenBve;
 using TrainEditor2.Extensions;
 using TrainEditor2.Models.Trains;
 
@@ -49,7 +50,7 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.FrontAxle,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.AddTo(disposable);
@@ -58,7 +59,7 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.RearAxle,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.AddTo(disposable);
@@ -79,16 +80,11 @@ namespace TrainEditor2.ViewModels.Trains
 
 				FrontAxle.SetValidateNotifyError(x =>
 					{
-						double front;
-						string message;
-
-						if (Utilities.TryParse(x, NumberRange.Any, out front, out message))
+						if (Utilities.TryParse(x, NumberRange.Any, out double front, out string message))
 						{
-							double rear;
-
-							if (DefinedAxles.Value && Utilities.TryParse(RearAxle.Value, NumberRange.Any, out rear) && front <= rear)
+							if (DefinedAxles.Value && Utilities.TryParse(RearAxle.Value, NumberRange.Any, out double rear) && front <= rear)
 							{
-								message = "RearAxleはFrontAxle未満でなければなりません。";
+								message = Utilities.GetInterfaceString("car_settings", "general", "axles", "mustbe_less");
 							}
 						}
 
@@ -105,16 +101,11 @@ namespace TrainEditor2.ViewModels.Trains
 
 				RearAxle.SetValidateNotifyError(x =>
 					{
-						double rear;
-						string message;
-
-						if (Utilities.TryParse(x, NumberRange.Any, out rear, out message))
+						if (Utilities.TryParse(x, NumberRange.Any, out double rear, out string message))
 						{
-							double front;
-
-							if (DefinedAxles.Value && Utilities.TryParse(FrontAxle.Value, NumberRange.Any, out front) && rear >= front)
+							if (DefinedAxles.Value && Utilities.TryParse(FrontAxle.Value, NumberRange.Any, out double front) && rear >= front)
 							{
-								message = "RearAxleはFrontAxle未満でなければなりません。";
+								message = Utilities.GetInterfaceString("car_settings", "general", "axles", "mustbe_less");
 							}
 						}
 
@@ -236,6 +227,11 @@ namespace TrainEditor2.ViewModels.Trains
 			get;
 		}
 
+		internal ReadOnlyReactiveCollection<ParticleSourceViewModel> ParticleSources
+		{
+			get;
+		}
+
 		internal CarViewModel(Car car)
 		{
 			CultureInfo culture = CultureInfo.InvariantCulture;
@@ -246,16 +242,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Mass,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -264,16 +256,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Length,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -282,16 +270,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Width,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -300,16 +284,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Height,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -318,16 +298,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.CenterOfGravityHeight,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -340,7 +316,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.FrontAxle,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -349,7 +325,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.RearAxle,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -372,16 +348,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.ExposedFrontalArea,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -390,16 +362,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.UnexposedFrontalArea,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Positive, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -459,16 +427,11 @@ namespace TrainEditor2.ViewModels.Trains
 
 			FrontAxle.SetValidateNotifyError(x =>
 				{
-					double front;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.Any, out front, out message))
+					if (Utilities.TryParse(x, NumberRange.Any, out double front, out string message))
 					{
-						double rear;
-
-						if (DefinedAxles.Value && Utilities.TryParse(RearAxle.Value, NumberRange.Any, out rear) && front <= rear)
+						if (DefinedAxles.Value && Utilities.TryParse(RearAxle.Value, NumberRange.Any, out double rear) && front <= rear)
 						{
-							message = "RearAxleはFrontAxle未満でなければなりません。";
+							message = Utilities.GetInterfaceString("car_settings", "general", "axles", "mustbe_less");
 						}
 					}
 
@@ -485,22 +448,25 @@ namespace TrainEditor2.ViewModels.Trains
 
 			RearAxle.SetValidateNotifyError(x =>
 				{
-					double rear;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.Any, out rear, out message))
+					if (Utilities.TryParse(x, NumberRange.Any, out double rear, out string message))
 					{
-						double front;
-
-						if (DefinedAxles.Value && Utilities.TryParse(FrontAxle.Value, NumberRange.Any, out front) && rear >= front)
+						if (DefinedAxles.Value && Utilities.TryParse(FrontAxle.Value, NumberRange.Any, out double front) && rear >= front)
 						{
-							message = "RearAxleはFrontAxle未満でなければなりません。";
+							message = Utilities.GetInterfaceString("car_settings", "general", "axles", "mustbe_less");
 						}
 					}
 
 					return message;
 				})
 				.Subscribe(_ => FrontAxle.ForceValidate())
+				.AddTo(disposable);
+
+			ParticleSources = car.particleSources
+				.ToReadOnlyReactiveCollection(x =>
+				{
+					ParticleSourceViewModel viewModel = new ParticleSourceViewModel(x, this);
+					return viewModel;
+				})
 				.AddTo(disposable);
 
 			RearAxle.ObserveHasErrors

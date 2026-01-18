@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
-using Prism.Mvvm;
 using TrainEditor2.Extensions;
 using TrainEditor2.Models.Others;
 
@@ -21,38 +20,20 @@ namespace TrainEditor2.Models.Sounds
 
 		internal TreeViewItemModel TreeItem
 		{
-			get
-			{
-				return treeItem;
-			}
-			set
-			{
-				SetProperty(ref treeItem, value);
-			}
+			get => treeItem;
+			set => SetProperty(ref treeItem, value);
 		}
 
 		internal TreeViewItemModel SelectedTreeItem
 		{
-			get
-			{
-				return selectedTreeItem;
-			}
-			set
-			{
-				SetProperty(ref selectedTreeItem, value);
-			}
+			get => selectedTreeItem;
+			set => SetProperty(ref selectedTreeItem, value);
 		}
 
 		internal ListViewItemModel SelectedListItem
 		{
-			get
-			{
-				return selectedListItem;
-			}
-			set
-			{
-				SetProperty(ref selectedListItem, value);
-			}
+			get => selectedListItem;
+			set => SetProperty(ref selectedListItem, value);
 		}
 
 		internal ObservableCollection<SoundElement> SoundElements;
@@ -259,9 +240,7 @@ namespace TrainEditor2.Models.Sounds
 		internal void UpdateListItem(ListViewItemModel item)
 		{
 			SoundElement element = (SoundElement)item.Tag;
-			Enum key = element.Key as Enum;
-
-			item.Texts[0] = key != null ? key.GetStringValues().First() : element.Key.ToString();
+			item.Texts[0] = element.Key is Enum key ? key.GetStringValues().First() : element.Key.ToString();
 			item.Texts[1] = element.FilePath;
 			item.Texts[2] = element.DefinedPosition ? $"{element.PositionX.ToString(culture)}, {element.PositionY.ToString(culture)}, {element.PositionZ.ToString(culture)}" : string.Empty;
 			item.Texts[3] = element.DefinedRadius ? element.Radius.ToString(culture) : string.Empty;

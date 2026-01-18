@@ -22,12 +22,15 @@
 //(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 //SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using OpenBveApi.Colors;
+using OpenBveApi.Math;
 using OpenBveApi.World;
 
 // ReSharper disable UnusedMember.Global
@@ -37,6 +40,9 @@ namespace OpenBve.Formats.MsTs
 	/// <summary>An abstract block of data, read from a MSTS file</summary>
 	public abstract class Block
 	{
+		/// <summary>The parent block</summary>
+		public Block ParentBlock;
+
 		/// <summary>The token that identifies the contents of this block</summary>
 		public KujuTokenID Token;
 
@@ -59,11 +65,18 @@ namespace OpenBve.Formats.MsTs
 		/// <summary>Reads a single-bit precision floating point number from the block</summary>
 		public abstract float ReadSingle();
 
-		/// <summary>Reads a single-bit precision floating point number from the block, and converts it to the desired units</summary>
-		/// <param name="desiredUnit"></param>
-		/// <returns></returns>
-		public abstract float ReadSingle<TUnitType>(TUnitType desiredUnit);
+		/// <summary>Reads a Color32 from the block</summary>
+		public abstract Color32 ReadColorArgb();
 
+		/// <summary>Reads a Vector2 from the block</summary>
+		public Vector2 ReadVector2() => new Vector2(ReadSingle(), ReadSingle());
+
+		/// <summary>Reads a Vector3 from the block</summary>
+		public Vector3 ReadVector3() => new Vector3(ReadSingle(), ReadSingle(), ReadSingle());
+
+		/// <summary>Reads a single-bit precision floating point number from the block, and converts it to the desired units</summary>
+		public abstract float ReadSingle<TUnitType>(TUnitType desiredUnit, TUnitType? defaultUnit = null) where TUnitType : struct;
+		
 		/// <summary>Skips <para>length</para> through the block</summary>
 		/// <param name="length">The length to skip</param>
 		public abstract void Skip(int length);
@@ -71,13 +84,27 @@ namespace OpenBve.Formats.MsTs
 		/// <summary>Reads a string from the block</summary>
 		public abstract string ReadString();
 
+		/// <summary>Reads a path from the block</summary>
+		/// <param name="absolute">The platform specific absolute path</param>
+		/// <param name="finalPath">The final path</param>
+		/// <returns>True if the path is found, false otherwise</returns>
+		public abstract bool ReadPath(string absolute, out string finalPath);
+
 		/// <summary>Reads a string array from the block</summary>
 		public abstract string[] ReadStringArray();
 
-		/// <summary>Reads an array of enum values from the block</summary>
+        /// <summary>Reads an array of enum values from the block</summary>
+        /// <typeparam name="TEnumType">The desired enum</typeparam>
+        /// <returns>An enum array</returns>
+        public abstract TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)  where TEnumType : struct;
+
+		/// <summary>Reads an enum value from the block</summary>
 		/// <typeparam name="TEnumType">The desired enum</typeparam>
 		/// <returns>An enum array</returns>
-		public abstract TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)  where TEnumType : struct;
+		public abstract TEnumType ReadEnumValue<TEnumType>(TEnumType desiredEnumType) where TEnumType : struct;
+
+		/// <summary>Reads a boolean value from the block</summary>
+		public bool ReadBool() => ReadInt16() == 1;
 
 		/// <summary>Returns the length of the block</summary>
 		public abstract long Length();
@@ -111,6 +138,12 @@ namespace OpenBve.Formats.MsTs
 		/// <remarks>The type of the new block will always match that of the base block</remarks>
 		public abstract Block ReadSubBlock(KujuTokenID newToken);
 
+		/// <summary>Reads the next sub-block from the enclosing block, skipping unexpected values</summary>
+		/// <param name="newToken">The expected token for the new block</param>
+		/// <returns>The new block</returns>
+		/// <remarks>The type of the new block will always match that of the base block</remarks>
+		public abstract Block GetSubBlock(KujuTokenID newToken);
+
 		/// <summary>Reads a sub-block from the enclosing block</summary>
 		/// <param name="validTokens">An array containing all possible valid tokens for the new block</param>
 		/// <returns>The new block</returns>
@@ -120,7 +153,7 @@ namespace OpenBve.Formats.MsTs
 		/// <summary>Reads any sub-block from the enclosing block</summary>
 		/// <returns>The new block</returns>
 		/// <remarks>The type of the new block will always match that of the base block</remarks>
-		public abstract Block ReadSubBlock();
+		public abstract Block ReadSubBlock(bool allowEmptyBlock = false);
 	}
 
 	/// <inheritdoc cref="Block" />
@@ -129,7 +162,7 @@ namespace OpenBve.Formats.MsTs
 		private readonly BinaryReader myReader;
 		private readonly MemoryStream myStream;
 
-		public BinaryBlock(byte[] bytes, KujuTokenID token)
+		public BinaryBlock(byte[] bytes, KujuTokenID token, Block parentBlock = null)
 		{
 			Token = token;
 			myStream = new MemoryStream(bytes);
@@ -152,6 +185,8 @@ namespace OpenBve.Formats.MsTs
 			{
 				Label = string.Empty;
 			}
+
+			ParentBlock = parentBlock;
 		}
 
 		public override Block ReadSubBlock(KujuTokenID newToken)
@@ -169,7 +204,12 @@ namespace OpenBve.Formats.MsTs
 			myReader.ReadUInt16();
 			uint remainingBytes = myReader.ReadUInt32();
 			byte[] newBytes = myReader.ReadBytes((int) remainingBytes);
-			return new BinaryBlock(newBytes, newToken);
+			return new BinaryBlock(newBytes, newToken, this);
+		}
+
+		public override Block GetSubBlock(KujuTokenID newToken)
+		{
+			throw new NotImplementedException();
 		}
 
 		public override Block ReadSubBlock(KujuTokenID[] validTokens)
@@ -183,16 +223,16 @@ namespace OpenBve.Formats.MsTs
 			myReader.ReadUInt16();
 			uint remainingBytes = myReader.ReadUInt32();
 			byte[] newBytes = myReader.ReadBytes((int) remainingBytes);
-			return new BinaryBlock(newBytes, currentToken);
+			return new BinaryBlock(newBytes, currentToken, this);
 		}
 
-		public override Block ReadSubBlock()
+		public override Block ReadSubBlock(bool allowEmptyBlock = false)
 		{
 			KujuTokenID currentToken = (KujuTokenID) myReader.ReadUInt16();
 			myReader.ReadUInt16();
 			uint remainingBytes = myReader.ReadUInt32();
 			byte[] newBytes = myReader.ReadBytes((int) remainingBytes);
-			return new BinaryBlock(newBytes, currentToken);
+			return new BinaryBlock(newBytes, currentToken, this);
 		}
 
 		public override ushort ReadUInt16()
@@ -220,7 +260,16 @@ namespace OpenBve.Formats.MsTs
 			return myReader.ReadSingle();
 		}
 
-		public override float ReadSingle<TUnitType>(TUnitType desiredUnit)
+		public override Color32 ReadColorArgb()
+		{
+			float a = myReader.ReadSingle();
+			float r = myReader.ReadSingle();
+			float g = myReader.ReadSingle();
+			float b = myReader.ReadSingle();
+			return new Color32((byte)(r * 255), (byte)(g * 255), (byte)(b * 255), (byte)(a * 255));
+		}
+
+		public override float ReadSingle<TUnitType>(TUnitType desiredUnit, TUnitType? defaultUnitType)
 		{
 			throw new NotImplementedException();
 		}
@@ -249,6 +298,27 @@ namespace OpenBve.Formats.MsTs
 			return (string.Empty); //Not sure this is valid, but let's be on the safe side
 		}
 
+		public override bool ReadPath(string absolute, out string finalPath)
+		{
+			string relative = ReadString().Replace("\"", "");
+			try
+			{
+				finalPath = OpenBveApi.Path.CombineFile(absolute, relative);
+			}
+			catch
+			{
+				finalPath = relative;
+				return false;
+			}
+			if (File.Exists(finalPath))
+			{
+				return true;
+			}
+
+			finalPath = relative;
+			return false;
+		}
+
 		public override string[] ReadStringArray()
 		{
 			throw new NotImplementedException();
@@ -257,6 +327,13 @@ namespace OpenBve.Formats.MsTs
 		public override TEnumType[] ReadEnumArray<TEnumType>(TEnumType desiredEnumType)
 		{
 			throw new NotImplementedException();
+		}
+
+		public override TEnumType ReadEnumValue<TEnumType>(TEnumType desiredEnumType)
+		{
+			string enumValue = ReadString();
+			Enum.TryParse(enumValue, out TEnumType e);
+			return e;
 		}
 
 		public override long Length()
@@ -294,50 +371,145 @@ namespace OpenBve.Formats.MsTs
 
 		private readonly LengthConverter lengthConverter = new LengthConverter();
 		private readonly WeightConverter weightConverter = new WeightConverter();
+		private readonly ForceConverter forceConverter = new ForceConverter();
+		private readonly VolumeConverter volumeConverter = new VolumeConverter();
+		private readonly CurrentConverter currentConverter = new CurrentConverter();
+		private readonly PressureConverter pressureConverter = new PressureConverter();
+		private readonly VelocityConverter velocityConvertor = new VelocityConverter();
+		private readonly TorqueConverter torqueConvertor = new TorqueConverter();
 
-		private TextualBlock(string text)
+		private KujuTokenID ParseToken(string s)
 		{
-			myText = text;
-			//Replace special characters and escaped brackets to stop the parser barfing
-			myText = myText.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim(new char[] { });
-			myText = myText.Replace(@"\(", "[").Replace(@"\)", "]");
-			// FIXME: Current parser needs whitespace around brackets, else it throws a wobbly
-			for (int i = 0; i < myText.Length; i++)
+			if (Enum.TryParse(s, true, out KujuTokenID parsedToken))
 			{
-				if (i > 0 && myText[i] == ')' && !char.IsWhiteSpace(myText[i - 1]))
+				return parsedToken;
+			}
+
+			if (s[0] == '#' || s.StartsWith("_#"))
+			{
+				return KujuTokenID.Skip;
+			}
+#if DEBUG 
+			// In debug mode, always throw an exception
+			// this way, any new parameters can be added to our list for future
+			// possible usage
+			throw new InvalidDataException("Unrecognised token " + s);
+#else
+			if (s.StartsWith("ORTS", StringComparison.InvariantCultureIgnoreCase))
+			{
+				// This is probably an ORTS token that we haven't encountered
+				// [the ORTS parameters spreadsheet link is broken]
+				// Parse the block, but do nothing at the minute
+				return KujuTokenID.ORTSUnknown;
+			}
+
+			// Completely unknown token
+			// NOTE: A lot of MSTS stuff contains textually edited typos
+			// At the minute, typos are being added to the token list
+			// Drawback of using an enum method for this :/
+			throw new InvalidDataException("Unrecognised token " + s);
+#endif
+		}
+
+		private TextualBlock(string text, bool textIsClean)
+		{
+			if (!textIsClean)
+			{
+				char[] fixedText = new char[text.Length];
+				int newTextLength = 0;
+				text = text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim(new char[] { });
+				text = text.Replace(@"\(", "[").Replace(@"\)", "]");
+				bool lastWhiteSpace = false;
+				for (int i = 0; i < text.Length; i++)
 				{
-					myText = myText.Insert(i, " ");
-					i++;
+					if (text[i] == '(' || text[i] == ')')
+					{
+						if (!lastWhiteSpace)
+						{
+							fixedText[newTextLength++] = ' ';
+						}
+						fixedText[newTextLength++] = text[i];
+						fixedText[newTextLength++] = ' ';
+						lastWhiteSpace = true;
+					}
+					else if (char.IsWhiteSpace(text[i]))
+					{
+						if (!lastWhiteSpace)
+						{
+							fixedText[newTextLength++] = ' ';
+							lastWhiteSpace = true;
+						}
+					}
+					else
+					{
+						fixedText[newTextLength++] = text[i];
+						lastWhiteSpace = false;
+					}
+					if (newTextLength == fixedText.Length - 1 && i != text.Length - 1)
+					{
+						Array.Resize(ref fixedText, fixedText.Length << 2);
+					}
 				}
-				if (i > 0 && myText[i] == '(' && !char.IsWhiteSpace(myText[i + 1]))
-				{
-					myText = myText.Insert(i + 1, " ");
-					i++;
-				}
+				myText = new string(fixedText, 0, newTextLength);
+			}
+			else
+			{
+				myText = text;
 			}
 			currentPosition = 0;
 		}
 
-		public TextualBlock(string text, KujuTokenID token)
+		public TextualBlock(string text, KujuTokenID token, bool textIsClean = false, Block parentBlock = null)
 		{
-			myText = text;
-			//Replace special characters and escaped brackets to stop the parser barfing
-			myText = myText.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim(new char[] { });
-			myText = myText.Replace(@"\(", "[").Replace(@"\)", "]");
-			// FIXME: Current parser needs whitespace around brackets, else it throws a wobbly
-			for (int i = 0; i < myText.Length; i++)
+			if (text.Length == 0)
 			{
-				if (i > 0 && myText[i] == ')' && !char.IsWhiteSpace(myText[i - 1]))
-				{
-					myText = myText.Insert(i, " ");
-					i++;
-				}
-				if (i > 0 && myText[i] == '(' && !char.IsWhiteSpace(myText[i + 1]))
-				{
-					myText = myText.Insert(i + 1, " ");
-					i++;
-				}
+				return;
 			}
+
+			if (!textIsClean)
+			{
+				char[] fixedText = new char[text.Length];
+				int newTextLength = 0;
+				text = text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim(new char[] { });
+				text = text.Replace(@"\(", "[").Replace(@"\)", "]");
+				bool lastWhiteSpace = false;
+				for (int i = 0; i < text.Length; i++)
+				{
+					if (text[i] == '(' || text[i] == ')')
+					{
+						if (!lastWhiteSpace)
+						{
+							fixedText[newTextLength++] = ' ';
+						}
+						fixedText[newTextLength++] = text[i];
+						fixedText[newTextLength++] = ' ';
+						lastWhiteSpace = true;
+					}
+					else if (char.IsWhiteSpace(text[i]))
+					{
+						if (!lastWhiteSpace)
+						{
+							fixedText[newTextLength++] = ' ';
+							lastWhiteSpace = true;
+						}
+					}
+					else
+					{
+						fixedText[newTextLength++] = text[i];
+						lastWhiteSpace = false;
+					}
+					if (newTextLength == fixedText.Length - 1 && i != text.Length - 1)
+					{
+						Array.Resize(ref fixedText, fixedText.Length << 2);
+					}
+				}
+				myText = new string(fixedText, 0, newTextLength);
+			}
+			else
+			{
+				myText = text;
+			}
+
 			Token = token;
 			currentPosition = 0;
 			Label = string.Empty;
@@ -360,11 +532,7 @@ namespace OpenBve.Formats.MsTs
 				s = s.Substring(0, ws);
 			}
 
-			KujuTokenID currentToken;
-			if (!Enum.TryParse(s, true, out currentToken))
-			{
-				throw new InvalidDataException("Invalid token " + s);
-			}
+			KujuTokenID currentToken = ParseToken(s);
 
 			if (currentToken != Token)
 			{
@@ -372,11 +540,12 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			currentPosition++;
+			ParentBlock = parentBlock;
 		}
 
 		public static Dictionary<KujuTokenID, Block> ReadBlocks(string text, KujuTokenID[] validTokens)
 		{
-			Block b = new TextualBlock(text);
+			Block b = new TextualBlock(text, false);
 			Dictionary<KujuTokenID, Block> readBlocks = new Dictionary<KujuTokenID, Block>();
 			while (b.Position() < b.Length() - 1)
 			{
@@ -393,16 +562,16 @@ namespace OpenBve.Formats.MsTs
 			return readBlocks;
 		}
 
-		public static Dictionary<KujuTokenID, Block> ReadBlocks(string text)
+		public static List<Block> ReadBlocks(string text)
 		{
-			Block b = new TextualBlock(text);
-			Dictionary<KujuTokenID, Block> readBlocks = new Dictionary<KujuTokenID, Block>();
+			Block b = new TextualBlock(text, false);
+			List<Block> readBlocks = new List<Block>();
 			while (b.Position() < b.Length() - 1)
 			{
 				try
 				{
-					Block sb = b.ReadSubBlock();
-					readBlocks.Add(sb.Token, sb);
+					Block sb = b.ReadSubBlock(true);
+					readBlocks.Add(sb);
 				}
 				catch
 				{
@@ -415,7 +584,7 @@ namespace OpenBve.Formats.MsTs
 		public override Block ReadSubBlock(KujuTokenID newToken)
 		{
 			startPosition = currentPosition;
-			string s = String.Empty;
+			string s = string.Empty;
 			while (currentPosition < myText.Length)
 			{
 				if (myText[currentPosition] == '(')
@@ -429,7 +598,6 @@ namespace OpenBve.Formats.MsTs
 				currentPosition++;
 			}
 
-			KujuTokenID currentToken;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
@@ -438,10 +606,7 @@ namespace OpenBve.Formats.MsTs
 				s = s.Substring(0, ws);
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
-			{
-				throw new InvalidDataException("Unrecognised token " + s);
-			}
+			KujuTokenID currentToken = ParseToken(s);
 
 			if (newToken != currentToken)
 			{
@@ -461,7 +626,7 @@ namespace OpenBve.Formats.MsTs
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), newToken);
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), newToken, true, this);
 					}
 
 					level--;
@@ -472,6 +637,18 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			throw new InvalidDataException("Unexpected end of block in " + Token);
+		}
+
+		public override Block GetSubBlock(KujuTokenID newToken)
+		{
+			int position = currentPosition;
+			while (double.TryParse(getNextValue(), out _))
+			{
+				position = currentPosition;
+			}
+
+			currentPosition = position;
+			return ReadSubBlock(newToken);
 		}
 
 		public override Block ReadSubBlock(KujuTokenID[] validTokens)
@@ -491,7 +668,6 @@ namespace OpenBve.Formats.MsTs
 				currentPosition++;
 			}
 
-			KujuTokenID currentToken;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
@@ -500,14 +676,15 @@ namespace OpenBve.Formats.MsTs
 				s = s.Substring(0, ws);
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
-			{
-				throw new InvalidDataException("Unrecognised token " + s);
-			}
+			KujuTokenID currentToken = ParseToken(s);
 
 			if (!validTokens.Contains(currentToken))
 			{
-				throw new InvalidDataException("Expected one of the following tokens: " + validTokens + " , got " + currentToken);
+				if (currentToken != KujuTokenID.Comment)
+				{
+					// comment is always valid and will be discarded by the block reader
+					throw new InvalidDataException("Expected one of the following tokens: " + validTokens + " , got " + currentToken);
+				}
 			}
 
 			int level = 0;
@@ -523,7 +700,13 @@ namespace OpenBve.Formats.MsTs
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken);
+						if (currentToken == KujuTokenID.Comment && !validTokens.Contains(KujuTokenID.Comment))
+						{
+							// found comment block which we don't want to read- retry
+							return ReadSubBlock(validTokens);
+						}
+
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken, true, this);
 					}
 
 					level--;
@@ -536,10 +719,10 @@ namespace OpenBve.Formats.MsTs
 			throw new InvalidDataException("Unexpected end of block in " + Token);
 		}
 
-		public override Block ReadSubBlock()
+		public override Block ReadSubBlock(bool allowEmptyBlock = false)
 		{
 			startPosition = currentPosition;
-			string s = String.Empty;
+			string s = string.Empty;
 			while (currentPosition < myText.Length)
 			{
 				if (myText[currentPosition] == '(')
@@ -553,24 +736,43 @@ namespace OpenBve.Formats.MsTs
 				currentPosition++;
 			}
 
-			if (string.IsNullOrWhiteSpace(s))
+			if (string.IsNullOrWhiteSpace(s) || s == ")")
 			{
-				throw new InvalidDataException("Empty sub-block");
+				// empty string or 'extra' closing brackets
+				if (!allowEmptyBlock)
+				{
+					throw new InvalidDataException("Empty sub-block");
+				}
+
+				TextualBlock t = new TextualBlock("", true);
+				t.Token = KujuTokenID.Skip;
+				return t;
 			}
 
-			KujuTokenID currentToken;
+			int sl = s.Length;
+			s = s.TrimStart(')').TrimStart(); // remove all other extraneous brackets + whitespace
+			startPosition += sl - s.Length;
+
+			string ns = s;
 			int ws = s.IndexOf(' ');
 			if (ws != -1)
 			{
 				//The block has the optional label
 				Label = s.Substring(ws, s.Length - ws).Trim(new char[] { });
+				if (Label[0] == ')')
+				{
+					if (allowEmptyBlock)
+					{
+						TextualBlock t = new TextualBlock("", true);
+						t.Token = KujuTokenID.Skip;
+						return t;
+					}
+					throw new InvalidDataException("Unexpected extra closing bracket encountered.");
+				}
 				s = s.Substring(0, ws);
 			}
 
-			if (!Enum.TryParse(s, true, out currentToken))
-			{
-				throw new InvalidDataException("Unrecognised token " + s);
-			}
+			KujuTokenID currentToken = ParseToken(s);
 			
 			int level = 0;
 			while (currentPosition < myText.Length)
@@ -585,16 +787,23 @@ namespace OpenBve.Formats.MsTs
 					currentPosition++;
 					if (level == 0)
 					{
-						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken);
+						if (currentToken == KujuTokenID.Skip)
+						{
+							return new TextualBlock(string.Empty, true);
+						}
+
+						return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }), currentToken, true, this);
 					}
-
 					level--;
-
 				}
-
 				currentPosition++;
 			}
 
+			if (currentPosition == myText.Length)
+			{
+				// Missing one or more block terminators- PadRight with appropriate number
+				return new TextualBlock(myText.Substring(startPosition, currentPosition - startPosition).Trim(new char[] { }).PadRight(currentPosition - startPosition + level, ')'), currentToken, true, this);
+			}
 			throw new InvalidDataException("Unexpected end of block in " + Token);
 		}
 
@@ -614,8 +823,7 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			string s = getNextValue();
-			int val;
-			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out val))
+			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out int val))
 			{
 				return (ushort) val;
 			}
@@ -636,8 +844,7 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			string s = getNextValue();
-			uint val;
-			if (uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out val))
+			if (uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint val))
 			{
 				return val;
 			}
@@ -659,8 +866,7 @@ namespace OpenBve.Formats.MsTs
 
 
 			string s = getNextValue();
-			int val;
-			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out val))
+			if (NumberFormats.TryParseIntVb6(s, out int val))
 			{
 				return val;
 			}
@@ -681,10 +887,9 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			string s = getNextValue();
-			int val;
-			if (int.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out val))
+			if (NumberFormats.TryParseIntVb6(s, out int val))
 			{
-				return (ushort) val;
+				return val;
 			}
 
 			throw new InvalidDataException("Unable to parse " + s + " to a valid integer in block " + Token);
@@ -699,34 +904,85 @@ namespace OpenBve.Formats.MsTs
 			}
 
 			string s = getNextValue();
-			float val;
-			if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out val))
+			if (s[s.Length -1] == ',')
+			{
+                // SMS files contain comma separated numbers in a textual CurvePoints block
+				s = s.Substring(0, s.Length - 1);
+			}
+			if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out float val))
 			{
 				return val;
+			}
+
+			// try ignoring numbers after the second comma if applicable
+			if (s.Split(',').Length > 2)
+			{
+				s = s.Substring(0, s.IndexOf(',', 0, 2));
+				if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out val))
+				{
+					return val;
+				}
+			}
+
+			// try ignoring numbers after the second decimal point if applicable
+			if (s.Split('.').Length > 2)
+			{
+				s = s.Substring(0, s.IndexOf('.', s.IndexOf('.') + 1));
+				if (float.TryParse(s, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out val))
+				{
+					return val;
+				}
 			}
 
 			throw new InvalidDataException("Unable to parse " + s + " to a valid single in block " + Token);
 		}
 
-		public override float ReadSingle<TUnitType>(TUnitType desiredUnit)
+		public override Color32 ReadColorArgb()
+		{
+			float a = 1.0f, r = 1.0f, g = 1.0f, b = 1.0f;
+			try
+			{
+				a = ReadSingle();
+				r = ReadSingle();
+				g = ReadSingle();
+				b = ReadSingle();
+			}
+			catch
+			{
+				// ignored
+			}
+			return new Color32((byte)(r * 255), (byte)(g * 255), (byte)(b * 255), (byte)(a * 255));
+		}
+
+		public override float ReadSingle<TUnitType>(TUnitType desiredUnit, TUnitType? defaultUnits)
 		{
 			string s = ReadString();
-			int c = s.Length - 1;
-			while (c > 0)
+			int hash = s.IndexOf('#');
+			if (hash != -1)
 			{
-				if (char.IsDigit(s[c]))
+				// In unit deliminated strings, hash acts as a comment separator (despite being valid as a string member elsewhere)
+				s = s.Substring(0, hash).Trim();
+			}
+			int c;
+			for (c = 0; c < s.Length; c++)
+			{
+				if (!char.IsNumber(s[c]) && s[c] != '.' && s[c] != 'e' && s[c] != '-')
 				{
-					c++;
 					break;
 				}
-				c--;
 			}
 
-			string Unit = s.Substring(c).ToLowerInvariant();
+
+			string Unit = s.Substring(c).ToLowerInvariant().Replace("/", string.Empty);
+
+			if (string.IsNullOrEmpty(Unit))
+			{
+				// assume that if no units are specified, our number is already in the desired unit e.g. Dash9.eng
+				Unit = (defaultUnits != null ? defaultUnits.ToString(): desiredUnit.ToString()).ToLowerInvariant();
+			}
 			s = s.Substring(0, c);
-			float parsedNumber;
 			
-			if (!float.TryParse(s, out parsedNumber))
+			if (!float.TryParse(s, out float parsedNumber))
 			{
 				throw new InvalidDataException("Unable to parse " + s + " to a valid single in block " + Token);
 			}
@@ -749,9 +1005,81 @@ namespace OpenBve.Formats.MsTs
 
 				parsedNumber = (float)weightConverter.Convert(parsedNumber, WeightConverter.KnownUnits[Unit], (UnitOfWeight)(object)desiredUnit);
 			}
+			else if (desiredUnit is UnitOfForce)
+			{
+				if (!ForceConverter.KnownUnits.ContainsKey(Unit))
+				{
+					throw new InvalidDataException("Unknown or unexpected force unit " + Unit + " encountered in block " + Token);
+				}
+
+				parsedNumber = (float)forceConverter.Convert(parsedNumber, ForceConverter.KnownUnits[Unit], (UnitOfForce)(object)desiredUnit);
+			}
+			else if (desiredUnit is UnitOfVolume)
+			{
+				if (!VolumeConverter.KnownUnits.ContainsKey(Unit))
+				{
+					throw new InvalidDataException("Unknown or unexpected volume unit " + Unit + " encountered in block " + Token);
+				}
+
+				parsedNumber = (float)volumeConverter.Convert(parsedNumber, VolumeConverter.KnownUnits[Unit], (UnitOfVolume)(object)desiredUnit);
+			}
+			else if (desiredUnit is UnitOfCurrent)
+			{
+				if (!CurrentConverter.KnownUnits.ContainsKey(Unit))
+				{
+					throw new InvalidDataException("Unknown or unexpected current unit " + Unit + " encountered in block " + Token);
+				}
+
+				parsedNumber = (float)currentConverter.Convert(parsedNumber, CurrentConverter.KnownUnits[Unit], (UnitOfCurrent)(object)desiredUnit);
+			}
+			else if (desiredUnit is UnitOfPressure)
+			{
+				if (!PressureConverter.KnownUnits.ContainsKey(Unit))
+				{
+					throw new InvalidDataException("Unknown or unexpected pressure unit " + Unit + " encountered in block " + Token);
+				}
+
+				parsedNumber = (float)pressureConverter.Convert(parsedNumber, PressureConverter.KnownUnits[Unit], (UnitOfPressure)(object)desiredUnit);
+
+			}
+			else if (desiredUnit is UnitOfVelocity)
+			{
+				if (!VelocityConverter.KnownUnits.ContainsKey(Unit))
+				{
+					throw new InvalidDataException("Unknown or unexpected velocity unit " + Unit + " encountered in block " + Token);
+				}
+
+				parsedNumber = (float)velocityConvertor.Convert(parsedNumber, VelocityConverter.KnownUnits[Unit], (UnitOfVelocity)(object)desiredUnit);
+			}
+			else if (desiredUnit is UnitOfTorque)
+			{
+				if (!TorqueConverter.KnownUnits.ContainsKey(Unit))
+				{
+					if (VelocityConverter.KnownUnits.ContainsKey(Unit))
+					{
+						/*
+						 * HACK: If we're using a velocity unit here, torque is usually expressed as a units in 1 figure.
+						 *		 Therefore, the velocity to m/s
+						 */
+						parsedNumber = (float)velocityConvertor.Convert(parsedNumber, VelocityConverter.KnownUnits[Unit], UnitOfVelocity.MetersPerSecond);
+						Unit = "nms";
+					}
+					else if (Unit == "s")
+					{
+						// ?? assume that plain s is actually newton meters / s ??
+						Unit = "nms";
+					}
+					else
+					{
+						throw new InvalidDataException("Unknown or unexpected torque unit " + Unit + " encountered in block " + Token);
+					}
+				}
+
+				parsedNumber = (float)torqueConvertor.Convert(parsedNumber, TorqueConverter.KnownUnits[Unit], (UnitOfTorque)(object)desiredUnit);
+			}
 			return parsedNumber;
 		}
-
+		
 		public override void Skip(int length)
 		{
 			//Unused at the minute
@@ -768,13 +1096,78 @@ namespace OpenBve.Formats.MsTs
 			return getNextValue();
 		}
 
+		public override bool ReadPath(string absolute, out string finalPath)
+		{
+			string relative = ReadString().Replace("\"", "");
+			try
+			{
+				finalPath = OpenBveApi.Path.CombineFile(absolute, relative);
+			}
+			catch
+			{
+				finalPath = relative;
+				return false;
+			}
+			
+			if (File.Exists(finalPath))
+			{
+				return true;
+			}
+
+			// n.b. Sound files may also be loaded from the global SOUND directory
+
+			// ReSharper disable once InconsistentNaming
+			string MSTSInstallDirectory = string.Empty;
+
+			try
+			{
+				object o = Registry.GetValue("HKEY_LOCAL_MACHINE\\Software\\Microsoft Games\\Train Simulator\\1.0", "Path", null);
+				if (o is string msts)
+				{
+					MSTSInstallDirectory = msts;
+					
+				}
+				o = Registry.GetValue("HKEY_CURRENT_USER\\Software\\OpenRails\\ORTS\\Folders", "Train Simulator", null);
+				if (o is string orts)
+				{
+					MSTSInstallDirectory = orts;
+				}
+			}
+			catch
+			{
+				// ignored
+			}
+
+			absolute = OpenBveApi.Path.CombineDirectory(MSTSInstallDirectory, "SOUND");
+			try
+			{
+				finalPath = OpenBveApi.Path.CombineFile(absolute, relative);
+			}
+			catch
+			{
+				finalPath = relative;
+				return false;
+			}
+
+			if (File.Exists(finalPath))
+			{
+				return true;
+			}
+
+			finalPath = relative;
+			return false;
+		}
+
 		public override string[] ReadStringArray()
 		{
 			List<string> strings = new List<string>();
-			string s;
 			while (true)
 			{
-				s = ReadString();
+				if (Position() == Length())
+				{
+					break;
+				}
+				string s = ReadString();
 				if (s != string.Empty)
 				{
 					strings.Add(s);
@@ -800,12 +1193,63 @@ namespace OpenBve.Formats.MsTs
 			TEnumType[] returnArray = new TEnumType[strings.Length];
 			for (int i = 0; i < strings.Length; i++)
 			{
+				strings[i] = strings[i].Replace("Handbrake Only", "Handbrake"); // UKTS BR_Bolster_D
 				if (!Enum.TryParse(strings[i], true, out returnArray[i]))
 				{
-					throw new InvalidDataException("Expected " + strings[i] + " to be a value member of the specified enum.");
+					if (string.IsNullOrEmpty(strings[i]))
+					{
+						returnArray[i] = default(TEnumType); // MT Class 101
+					}
+					else
+					{
+						throw new InvalidDataException("Expected " + strings[i] + " to be a value member of the specified enum.");
+					}
+					
 				}
 			}
 			return returnArray;
+		}
+
+		public override TEnumType ReadEnumValue<TEnumType>(TEnumType desiredEnumType)
+		{
+			string s = ReadString();
+			s = s.Replace("/", "_");
+			s = Replace(s, "METRES", "METERS"); // accept both spellings of meter
+			s = Replace(s, "SEC_SEC", "SEC"); // 3DTS Class 108
+			s = Replace(s, "12", "TWELVE"); // can't start an enum value with a number, so replace with textual
+			s = Replace(s, "24", "TWENTYFOUR"); // ditto
+			if (!Enum.TryParse(s, true, out TEnumType e))
+			{
+				throw new InvalidDataException("Expected " + s + " to be a value member of the specified enum.");
+			}
+			return e;
+		}
+
+		private static string Replace(string str, string oldValue, string newValue)
+		{
+			// Helper method to case invariant replace string within a string
+			// This isn't available before .Net Core
+			if(string.IsNullOrEmpty(oldValue))
+			{
+				return str;
+			}
+			
+			StringBuilder sb = new StringBuilder();
+
+			int previousIndex = 0;
+			int index = str.IndexOf(oldValue, StringComparison.InvariantCultureIgnoreCase);
+			while (index != -1)
+			{
+				sb.Append(str.Substring(previousIndex, index - previousIndex));
+				sb.Append(newValue);
+				index += oldValue.Length;
+
+				previousIndex = index;
+				index = str.IndexOf(oldValue, index, StringComparison.InvariantCultureIgnoreCase);
+			}
+			sb.Append(str.Substring(previousIndex));
+
+			return sb.ToString();
 		}
 
 		public override long Length()
@@ -835,7 +1279,8 @@ namespace OpenBve.Formats.MsTs
 				//Quote enclosed string
 				currentPosition++;
 				startPosition++;
-				while (myText[currentPosition] != '"')
+				
+				while (myText[currentPosition] != '"' && currentPosition < myText.Length - 1)
 				{
 					currentPosition++;
 				}

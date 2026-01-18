@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LibRender2;
-using LibRender2.Cursors;
 using LibRender2.Trains;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
@@ -27,32 +26,39 @@ namespace OpenBve.Graphics.Renderers
 		private readonly NewRenderer renderer;
 		private readonly List<ObjectState> touchableObject;
 		private readonly FrameBufferObject fbo;
-		private ObjectState prePickedObject;
+		
+		/// <summary>Stores whether the mouse is currently down</summary>
+		private bool mouseCurrentlyDown;
+		/// <summary>The object picked on the last touch down event</summary>
+		private ObjectState previouslyPickedObject;
 
 		internal Touch(NewRenderer renderer)
 		{
 			this.renderer = renderer;
 			touchableObject = new List<ObjectState>();
 
-			if (!renderer.ForceLegacyOpenGL)
+			if (renderer.ForceLegacyOpenGL)
 			{
-				fbo = new FrameBufferObject();
-				fbo.Bind();
-				fbo.SetTextureBuffer(FrameBufferObject.TargetBuffer.Color, PixelInternalFormat.R32f, PixelFormat.Red, PixelType.Float, renderer.Screen.Width, renderer.Screen.Height);
-				fbo.DrawBuffers(new[] { DrawBuffersEnum.ColorAttachment0 });
-				fbo.UnBind();
+				// touch not supported when GL4 is not available
+				return;
 			}
+			fbo = new FrameBufferObject();
+			fbo.Bind();
+			fbo.SetTextureBuffer(FrameBufferObject.TargetBuffer.Color, PixelInternalFormat.R32f, PixelFormat.Red, PixelType.Float, renderer.Screen.Width, renderer.Screen.Height);
+			fbo.DrawBuffers(new[] { DrawBuffersEnum.ColorAttachment0 });
+			fbo.UnBind();
 		}
 
 		internal void UpdateViewport()
 		{
-			if (renderer.AvailableNewRenderer)
+			if (!renderer.AvailableNewRenderer)
 			{
-				fbo.Bind();
-				fbo.SetTextureBuffer(FrameBufferObject.TargetBuffer.Color, PixelInternalFormat.R32f, PixelFormat.Red, PixelType.Float, renderer.Screen.Width, renderer.Screen.Height);
-				fbo.DrawBuffers(new[] { DrawBuffersEnum.ColorAttachment0 });
-				fbo.UnBind();
+				return;
 			}
+			fbo.Bind();
+			fbo.SetTextureBuffer(FrameBufferObject.TargetBuffer.Color, PixelInternalFormat.R32f, PixelFormat.Red, PixelType.Float, renderer.Screen.Width, renderer.Screen.Height);
+			fbo.DrawBuffers(new[] { DrawBuffersEnum.ColorAttachment0 });
+			fbo.UnBind();
 		}
 
 		private void ShowObject(ObjectState state)
@@ -61,7 +67,7 @@ namespace OpenBve.Graphics.Renderers
 
 			if (renderer.AvailableNewRenderer && state.Prototype.Mesh.VAO == null)
 			{
-				VAOExtensions.CreateVAO(ref state.Prototype.Mesh, state.Prototype.Dynamic, renderer.pickingShader.VertexLayout, renderer);
+				VAOExtensions.CreateVAO(state.Prototype.Mesh, state.Prototype.Dynamic, renderer.pickingShader.VertexLayout, renderer);
 			}
 		}
 
@@ -74,20 +80,20 @@ namespace OpenBve.Graphics.Renderers
 				return;
 			}
 
-			if (renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
-			{
-				return;
-			}
-
 			CarBase Car = TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar];
-			int add = Car.CarSections[0].CurrentAdditionalGroup + 1;
-
-			if (add >= Car.CarSections[0].Groups.Length)
+			if (renderer.Camera.CurrentMode > CameraViewMode.InteriorLookAhead || !Car.CarSections.TryGetValue(CarSectionType.Interior, out CarSection interiorSection))
 			{
 				return;
 			}
 
-			TouchElement[] TouchElements = Car.CarSections[0].Groups[add].TouchElements;
+			int add = interiorSection.CurrentAdditionalGroup + 1;
+
+			if (add >= interiorSection.Groups.Length)
+			{
+				return;
+			}
+
+			TouchElement[] TouchElements = interiorSection.Groups[add].TouchElements;
 
 			if (TouchElements == null)
 			{
@@ -298,13 +304,15 @@ namespace OpenBve.Graphics.Renderers
 		{
 			NewCursor = null;
 			
-			if (!Loading.SimulationSetup)
+			if (!Loading.SimulationSetup || renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
 			{
 				Status = MouseCursor.Status.Default;
 				return false;
 			}
 
-			if (renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
+			CarBase Car = TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar];
+
+			if (!Car.CarSections.TryGetValue(CarSectionType.Interior, out CarSection interCarSection) || renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
 			{
 				Status = MouseCursor.Status.Default;
 				return false;
@@ -312,15 +320,14 @@ namespace OpenBve.Graphics.Renderers
 
 			Status = MouseCursor.Status.Default;
 
-			CarBase Car = TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar];
-			int add = Car.CarSections[0].CurrentAdditionalGroup + 1;
-
-			if (add >= Car.CarSections[0].Groups.Length)
+			int add = Car.CarSections[CarSectionType.Interior].CurrentAdditionalGroup + 1;
+			
+			if (add >= interCarSection.Groups.Length)
 			{
 				return false;
 			}
-
-			TouchElement[] TouchElements = Car.CarSections[0].Groups[add].TouchElements;
+			
+			TouchElement[] TouchElements = interCarSection.Groups[add].TouchElements;
 
 			if (TouchElements == null)
 			{
@@ -328,6 +335,13 @@ namespace OpenBve.Graphics.Renderers
 			}
 
 			ObjectState pickedObject = renderer.AvailableNewRenderer ? ParseFBO(Point, 5, 5) : RenderSceneSelection(Point, new Vector2(5.0f));
+
+			if (mouseCurrentlyDown && pickedObject != previouslyPickedObject)
+			{
+				// picked object has changed on move, so issue mouse up event (to clear old), then mouse down (for new)
+				LeaveCheck(Point);
+				TouchCheck(Point);
+			}
 
 			foreach (TouchElement TouchElement in TouchElements.Where(x => x.Element.internalObject == pickedObject))
 			{
@@ -364,20 +378,22 @@ namespace OpenBve.Graphics.Renderers
 				return;
 			}
 
+			mouseCurrentlyDown = true;
+
 			if (renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
 			{
 				return;
 			}
 
 			CarBase Car = TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar];
-			int add = Car.CarSections[0].CurrentAdditionalGroup + 1;
+			int add = Car.CarSections[CarSectionType.Interior].CurrentAdditionalGroup + 1;
 
-			if (add >= Car.CarSections[0].Groups.Length)
+			if (add >= Car.CarSections[CarSectionType.Interior].Groups.Length)
 			{
 				return;
 			}
 
-			TouchElement[] TouchElements = Car.CarSections[0].Groups[add].TouchElements;
+			TouchElement[] TouchElements = Car.CarSections[CarSectionType.Interior].Groups[add].TouchElements;
 
 			if (TouchElements == null)
 			{
@@ -393,14 +409,14 @@ namespace OpenBve.Graphics.Renderers
 					if (Interface.CurrentControls[index].DigitalState != DigitalControlState.Pressed && TrainManager.PlayerTrain.Plugin != null)
 					{
 						TrainManager.PlayerTrain.Plugin.TouchEvent(add, index);
+						TrainManager.PlayerTrain.Plugin.TouchEvent(add, Interface.CurrentControls[index].Command);
 					}
 					Interface.CurrentControls[index].AnalogState = 1.0;
 					Interface.CurrentControls[index].DigitalState = DigitalControlState.Pressed;
 					MainLoop.AddControlRepeat(index);
 				}
 			}
-
-			prePickedObject = pickedObject;
+			previouslyPickedObject = pickedObject;
 		}
 
 		internal void LeaveCheck(Vector2 Point)
@@ -410,19 +426,21 @@ namespace OpenBve.Graphics.Renderers
 				return;
 			}
 
+			mouseCurrentlyDown = false;
+
 			if (renderer.Camera.CurrentMode != CameraViewMode.Interior && renderer.Camera.CurrentMode != CameraViewMode.InteriorLookAhead)
 			{
 				return;
 			}
 
 			CarBase Car = TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar];
-			int add = Car.CarSections[0].CurrentAdditionalGroup + 1;
-			if (add >= Car.CarSections[0].Groups.Length)
+			int add = Car.CarSections[CarSectionType.Interior].CurrentAdditionalGroup + 1;
+			if (add >= Car.CarSections[CarSectionType.Interior].Groups.Length)
 			{
 				return;
 			}
 
-			TouchElement[] TouchElements = Car.CarSections[0].Groups[add].TouchElements;
+			TouchElement[] TouchElements = Car.CarSections[CarSectionType.Interior].Groups[add].TouchElements;
 
 			if (TouchElements == null)
 			{
@@ -435,18 +453,21 @@ namespace OpenBve.Graphics.Renderers
 			{
 				if (TouchElement.Element.internalObject == pickedObject)
 				{
-					Car.CarSections[0].CurrentAdditionalGroup = TouchElement.JumpScreenIndex;
+					Car.CarSections[CarSectionType.Interior].CurrentAdditionalGroup = TouchElement.JumpScreenIndex;
 					// Force a show / hide of the car sections to ensure that the touch stack is correctly updated
 					Car.ChangeCarSection(CarSectionType.Interior, false, true);
 
-					foreach (var index in TouchElement.SoundIndices.Where(x => x >= 0 && Car.Sounds.Touch != null &&  x < Car.Sounds.Touch.Length))
+					foreach (var index in TouchElement.SoundIndices)
 					{
-						Car.Sounds.Touch[index].Play(TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar], false);
+						if (Car.Sounds.Touch.ContainsKey(index))
+						{
+							Car.Sounds.Touch[index].Play(TrainManager.PlayerTrain.Cars[TrainManager.PlayerTrain.DriverCar], false);
+						}		
 					}
 				}
 
 				// HACK: Normally terminate the command issued once.
-				if (TouchElement.Element.internalObject == pickedObject || (pickedObject != prePickedObject && TouchElement.Element.internalObject == prePickedObject))
+				if (TouchElement.Element.internalObject == pickedObject || (pickedObject != previouslyPickedObject && TouchElement.Element.internalObject == previouslyPickedObject))
 				{
 					foreach (int index in TouchElement.ControlIndices)
 					{

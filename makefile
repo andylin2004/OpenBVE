@@ -6,6 +6,7 @@ MIN_NUGET_VERSION:= "2.16.0"
 NUGET_VERSION:= $(shell nuget help 2> /dev/null | awk '/Version:/ { print $$3; exit 0}')
 GreaterVersion = $(shell printf '%s\n' $(1) $(2) | sort -t. -k 1,1nr -k 2,2nr -k 3,3nr -k 4,4nr | head -n 1)
 PROGRAM_VERSION = $(shell git describe --tags --exact-match 2> /dev/null)
+ROOT_DIR := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 
 # Directories
 DEBUG_DIR   := bin_debug
@@ -137,6 +138,9 @@ prequisite-check:
  $(info nuget Version $(NUGET_VERSION) found.)
  ifeq "$(call GreaterVersion, $(NUGET_VERSION), $(MIN_NUGET_VERSION))" "$(NUGET_VERSION)"
  #Nothing
+ else ifeq ($(strip $(NUGET_VERSION)),)
+ $(info Unable to determine the nuget version installed.)
+ $(info OpenBVE requires a minimum nuget version of 2.16- The build will fail with versions below this.)
  else
  $(info OpenBVE requires a minimum nuget version of 2.16)
  $(info Please run $(red)nuget update -self$(reset) with administrative priveledges.)
@@ -157,8 +161,9 @@ $(MAC_BUILD_RESULT): all-release
 	@echo $(COLOR_RED)Copying build data into $(COLOR_CYAN)OpenBVE.app$(COLOR_END)
 	@cp -r $(RELEASE_DIR)/* mac/OpenBVE.app/Contents/Resources/
 
+# Because Azure is iffy on MacOS13, let's try a custom script
 	@echo $(COLOR_RED)Creating $(COLOR_CYAN)$(MAC_BUILD_RESULT)$(COLOR_END)
-	@hdiutil create $(MAC_BUILD_RESULT) -volname "OpenBVE" -fs HFS+ -srcfolder "mac/OpenBVE.app"
+	@./DMGScript.sh
 	@echo Renaming final output file
 ifeq (, $(PROGRAM_VERSION))
 	@echo This is a $(COLOR_BLUE)Daily build$(COLOR_END)
@@ -205,6 +210,6 @@ ifeq (, $(PROGRAM_VERSION))
 	@mv installers/debian.deb OpenBVE-$$(date '+%F').deb
 else
 	@echo This is a $(COLOR_YELLOW)Tagged Release build$(COLOR_END)
-	@echo Final filename: $(COLOR_RED)OpenBVE-$$(date '+%F').deb$(COLOR_END)
-	@mv installers/debian.deb OpenBVE-$(PROGRAM_VERSION).deb
+	@echo Final filename: $(COLOR_RED)OpenBVE-$(PROGRAM_VERSION).deb$(COLOR_END)
+	@mv "$(ROOT_DIR)/installers/debian.deb" OpenBVE-$(PROGRAM_VERSION).deb
 endif

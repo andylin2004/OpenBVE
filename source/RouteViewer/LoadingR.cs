@@ -6,12 +6,12 @@
 // ╚═════════════════════════════════════════════════════════════╝
 
 using System;
-using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using LibRender2.Cameras;
+using OpenBveApi;
 using OpenBveApi.Math;
 using OpenBveApi.Routes;
 using OpenBveApi.Runtime;
@@ -23,10 +23,7 @@ namespace RouteViewer {
 
 		internal static bool Cancel
 		{
-			get
-			{
-				return _cancel;
-			}
+			get => _cancel;
 			set
 			{
 				if (value)
@@ -56,20 +53,22 @@ namespace RouteViewer {
 		internal static bool JobAvailable;
 
 		// load
-		internal static void Load(string RouteFile, Encoding RouteEncoding, Bitmap bitmap = null)
+		internal static void Load(string routeFile, Encoding routeEncoding, byte[] textureBytes)
 		{
+			Program.Renderer.GameWindow.TargetRenderFrequency = 0;
 			// reset
 			Game.Reset();
 			Program.Renderer.Loading.InitLoading(Program.FileSystem.GetDataFolder("In-game"), typeof(NewRenderer).Assembly.GetName().Version.ToString(), Interface.CurrentOptions.LoadingLogo, Interface.CurrentOptions.LoadingProgressBar);
-			if (bitmap != null)
+			if (textureBytes != null && textureBytes.Length > 0)
 			{
-				Program.Renderer.Loading.SetLoadingBkg(Program.Renderer.TextureManager.RegisterTexture(bitmap, new TextureParameters(null, null)));
+				Texture t = new Texture(Program.Renderer.Screen.Width, Program.Renderer.Screen.Height, PixelFormat.RGBAlpha, textureBytes, null);
+				Program.Renderer.Loading.SetLoadingBkg(t);
 			}
 			// members
 			Cancel = false;
 			Complete = false;
-			CurrentRouteFile = RouteFile;
-			CurrentRouteEncoding = RouteEncoding;
+			CurrentRouteFile = routeFile;
+			CurrentRouteEncoding = routeEncoding;
 			// thread
 			Loading.LoadAsynchronously(CurrentRouteFile, CurrentRouteEncoding);
 			RouteViewer.LoadingScreenLoop();
@@ -80,11 +79,11 @@ namespace RouteViewer {
 		internal static string GetRailwayFolder(string RouteFile) {
 			try
 			{
-				string Folder = System.IO.Path.GetDirectoryName(RouteFile);
+				string Folder = Path.GetDirectoryName(RouteFile);
 
 				while (true)
 				{
-					string Subfolder = OpenBveApi.Path.CombineDirectory(Folder, "Railway");
+					string Subfolder = Path.CombineDirectory(Folder, "Railway");
 					if (System.IO.Directory.Exists(Subfolder))
 					{
 						if (System.IO.Directory.EnumerateDirectories(Subfolder).Any() || System.IO.Directory.EnumerateFiles(Subfolder).Any())
@@ -109,7 +108,7 @@ namespace RouteViewer {
 			//If the Route, Object and Sound folders exist, but are not in a railway folder.....
 			try
 			{
-				string Folder = System.IO.Path.GetDirectoryName(RouteFile);
+				string Folder = Path.GetDirectoryName(RouteFile);
 				if (Folder == null)
 				{
 					// Unlikely to work, but attempt to make the best of it
@@ -118,9 +117,9 @@ namespace RouteViewer {
 				string candidate = null;
 				while (true)
 				{
-					string RouteFolder = OpenBveApi.Path.CombineDirectory(Folder, "Route");
-					string ObjectFolder = OpenBveApi.Path.CombineDirectory(Folder, "Object");
-					string SoundFolder = OpenBveApi.Path.CombineDirectory(Folder, "Sound");
+					string RouteFolder = Path.CombineDirectory(Folder, "Route");
+					string ObjectFolder = Path.CombineDirectory(Folder, "Object");
+					string SoundFolder = Path.CombineDirectory(Folder, "Sound");
 					if (System.IO.Directory.Exists(RouteFolder) && System.IO.Directory.Exists(ObjectFolder) && System.IO.Directory.Exists(SoundFolder))
 					{
 						return Folder;
@@ -174,13 +173,16 @@ namespace RouteViewer {
 
 			//Set the route and train folders in the info class
 			// ReSharper disable once UnusedVariable
+#pragma warning disable IDE0059 // Unnecessary assignment of a value
 			Task loadThreaded = LoadThreaded();
+#pragma warning restore IDE0059 // Unnecessary assignment of a value
+
 		}
 
 		private static void LoadEverythingThreaded() {
 			string RailwayFolder = GetRailwayFolder(CurrentRouteFile);
-			string ObjectFolder = OpenBveApi.Path.CombineDirectory(RailwayFolder, "Object");
-			string SoundFolder = OpenBveApi.Path.CombineDirectory(RailwayFolder, "Sound");
+			string ObjectFolder = Path.CombineDirectory(RailwayFolder, "Object");
+			string SoundFolder = Path.CombineDirectory(RailwayFolder, "Sound");
 			Program.Renderer.Camera.CurrentMode = CameraViewMode.Track;
 			// load route
 			bool loaded = false;

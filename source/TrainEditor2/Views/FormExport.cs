@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows.Forms;
@@ -42,6 +42,14 @@ namespace TrainEditor2.Views
 					x => x.Enabled,
 					BindingMode.OneWay,
 					x => x == App.TrainFileType.OldFormat
+				)
+				.AddTo(disposable);
+			app.CurrentTrainFileType
+				.BindTo(
+					groupBoxTrainXML,
+					x => x.Enabled,
+					BindingMode.OneWay,
+					x => x == App.TrainFileType.TrainXML
 				)
 				.AddTo(disposable);
 
@@ -233,7 +241,65 @@ namespace TrainEditor2.Views
 				.BindToErrorProvider(errorProvider, textBoxSoundXmlFileName)
 				.AddTo(disposable);
 
+			app.TrainXmlExportLocation
+				.BindTo(
+					textBoxTrainXmlFilename,
+					x => x.Text,
+					BindingMode.TwoWay,
+					null,
+					null,
+					Observable.FromEvent<EventHandler, EventArgs>(
+							h => (s, e) => h(e),
+							h => textBoxTrainXmlFilename.TextChanged += h,
+							h => textBoxTrainXmlFilename.TextChanged -= h
+						)
+						.ToUnit()
+				)
+				.AddTo(disposable);
+
+			app.TrainXmlExportLocation
+				.BindToErrorProvider(errorProvider, textBoxTrainXmlFilename)
+				.AddTo(disposable);
+
 			app.ExportFiles.BindToButton(buttonOK).AddTo(disposable);
+
+			groupBoxOldFormat.Text = Utilities.GetInterfaceString("import_export", "train", "old_format");
+			groupBoxTrain.Text = Utilities.GetInterfaceString("import_export", "train", "name");
+			groupBoxPanel.Text = Utilities.GetInterfaceString("import_export", "panel", "name");
+			groupBoxSound.Text = Utilities.GetInterfaceString("import_export", "sound", "name");
+
+			groupBoxTrainDat.Text = Utilities.GetInterfaceString("import_export", "train", "traindat");
+			groupBoxExtensionsCfg.Text = Utilities.GetInterfaceString("import_export", "train", "extensionscfg");
+			groupBoxPanel2Cfg.Text = Utilities.GetInterfaceString("import_export", "panel", "panel2cfg");
+			groupBoxPanelXml.Text = Utilities.GetInterfaceString("import_export", "panel", "panelxml");
+			groupBoxSoundCfg.Text = Utilities.GetInterfaceString("import_export", "sound", "soundcfg");
+			groupBoxSoundXml.Text = Utilities.GetInterfaceString("import_export", "sound", "soundxml");
+
+			labelTrainType.Text = $@"{Utilities.GetInterfaceString("items", "type")}:";
+			labelPanelType.Text = $@"{Utilities.GetInterfaceString("items", "type")}:";
+			labelSoundType.Text = $@"{Utilities.GetInterfaceString("items", "type")}:";
+
+			comboBoxTrainType.Items[0] = Utilities.GetInterfaceString("import_export", "train", "old_format");
+			comboBoxPanelType.Items[0] = Utilities.GetInterfaceString("import_export", "panel", "panel2cfg");
+			comboBoxPanelType.Items[1] = Utilities.GetInterfaceString("import_export", "panel", "panelxml");
+			comboBoxSoundType.Items[0] = Utilities.GetInterfaceString("import_export", "sound", "soundcfg");
+			comboBoxSoundType.Items[1] = Utilities.GetInterfaceString("import_export", "sound", "soundxml");
+
+			labelTrainDatFileName.Text = Utilities.GetInterfaceString("items", "filename");
+			labelExtensionsCfgFileName.Text = Utilities.GetInterfaceString("items", "filename");
+			labelPanel2CfgFileName.Text = Utilities.GetInterfaceString("items", "filename");
+			labelPanelXmlFileName.Text = Utilities.GetInterfaceString("items", "filename");
+			labelSoundCfgFileName.Text = Utilities.GetInterfaceString("items", "filename");
+			labelSoundXmlFileName.Text = Utilities.GetInterfaceString("items", "filename");
+
+			buttonTrainDatFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			buttonExtensionsCfgFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			buttonPanel2CfgFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			buttonPanelXmlFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			buttonSoundCfgFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			buttonSoundXmlFileNameOpen.Text = Utilities.GetInterfaceString("navigation", "open");
+			
+			buttonOK.Text = Utilities.GetInterfaceString("items", "button_ok");
 		}
 
 		private void FormExport_Load(object sender, EventArgs e)
@@ -288,6 +354,11 @@ namespace TrainEditor2.Views
 		private void ButtonOK_Click(object sender, EventArgs e)
 		{
 			Close();
+		}
+
+		private void buttonTrainXmlFilenameOpen_Click(object sender, EventArgs e)
+		{
+			SetFileName(@"train.xml files|train.xml|All files|*", textBoxTrainXmlFilename);
 		}
 	}
 }

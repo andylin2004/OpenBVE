@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using OpenBveApi.Runtime;
 
 namespace OpenBveApi.Interface {
@@ -43,7 +43,7 @@ namespace OpenBveApi.Interface {
 			/// <summary>Adjust to the brake notch directly from command option value</summary>
 			BrakeAnyNotch,
 			/// <summary>Adjust to the reverser directly from command option value</summary>
-			ReverserAnyPostion,
+			ReverserAnyPosition,
 			/// <summary>Hold Brake</summary>
 			HoldBrake,
 			/// <summary>Moves the reverser in the forwards direction</summary>
@@ -78,6 +78,10 @@ namespace OpenBveApi.Interface {
 			CameraInteriorNoPanel,
 			/// <summary>Change to the exterior (Attached to train) camera mode</summary>
 			CameraExterior,
+			/// <summary>Change to the head out (left) camera mode</summary>
+			CameraHeadOutLeft,
+			/// <summary>Change to the head out (right) camera mode</summary>
+			CameraHeadOutRight,
 			/// <summary>Change to the track based camera mode</summary>
 			CameraTrack,
 			/// <summary>Change to fly-by camera mode</summary>
@@ -111,9 +115,9 @@ namespace OpenBveApi.Interface {
 			/// <summary>Zoom the camera out</summary>
 			CameraZoomOut,
 			/// <summary>Shift to the previous Point of Interest camera view</summary>
-			CameraPreviousPOI,
+			CameraPOIPrevious,
 			/// <summary>Shift to the next Point of Interest camera view</summary>
-			CameraNextPOI,
+			CameraPOINext,
 			/// <summary>Reset the camera to pointing immediately forwards at track-level</summary>
 			CameraReset,
 			/// <summary>Toggle camera restriction mode</summary>
@@ -131,15 +135,15 @@ namespace OpenBveApi.Interface {
 			/// <summary>Shows or hides the in-game gradient display</summary>
 			MiscGradient,
 			/// <summary>Show / hide the in-game remain distance of the next station</summary>
-			MiscDistanceToNextStation,
+			MiscDistNextStation,
 			/// <summary>Shows or hides the in-game FPS display</summary>
 			MiscFps,
 			/// <summary>Toggles AI control of the player train</summary>
 			MiscAI,
 			/// <summary>Switches between the different interface modes</summary>
-			MiscInterfaceMode,
+			MiscInterface,
 			/// <summary>Toggles the backface-culling mode</summary>
-			MiscBackfaceCulling,
+			MiscBackface,
 			/// <summary>Switches between low and high CPU modes</summary>
 			MiscCPUMode,
 			/// <summary>Switches between the normal and accelerated time-factors</summary>
@@ -272,6 +276,8 @@ namespace OpenBveApi.Interface {
 			DecreaseCutoff,
 			/// <summary>The blowers</summary>
 			Blowers,
+			/// <summary>The cylinder cocks</summary>
+			CylinderCocks,
 			//Diesel Locomotive
 			/// <summary>Start the engine</summary>
 			EngineStart,
@@ -301,13 +307,29 @@ namespace OpenBveApi.Interface {
 			AccessibilityCurrentSpeed,
 			/// <summary>Triggers a screen reader message with the distance and aspect to the next signal</summary>
 			AccessibilityNextSignal,
-			/// <summary>Triggers a screen reader message with the distance and aspect to the next station</summary>
+			/// <summary>Triggers a screen reader message with the distance to the next station</summary>
 			AccessibilityNextStation,
+			/*
+			 * Added in 1.11.2.8
+			 */
+			/// <summary>Triggers a screen reader message with the current limit, next limit and distance</summary>
+			AccessibilityNextLimit,
+			/// <summary>Shows the change switch menu</summary>
+			SwitchMenu,
 			/*
 			 * Added in 1.8.4.3
 			 */
 			/// <summary>Toggles the sanders if fitted</summary>
-			Sanders
+			Sanders,
+			/// <summary>Uncouples the front coupling of a car</summary>
+			UncoupleFront,
+			/// <summary>Uncouples the rear coupling of a car</summary>
+			UncoupleRear,
+			/// <summary>Controls the DSD</summary>
+			DriverSupervisionDevice,
+			// Added in 1.11.2.0
+			/// <summary>Press to request permission from the signaller to access a permissive section</summary>
+			AccessPermissiveSection
 		}
 
 		/// <summary>Defines the possible command types</summary>
@@ -320,23 +342,20 @@ namespace OpenBveApi.Interface {
 			/// <summary>A full analog joystick or gamepad axis</summary>
 			AnalogFull
 		}
-
 		
-
 		/// <summary>Converts the specified security command to a virtual key.</summary>
 		/// <returns>Virtual key for plugins.</returns>
-		/// <param name="cmd">The security command. If this isn't a recognized security command, ArgumentException will be thrown.</param>
-		public static VirtualKeys SecurityToVirtualKey(Command cmd)
+		/// <param name="cmd">The security command</param>
+		/// <param name="key">The returned key</param>
+		public static bool SecurityToVirtualKey(Command cmd, out VirtualKeys key)
 		{
 			string cmdname = Enum.GetName(typeof(Command), cmd);
-			if (cmdname == null) throw new ArgumentNullException("cmd");
+			if (cmdname == null) throw new ArgumentNullException(nameof(cmd));
 			if (cmdname.StartsWith("Security", StringComparison.Ordinal))
 				cmdname = cmdname.Substring(8).ToUpperInvariant();
-			VirtualKeys key;
 			if (!Enum.TryParse(cmdname, out key))
-				throw new ArgumentException(@"VirtualKeys does not contain the following key: " +
-					cmdname, "cmd");
-			return key;
+				return false;
+			return true;
 		}
 	}
 }

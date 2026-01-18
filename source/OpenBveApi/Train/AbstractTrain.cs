@@ -1,8 +1,14 @@
-﻿namespace OpenBveApi.Trains
+using OpenBveApi.Routes;
+using System;
+using System.Collections.Generic;
+
+namespace OpenBveApi.Trains
 {
 	/// <summary>An abstract train</summary>
 	public abstract class AbstractTrain
 	{
+		/// <summary>The type of the train</summary>
+		public TrainType Type;
 		/// <summary>The current state of the train</summary>
 		public TrainState State;
 		/// <summary>Holds the AI controlling the train if any</summary>
@@ -25,6 +31,7 @@
 		/// <summary>The route speed limts</summary>
 		public double[] RouteLimits;
 		/// <summary>The current route limit in effect</summary>
+		/// <remarks>Units are m/s</remarks>
 		public double CurrentRouteLimit;
 		/// <summary>The current speed of the train (as an average of all cars)</summary>
 		/// <remarks>Default units are m/s</remarks>
@@ -32,6 +39,8 @@
 		/// <summary>The index to the next station at which the train calls</summary>
 		/// <remarks>If stationary at a timetabled station, this will return that station</remarks>
 		public int Station;
+		/// <summary>The last switch the train passed over</summary>
+		public Guid Switch;
 		/// <summary>The timetable delta from the player train</summary>
 		/// <remarks>Is negative for earlier trains, or negative for later trains</remarks>
 		public double TimetableDelta;
@@ -54,6 +63,12 @@
 		/// <summary>Gets the length of the train</summary>
 		public virtual double Length => 0;
 
+		/// <summary>Returns the available power supplies to this train</summary>
+		public virtual Dictionary<PowerSupplyTypes, PowerSupply> AvailablePowerSupplies => new Dictionary<PowerSupplyTypes, PowerSupply>();
+
+		/// <summary>Gets the current signal aspect applicable to the train</summary>
+		public virtual int CurrentSignalAspect => 0;
+
 		/// <summary>Updates the train</summary>
 		/// <param name="TimeElapsed">The time elapsed since the last call to update</param>
 		public virtual void Update(double TimeElapsed)
@@ -75,6 +90,14 @@
 		public virtual void Derail(AbstractCar Car, double ElapsedTime)
 		{
 
+		}
+
+        /// <summary>Couples another train to this train</summary>
+        /// <param name="Train">The train to couple</param>
+        /// <param name="Front">Whether the new train is coupled to the front</param>
+        public virtual void Couple(AbstractTrain Train, bool Front)
+		{
+		
 		}
 
 		/// <summary>Call this method to reverse (flip) the entire train</summary>
@@ -147,7 +170,8 @@
 
 		/// <summary>Jumps the train to the specified station index</summary>
 		/// <param name="StationIndex">The index of the station to jump to</param>
-		public virtual void Jump(int StationIndex)
+		/// <param name="TrackKey">The key of the track on which the station is placed</param>
+		public virtual void Jump(int StationIndex, int TrackKey)
 		{
 
 		}

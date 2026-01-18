@@ -5,6 +5,7 @@ using OpenBveApi.Interface;
 using OpenBveApi.Runtime;
 using OpenBveApi.Trains;
 using RouteManager2.Stations;
+using TrainManager.BrakeSystems;
 using TrainManager.Handles;
 using TrainManager.Trains;
 
@@ -108,13 +109,17 @@ namespace TrainManager.SafetySystems
 				foreach (RouteStation selectedStation in TrainManagerBase.CurrentRoute.Stations)
 				{
 					double stopPosition = -1;
-					int stopIdx = TrainManagerBase.CurrentRoute.Stations[s].GetStopIndex(Train.NumberOfCars);
+					double forwardTolerance = -1;
+					double backwardTolerance = -1;
+					int stopIdx = TrainManagerBase.CurrentRoute.Stations[s].GetStopIndex(Train);
 					if (selectedStation.Stops.Length != 0)
 					{
 						stopPosition = selectedStation.Stops[stopIdx].TrackPosition;
+						forwardTolerance = selectedStation.Stops[stopIdx].ForwardTolerance;
+						backwardTolerance = selectedStation.Stops[stopIdx].BackwardTolerance;
 					}
 
-					Station i = new Station(selectedStation, stopPosition);
+					Station i = new Station(selectedStation, stopPosition, forwardTolerance, backwardTolerance);
 					currentRouteStations.Add(i);
 					s++;
 				}
@@ -123,20 +128,33 @@ namespace TrainManager.SafetySystems
 
 			}
 
+			double bcPressure = 0;
+			double mrPressure = 0;
+			double erPressure = 0;
+			double bpPressure = 0;
+			double sapPressure = 0;
 			//End of additions
 			double speed = this.Train.Cars[this.Train.DriverCar].Specs.PerceivedSpeed;
-			double bcPressure = this.Train.Cars[this.Train.DriverCar].CarBrake.brakeCylinder.CurrentPressure;
-			double mrPressure = this.Train.Cars[this.Train.DriverCar].CarBrake.mainReservoir.CurrentPressure;
-			double erPressure = this.Train.Cars[this.Train.DriverCar].CarBrake.equalizingReservoir.CurrentPressure;
-			double bpPressure = this.Train.Cars[this.Train.DriverCar].CarBrake.brakePipe.CurrentPressure;
-			double sapPressure = this.Train.Cars[this.Train.DriverCar].CarBrake.straightAirPipe.CurrentPressure;
+			if (this.Train.Cars[this.Train.DriverCar].CarBrake is AirBrake airBrake)
+			{
+				bcPressure = airBrake.BrakeCylinder.CurrentPressure;
+				mrPressure = airBrake.MainReservoir.CurrentPressure;
+				erPressure = airBrake.EqualizingReservoir.CurrentPressure;
+				bpPressure = airBrake.BrakePipe.CurrentPressure;
+				sapPressure = airBrake.StraightAirPipe.CurrentPressure;
+			}
+			else if (this.Train.Cars[this.Train.DriverCar].CarBrake is VacuumBrake vacuumBrake)
+			{
+				// TODO: Plugin interface assumes that brake system is air brakes...
+			}
+
 			bool wheelSlip = false;
 			for (int i = 0; i < this.Train.Cars.Length; i++)
 			{
 				if (this.Train.Cars[i].FrontAxle.CurrentWheelSlip)
 				{
 					/*
-					 * Find out if any car in the train is experincing wheelslip
+					 * Find out if any car in the train is experiencing wheelslip
 					 * Remember that only motor cars may experience wheelslip, and there is no
 					 * set position of these within the train, hence it's easier to just check all
 					 */
@@ -154,7 +172,7 @@ namespace TrainManager.SafetySystems
 			try
 			{
 				AbstractTrain closestTrain = TrainManagerBase.currentHost.ClosestTrain(this.Train);
-				precedingVehicle = closestTrain != null ? new PrecedingVehicleState(closestTrain.RearCarTrackPosition, closestTrain.RearCarTrackPosition - location, new Speed(closestTrain.CurrentSpeed)) : new PrecedingVehicleState(Double.MaxValue, Double.MaxValue - location, new Speed(0.0));
+				precedingVehicle = closestTrain != null ? new PrecedingVehicleState(closestTrain.RearCarTrackPosition, closestTrain.RearCarTrackPosition - location, new Speed(closestTrain.CurrentSpeed)) : new PrecedingVehicleState(double.MaxValue, double.MaxValue - location, new Speed(0.0));
 			}
 			catch
 			{
@@ -222,7 +240,15 @@ namespace TrainManager.SafetySystems
 				}
 			}
 
-			return new OpenBveApi.Runtime.Handles(reverser, powerNotch, brakeNotch, this.Train.Handles.LocoBrake.Driver, this.Train.Specs.CurrentConstSpeed, this.Train.Handles.HoldBrake.Driver);
+			if (this.Train.Handles.LocoBrake == null)
+			{
+				return new OpenBveApi.Runtime.Handles(reverser, powerNotch, brakeNotch, 0, this.Train.Specs.CurrentConstSpeed, this.Train.Handles.HoldBrake.Driver);
+			}
+			else
+			{
+				return new OpenBveApi.Runtime.Handles(reverser, powerNotch, brakeNotch, this.Train.Handles.LocoBrake.Driver, this.Train.Specs.CurrentConstSpeed, this.Train.Handles.HoldBrake.Driver);	
+			}
+			
 		}
 
 		/// <summary>Sets the driver handles or the virtual handles.</summary>
@@ -269,7 +295,7 @@ namespace TrainManager.SafetySystems
 			{
 				if (virtualHandles)
 				{
-					this.Train.Handles.Power.Safety = handles.PowerNotch;
+					this.Train.Handles.Power.ApplySafetyState(handles.PowerNotch);
 				}
 				else
 				{
@@ -280,7 +306,7 @@ namespace TrainManager.SafetySystems
 			{
 				if (virtualHandles)
 				{
-					this.Train.Handles.Power.Safety = this.Train.Handles.Power.Driver;
+					this.Train.Handles.Power.ApplySafetyState(this.Train.Handles.Power.Driver);
 				}
 
 				this.PluginValid = false;
@@ -301,7 +327,7 @@ namespace TrainManager.SafetySystems
 				{
 					if (virtualHandles)
 					{
-						this.Train.Handles.Brake.Safety = (int) AirBrakeHandleState.Release;
+						this.Train.Handles.Brake.ApplySafetyState((int) AirBrakeHandleState.Release);
 					}
 					else
 					{
@@ -313,7 +339,7 @@ namespace TrainManager.SafetySystems
 				{
 					if (virtualHandles)
 					{
-						this.Train.Handles.Brake.Safety = (int) AirBrakeHandleState.Lap;
+						this.Train.Handles.Brake.ApplySafetyState((int) AirBrakeHandleState.Lap);
 					}
 					else
 					{
@@ -325,7 +351,7 @@ namespace TrainManager.SafetySystems
 				{
 					if (virtualHandles)
 					{
-						this.Train.Handles.Brake.Safety = (int) AirBrakeHandleState.Service;
+						this.Train.Handles.Brake.ApplySafetyState((int) AirBrakeHandleState.Service);
 					}
 					else
 					{
@@ -337,7 +363,7 @@ namespace TrainManager.SafetySystems
 				{
 					if (virtualHandles)
 					{
-						this.Train.Handles.Brake.Safety = (int) AirBrakeHandleState.Service;
+						this.Train.Handles.Brake.ApplySafetyState((int) AirBrakeHandleState.Service);
 						this.Train.Handles.EmergencyBrake.Safety = true;
 					}
 					else
@@ -360,7 +386,7 @@ namespace TrainManager.SafetySystems
 						if (virtualHandles)
 						{
 							this.Train.Handles.EmergencyBrake.Safety = true;
-							this.Train.Handles.Brake.Safety = this.Train.Handles.Brake.MaximumNotch;
+							this.Train.Handles.Brake.ApplySafetyState(this.Train.Handles.Brake.MaximumNotch);
 						}
 						else
 						{
@@ -373,7 +399,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = handles.BrakeNotch - 1;
+							this.Train.Handles.Brake.ApplySafetyState(handles.BrakeNotch - 1);
 						}
 						else
 						{
@@ -386,7 +412,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = 0;
+							this.Train.Handles.Brake.ApplySafetyState(0);
 							this.Train.Handles.HoldBrake.Actual = true;
 						}
 						else
@@ -400,7 +426,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = 0;
+							this.Train.Handles.Brake.ApplySafetyState(0);
 						}
 						else
 						{
@@ -413,7 +439,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = this.Train.Handles.Brake.Driver;
+							this.Train.Handles.Brake.ApplySafetyState(Train.Handles.Brake.Driver);
 						}
 
 						this.PluginValid = false;
@@ -426,7 +452,7 @@ namespace TrainManager.SafetySystems
 						if (virtualHandles)
 						{
 							this.Train.Handles.EmergencyBrake.Safety = true;
-							this.Train.Handles.Brake.Safety = this.Train.Handles.Brake.MaximumNotch;
+							this.Train.Handles.Brake.ApplySafetyState(this.Train.Handles.Brake.MaximumNotch);
 						}
 						else
 						{
@@ -438,7 +464,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = handles.BrakeNotch;
+							this.Train.Handles.Brake.ApplySafetyState(handles.BrakeNotch);
 						}
 						else
 						{
@@ -450,7 +476,7 @@ namespace TrainManager.SafetySystems
 					{
 						if (virtualHandles)
 						{
-							this.Train.Handles.Brake.Safety = this.Train.Handles.Brake.Driver;
+							this.Train.Handles.Brake.ApplySafetyState(this.Train.Handles.Brake.Driver);
 						}
 
 						this.PluginValid = false;
@@ -565,6 +591,12 @@ namespace TrainManager.SafetySystems
 			// Ignored other than by .Net plugins
 		}
 
+		/// <summary>Called when a touch event occurs.</summary>
+		public virtual void TouchEvent(int groupIndex, Translations.Command command)
+		{
+			// Ignored other than by .Net plugins
+		}
+
 		/// <summary>Called when a horn is played or stopped.</summary>
 		public abstract void HornBlow(HornTypes type);
 
@@ -578,11 +610,7 @@ namespace TrainManager.SafetySystems
 			if (data.Length != 0)
 			{
 				bool update;
-				if (this.Train.CurrentSectionIndex != this.LastSection)
-				{
-					update = true;
-				}
-				else if (data.Length != this.LastAspects.Length)
+				if (this.Train.CurrentSectionIndex != this.LastSection || data.Length != this.LastAspects.Length)
 				{
 					update = true;
 				}
@@ -606,9 +634,9 @@ namespace TrainManager.SafetySystems
 					{
 						for (int j = 0; j < InputDevicePlugin.AvailablePluginInfos.Count; j++)
 						{
-							if (InputDevicePlugin.AvailablePluginInfos[j].Status == InputDevicePlugin.PluginInfo.PluginStatus.Enable && InputDevicePlugin.AvailablePlugins[j] is ITrainInputDevice)
+							if (InputDevicePlugin.AvailablePluginInfos[j].Status == InputDevicePlugin.PluginInfo.PluginStatus.Enable 
+								&& InputDevicePlugin.AvailablePlugins[j] is ITrainInputDevice trainInputDevice)
 							{
-								ITrainInputDevice trainInputDevice = (ITrainInputDevice)InputDevicePlugin.AvailablePlugins[j];
 								trainInputDevice.SetSignal(data);
 							}
 						}

@@ -108,19 +108,20 @@ namespace AssimpNET.X
 	/** Helper structure representing a XFile material */
 	public class Material
 	{
-		public string Name;
+		public readonly string Name;
 		public readonly bool IsReference; // if true, mName holds a name by which the actual material can be found in the material list
 		public Color128 Diffuse;
 		public float SpecularExponent;
-		public Color128 Specular;
-		public Color128 Emissive;
+		public Color96 Specular;
+		public Color96 Emissive;
 		public List<TexEntry> Textures = new List<TexEntry>();
 
 		public uint SceneIndex; // the index under which it was stored in the scene's material list
 
-		public Material(bool isReference)
+		public Material(bool isReference, string name)
 		{
 			IsReference = isReference;
+			Name = name;
 		}
 	}
 

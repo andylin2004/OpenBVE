@@ -60,9 +60,9 @@ namespace MechanikRouteParser
 		    CurrentHost = host;
 		    FileSystem = fileSystem;
 		    CurrentOptions = Options;
-		    Parser.knownRoutes = new Dictionary<string, RouteProperties>();
-		    Parser.knownModules = new List<string>();
-			RoutePropertiesDatabaseParser.LoadRoutePropertyDatabase(ref Parser.knownRoutes, ref Parser.knownModules);
+		    Parser.KnownRoutes = new Dictionary<string, RouteProperties>();
+		    Parser.KnownModules = new List<string>();
+			RoutePropertiesDatabaseParser.LoadRoutePropertyDatabase(ref Parser.KnownRoutes, ref Parser.KnownModules);
 	    }
 
 	    public override void Unload()
@@ -87,7 +87,7 @@ namespace MechanikRouteParser
 		    {
 			    try
 			    {
-					if (Parser.knownModules.Contains(Path.GetChecksum(path)) || File.ReadLines(path).Count() < 800)
+					if (Parser.KnownModules.Contains(Path.GetChecksum(path)) || File.ReadLines(path).Count() < 800)
 				    {
 					    /*
 					     * Slightly hacky check if not found in the known modules list:
@@ -113,14 +113,14 @@ namespace MechanikRouteParser
 
 	    /// <summary>Loads the specified route.</summary>
 	    /// <param name="path">The path to the file or folder that contains the route.</param>
-	    /// <param name="Encoding">The user-selected encoding (if appropriate)</param>
+	    /// <param name="textEncoding">The user-selected encoding (if appropriate)</param>
 	    /// <param name="trainPath">The path to the selected train</param>
 	    /// <param name="objectPath">The base object folder path</param>
 	    /// <param name="soundPath">The base sound folder path</param>
 	    /// <param name="PreviewOnly">Whether this is a preview</param>
 	    /// <param name="route">Receives the route.</param>
 	    /// <returns>Whether loading the sound was successful.</returns>
-	    public override bool LoadRoute(string path, System.Text.Encoding Encoding, string trainPath, string objectPath, string soundPath, bool PreviewOnly, ref object route)
+	    public override bool LoadRoute(string path, System.Text.Encoding textEncoding, string trainPath, string objectPath, string soundPath, bool PreviewOnly, ref object route)
 	    {
 		    LastException = null;
 		    Cancel = false;

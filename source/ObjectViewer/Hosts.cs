@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using OpenBveApi;
 using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
@@ -13,6 +14,7 @@ using OpenBveApi.Trains;
 using OpenBveApi.World;
 using TrainManager;
 using TrainManager.Trains;
+using Path = OpenBveApi.Path;
 
 namespace ObjectViewer {
 	/// <summary>Represents the host application.</summary>
@@ -113,8 +115,14 @@ namespace ObjectViewer {
 										texture = texture.ApplyParameters(parameters);
 										return true;
 									}
-									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadTexture");
+									if(!FailedTextures.Contains(path))
+									{
+										FailedTextures.Add(path);
+										Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadTexture");
+									}
+									
 								} catch (Exception ex) {
+									// exception may be transient
 									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at LoadTexture:" + ex.Message);
 								}
 							}
@@ -126,11 +134,19 @@ namespace ObjectViewer {
 				FileInfo f = new FileInfo(path);
 				if (f.Length == 0)
 				{
-					Interface.AddMessage(MessageType.Error, false, "Zero-byte texture file encountered at " + path);
+					if (!FailedTextures.Contains(path))
+					{
+						FailedTextures.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "Zero-byte texture file encountered at " + path);
+					}
 				}
 				else
 				{
-					Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading texture " + path);
+					if (!FailedTextures.Contains(path))
+					{
+						FailedTextures.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading texture " + path);
+					}
 				}
 			} else {
 				ReportProblem(ProblemType.PathNotFound, path);
@@ -144,10 +160,9 @@ namespace ObjectViewer {
 			return Program.Renderer.TextureManager.LoadTexture(ref Texture, wrapMode, CPreciseTimer.GetClockTicks(), Interface.CurrentOptions.Interpolation, Interface.CurrentOptions.AnisotropicFilteringLevel);
 		}
 
-		public override bool RegisterTexture(string path, TextureParameters parameters, out Texture handle, bool loadTexture = false) {
+		public override bool RegisterTexture(string path, TextureParameters parameters, out Texture handle, bool loadTexture = false, int timeout = 1000) {
 			if (File.Exists(path) || Directory.Exists(path)) {
-				Texture data;
-				if (Program.Renderer.TextureManager.RegisterTexture(path, parameters, out data)) {
+				if (Program.Renderer.TextureManager.RegisterTexture(path, parameters, out Texture data)) {
 					handle = data;
 					if (loadTexture)
 					{
@@ -246,17 +261,22 @@ namespace ObjectViewer {
 				return true;
 			}
 
-			if (File.Exists(path) || Directory.Exists(path)) {
+			if (File.Exists(path) || Directory.Exists(path))
+			{
 				Encoding = TextEncoding.GetSystemEncodingFromFile(path, Encoding);
 
-				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++) {
-					if (Program.CurrentHost.Plugins[i].Object != null) {
-						try {
-							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path)) {
+				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
+				{
+					if (Program.CurrentHost.Plugins[i].Object != null)
+					{
+						try
+						{
+							if (Program.CurrentHost.Plugins[i].Object.CanLoadObject(path))
+							{
 								try
 								{
-									UnifiedObject obj;
-									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out obj)) {
+									if (Program.CurrentHost.Plugins[i].Object.LoadObject(path, Encoding, out UnifiedObject obj))
+									{
 										if (obj == null)
 										{
 											continue;
@@ -264,33 +284,59 @@ namespace ObjectViewer {
 										obj.OptimizeObject(false, Interface.CurrentOptions.ObjectOptimizationBasicThreshold, true);
 										Object = obj;
 
-										StaticObject staticObject = Object as StaticObject;
-										if (staticObject != null)
+										if (Object is StaticObject staticObject)
 										{
-											StaticObjectCache.Add(ValueTuple.Create(path, false), staticObject);
+											StaticObjectCache.Add(ValueTuple.Create(path, false, File.GetLastWriteTime(path)), staticObject);
 											return true;
 										}
 
-										AnimatedObjectCollection aoc = Object as AnimatedObjectCollection;
-										if (aoc != null)
+										if (Object is AnimatedObjectCollection aoc)
 										{
 											AnimatedObjectCollectionCache.Add(path, aoc);
 										}
 
 										return true;
 									}
-									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
-								} catch (Exception ex) {
+									if (!FailedObjects.Contains(path))
+									{
+										FailedObjects.Add(path);
+										Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " returned unsuccessfully at LoadObject");
+									}
+
+								}
+								catch (Exception ex)
+								{
+									// exception may be transient
 									Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at LoadObject:" + ex.Message);
 								}
 							}
-						} catch (Exception ex) {
+						}
+						catch (Exception ex)
+						{
 							Interface.AddMessage(MessageType.Error, false, "Plugin " + Program.CurrentHost.Plugins[i].Title + " raised the following exception at CanLoadObject:" + ex.Message);
 						}
 					}
 				}
-				Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
-			} else {
+				FileInfo f = new FileInfo(path);
+				if (f.Length == 0)
+				{
+					if (!NullFiles.Contains(Path.GetFileNameWithoutExtension(path).ToLowerInvariant()) && !FailedObjects.Contains(path))
+					{
+						FailedObjects.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "Zero-byte object file encountered at " + path);
+					}
+				}
+				else
+				{
+					if (!NullFiles.Contains(Path.GetFileNameWithoutExtension(path).ToLowerInvariant()) && !FailedObjects.Contains(path))
+					{
+						FailedObjects.Add(path);
+						Interface.AddMessage(MessageType.Error, false, "No plugin found that is capable of loading object " + path);
+					}
+				}
+			}
+			else
+			{
 				ReportProblem(ProblemType.PathNotFound, path);
 			}
 			Object = null;
@@ -302,14 +348,14 @@ namespace ObjectViewer {
 			FunctionScripts.ExecuteFunctionScript(functionScript, (TrainBase)train, CarIndex, Position, TrackPosition, SectionIndex, IsPartOfTrain, TimeElapsed, CurrentState);
 		}
 
-		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition, double Brightness)
+		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation WorldTransformation, Transformation LocalTransformation, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition)
 		{
-			return Program.Renderer.CreateStaticObject(Prototype, Position, WorldTransformation, LocalTransformation, ObjectDisposalMode.Accurate, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, 25.0, TrackPosition, Brightness);
+			return Program.Renderer.CreateStaticObject(Prototype, Position, WorldTransformation, LocalTransformation, ObjectDisposalMode.Accurate, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, 25.0, TrackPosition);
 		}
 
-		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation LocalTransformation, Matrix4D Rotate, Matrix4D Translate, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition, double Brightness)
+		public override int CreateStaticObject(StaticObject Prototype, Vector3 Position, Transformation LocalTransformation, Matrix4D Rotate, Matrix4D Translate, double AccurateObjectDisposalZOffset, double StartingDistance, double EndingDistance, double TrackPosition)
 		{
-			return Program.Renderer.CreateStaticObject(Position, Prototype, LocalTransformation, Rotate, Translate, ObjectDisposalMode.Accurate, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, 25.0, TrackPosition, Brightness);
+			return Program.Renderer.CreateStaticObject(Position, Prototype, LocalTransformation, Rotate, Translate, ObjectDisposalMode.Accurate, AccurateObjectDisposalZOffset, StartingDistance, EndingDistance, 25.0, TrackPosition);
 		}
 
 		public override void CreateDynamicObject(ref ObjectState internalObject)
@@ -329,10 +375,7 @@ namespace ObjectViewer {
 
 		public override int AnimatedWorldObjectsUsed
 		{
-			get
-			{
-				return ObjectManager.AnimatedWorldObjectsUsed;
-			}
+			get => ObjectManager.AnimatedWorldObjectsUsed;
 			set
 			{
 				int a = ObjectManager.AnimatedWorldObjectsUsed;
@@ -351,26 +394,14 @@ namespace ObjectViewer {
 
 		public override WorldObject[] AnimatedWorldObjects
 		{
-			get
-			{
-				return ObjectManager.AnimatedWorldObjects;
-			}
-			set
-			{
-				ObjectManager.AnimatedWorldObjects = value;
-			}
+			get => ObjectManager.AnimatedWorldObjects;
+			set => ObjectManager.AnimatedWorldObjects = value;
 		}
 
 		public override Dictionary<int, Track> Tracks
 		{
-			get
-			{
-				return Program.CurrentRoute.Tracks;
-			}
-			set
-			{
-				Program.CurrentRoute.Tracks = value;
-			}
+			get => Program.CurrentRoute.Tracks;
+			set => Program.CurrentRoute.Tracks = value;
 		}
 
 		public override AbstractTrain ParseTrackFollowingObject(string objectPath, string tfoFile)
@@ -378,14 +409,8 @@ namespace ObjectViewer {
 			throw new NotImplementedException();
 		}
 
-		public override AbstractTrain[] Trains
-		{
-			get
-			{
-				// ReSharper disable once CoVariantArrayConversion
-				return Program.TrainManager.Trains;
-			}
-		}
+		// ReSharper disable once CoVariantArrayConversion
+		public override IEnumerable<AbstractTrain> Trains => Program.TrainManager.Trains;
 
 		public override AbstractTrain ClosestTrain(AbstractTrain Train)
 		{
@@ -396,7 +421,7 @@ namespace ObjectViewer {
 			return TrainManagerBase.PlayerTrain;
 		}
 
-		public override AbstractTrain ClosestTrain(double TrackPosition)
+		public override AbstractTrain ClosestTrain(Vector3 worldPosition)
 		{
 			return TrainManagerBase.PlayerTrain;
 		}

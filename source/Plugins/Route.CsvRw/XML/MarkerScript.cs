@@ -3,6 +3,7 @@ using System.Xml;
 using OpenBveApi.Colors;
 using OpenBveApi.Math;
 using System.Linq;
+using OpenBveApi;
 using OpenBveApi.Textures;
 using OpenBveApi.Interface;
 using RouteManager2.MessageManager;
@@ -10,17 +11,18 @@ using RouteManager2.MessageManager.MessageTypes;
 
 namespace CsvRwRouteParser
 {
-	class MarkerScriptParser
+	internal class MarkerScriptParser
 	{
-		public static bool ReadMarkerXML(string fileName, double StartingPosition, ref Marker Marker)
+		public static bool ReadMarkerXML(string fileName, double StartingPosition, out Marker Marker)
 		{
+			Marker = null;
 			double EndingPosition = Double.PositiveInfinity;
 			AbstractMessage Message = null;
 			//The current XML file to load
 			XmlDocument currentXML = new XmlDocument();
 			//Load the marker's XML file 
 			currentXML.Load(fileName);
-			string Path = System.IO.Path.GetDirectoryName(fileName);
+			string filePath = Path.GetDirectoryName(fileName);
 			if (currentXML.DocumentElement != null)
 			{
 				bool iM = false;
@@ -44,7 +46,7 @@ namespace CsvRwRouteParser
 						string EarlyText = null, Text = null, LateText = null;
 						string[] Trains = null;
 						Texture EarlyTexture = null, Texture = null, LateTexture = null;
-						double EarlyTime = 0.0, LateTime = 0.0, TimeOut = Double.PositiveInfinity;
+						double EarlyTime = 0.0, LateTime = 0.0, TimeOut = double.PositiveInfinity;
 						MessageColor EarlyColor = MessageColor.White, OnTimeColor = MessageColor.White, LateColor = MessageColor.White;
 						Vector2 messageSize = Vector2.Null;
 						foreach (XmlNode c in n.ChildNodes)
@@ -68,7 +70,7 @@ namespace CsvRwRouteParser
 												string f;
 												try
 												{
-													f = OpenBveApi.Path.CombineFile(Path, cc.InnerText);
+													f = Path.CombineFile(filePath, cc.InnerText);
 												}
 												catch
 												{
@@ -77,7 +79,7 @@ namespace CsvRwRouteParser
 												}
 												if (System.IO.File.Exists(f))
 												{
-													if (!Plugin.CurrentHost.RegisterTexture(f, new TextureParameters(null, null), out EarlyTexture))
+													if (!Plugin.CurrentHost.RegisterTexture(f, TextureParameters.NoChange, out EarlyTexture))
 													{
 														Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Loading MessageEarlyTexture " + f + " failed.");
 													}
@@ -118,7 +120,7 @@ namespace CsvRwRouteParser
 												string f;
 												try
 												{
-													f = OpenBveApi.Path.CombineFile(Path, cc.InnerText);
+													f = Path.CombineFile(filePath, cc.InnerText);
 												}
 												catch
 												{
@@ -127,7 +129,7 @@ namespace CsvRwRouteParser
 												}
 												if (System.IO.File.Exists(f))
 												{
-													if (!Plugin.CurrentHost.RegisterTexture(f, new TextureParameters(null, null), out Texture))
+													if (!Plugin.CurrentHost.RegisterTexture(f, TextureParameters.NoChange, out Texture))
 													{
 														Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Loading MessageTexture " + f + " failed.");
 													}
@@ -165,7 +167,7 @@ namespace CsvRwRouteParser
 												string f;
 												try
 												{
-													f = OpenBveApi.Path.CombineFile(Path, cc.InnerText);
+													f = Path.CombineFile(filePath, cc.InnerText);
 												}
 												catch
 												{
@@ -174,7 +176,7 @@ namespace CsvRwRouteParser
 												}
 												if (System.IO.File.Exists(f))
 												{
-													if (!Plugin.CurrentHost.RegisterTexture(f, new TextureParameters(null, null), out LateTexture))
+													if (!Plugin.CurrentHost.RegisterTexture(f, TextureParameters.NoChange, out LateTexture))
 													{
 														Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Loading MessageLateTexture " + f + " failed.");
 													}

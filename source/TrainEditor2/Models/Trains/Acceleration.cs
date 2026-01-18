@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
-using Prism.Mvvm;
+using System.Xml.Linq;
 using TrainEditor2.Extensions;
 using TrainEditor2.Models.Others;
 
@@ -24,62 +24,32 @@ namespace TrainEditor2.Models.Trains
 
 			internal double A0
 			{
-				get
-				{
-					return a0;
-				}
-				set
-				{
-					SetProperty(ref a0, value);
-				}
+				get => a0;
+				set => SetProperty(ref a0, value);
 			}
 
 			internal double A1
 			{
-				get
-				{
-					return a1;
-				}
-				set
-				{
-					SetProperty(ref a1, value);
-				}
+				get => a1;
+				set => SetProperty(ref a1, value);
 			}
 
 			internal double V1
 			{
-				get
-				{
-					return v1;
-				}
-				set
-				{
-					SetProperty(ref v1, value);
-				}
+				get => v1;
+				set => SetProperty(ref v1, value);
 			}
 
 			internal double V2
 			{
-				get
-				{
-					return v2;
-				}
-				set
-				{
-					SetProperty(ref v2, value);
-				}
+				get => v2;
+				set => SetProperty(ref v2, value);
 			}
 
 			internal double E
 			{
-				get
-				{
-					return e;
-				}
-				set
-				{
-					SetProperty(ref e, value);
-				}
+				get => e;
+				set => SetProperty(ref e, value);
 			}
 
 			internal Entry()
@@ -111,146 +81,74 @@ namespace TrainEditor2.Models.Trains
 
 		internal int SelectedEntryIndex
 		{
-			get
-			{
-				return selectedEntryIndex;
-			}
-			set
-			{
-				SetProperty(ref selectedEntryIndex, value);
-			}
+			get => selectedEntryIndex;
+			set => SetProperty(ref selectedEntryIndex, value);
 		}
 
 		internal Entry SelectedEntry
 		{
-			get
-			{
-				return Entries[SelectedEntryIndex];
-			}
-			set
-			{
-				Entries[SelectedEntryIndex] = value;
-			}
+			get => Entries[SelectedEntryIndex];
+			set => Entries[SelectedEntryIndex] = value;
 		}
 
 		internal double MinVelocity
 		{
-			get
-			{
-				return minVelocity;
-			}
-			set
-			{
-				SetProperty(ref minVelocity, value);
-			}
+			get => minVelocity;
+			set => SetProperty(ref minVelocity, value);
 		}
 
 		internal double MaxVelocity
 		{
-			get
-			{
-				return maxVelocity;
-			}
-			set
-			{
-				SetProperty(ref maxVelocity, value);
-			}
+			get => maxVelocity;
+			set => SetProperty(ref maxVelocity, value);
 		}
 
 		internal double MinAcceleration
 		{
-			get
-			{
-				return minAcceleration;
-			}
-			set
-			{
-				SetProperty(ref minAcceleration, value);
-			}
+			get => minAcceleration;
+			set => SetProperty(ref minAcceleration, value);
 		}
 
 		internal double MaxAcceleration
 		{
-			get
-			{
-				return maxAcceleration;
-			}
-			set
-			{
-				SetProperty(ref maxAcceleration, value);
-			}
+			get => maxAcceleration;
+			set => SetProperty(ref maxAcceleration, value);
 		}
 
 		internal double NowVelocity
 		{
-			get
-			{
-				return nowVelocity;
-			}
-			set
-			{
-				SetProperty(ref nowVelocity, value);
-			}
+			get => nowVelocity;
+			set => SetProperty(ref nowVelocity, value);
 		}
 
 		internal double NowAcceleration
 		{
-			get
-			{
-				return nowAcceleration;
-			}
-			set
-			{
-				SetProperty(ref nowAcceleration, value);
-			}
+			get => nowAcceleration;
+			set => SetProperty(ref nowAcceleration, value);
 		}
 
 		internal bool Resistance
 		{
-			get
-			{
-				return resistance;
-			}
-			set
-			{
-				SetProperty(ref resistance, value);
-			}
+			get => resistance;
+			set => SetProperty(ref resistance, value);
 		}
 
 		internal int ImageWidth
 		{
-			get
-			{
-				return imageWidth;
-			}
-			set
-			{
-				SetProperty(ref imageWidth, value);
-			}
+			get => imageWidth;
+			set => SetProperty(ref imageWidth, value);
 		}
 
 		internal int ImageHeight
 		{
-			get
-			{
-				return imageHeight;
-			}
-			set
-			{
-				SetProperty(ref imageHeight, value);
-			}
+			get => imageHeight;
+			set => SetProperty(ref imageHeight, value);
 		}
 
 		internal Bitmap Image
 		{
-			get
-			{
-				return image;
-			}
-			set
-			{
-				SetProperty(ref image, value);
-			}
+			get => image;
+			set => SetProperty(ref image, value);
 		}
 
 		internal Acceleration()
@@ -410,6 +308,24 @@ namespace TrainEditor2.Models.Trains
 		{
 			NowVelocity = 0.01 * Math.Round(100.0 * XtoVelocity(position.X));
 			NowAcceleration = 0.01 * Math.Round(100.0 * YtoAcceleration(position.Y));
+		}
+
+		internal void WriteXML(string fileName, XElement carNode)
+		{
+			XElement accelerationElement = new XElement("AccelerationCurves");
+			for (int i = 0; i < Entries.Count; i++)
+			{
+				XElement curveElement = new XElement("openBVE",
+					new XElement("StageZeroAcceleration", Entries[i].A0),
+					new XElement("StageOneAcceleration", Entries[i].A1),
+					new XElement("StageOneSpeed", Entries[i].V1),
+					new XElement("StageTwoSpeed", Entries[i].V2),
+					new XElement("StageTwoExponent", Entries[i].E));
+				accelerationElement.Add(curveElement);
+			}
+			carNode.Add(accelerationElement);
+
+
 		}
 	}
 }

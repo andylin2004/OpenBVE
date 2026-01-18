@@ -6,9 +6,16 @@
 // ╚═════════════════════════════════════════════════════════════╝
 
 using LibRender2.Cameras;
+using LibRender2.Menu;
+using LibRender2.Overlays;
+using LibRender2.Screens;
+using LibRender2.Viewports;
 using OpenBveApi;
+using OpenBveApi.Colors;
 using OpenBveApi.FileSystem;
+using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
+using OpenBveApi.Objects;
 using OpenBveApi.Routes;
 using OpenTK;
 using OpenTK.Graphics;
@@ -16,17 +23,12 @@ using OpenTK.Graphics.OpenGL;
 using OpenTK.Input;
 using RouteManager2;
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Globalization;
 using System.Linq;
 using System.Runtime;
 using System.Text;
 using System.Windows.Forms;
-using LibRender2.Overlays;
-using OpenBveApi.Colors;
-using OpenBveApi.Hosts;
-using OpenBveApi.Objects;
+using Buffer = System.Buffer;
 using ButtonState = OpenTK.Input.ButtonState;
 
 namespace RouteViewer
@@ -47,9 +49,6 @@ namespace RouteViewer
 		private static bool ControlPressed = false;
 		private static bool AltPressed = false;
 
-		internal static GameWindow currentGameWindow;
-		internal static GraphicsMode currentGraphicsMode;
-
 		// mouse
 		private static int MouseButton;
 
@@ -66,7 +65,10 @@ namespace RouteViewer
 
 		internal static formRailPaths pathForm;
 
-			// main
+		[System.Runtime.InteropServices.DllImport("user32.dll")]
+		private static extern bool SetProcessDPIAware();
+
+		// main
 		[STAThread]
 		internal static void Main(string[] args)
 		{
@@ -76,16 +78,30 @@ namespace RouteViewer
 			FileSystem.CreateFileSystem();
 			Sounds = new Sounds(CurrentHost);
 			Options.LoadOptions();
+			// n.b. Init the toolkit before the renderer
+			var options = new ToolkitOptions
+			{
+				Backend = PlatformBackend.PreferX11,
+			};
+
+			if (CurrentHost.Platform == HostPlatform.MicrosoftWindows)
+			{
+				// We're managing our own DPI
+				options.EnableHighResolution = false;
+				SetProcessDPIAware();
+			}
+
+			Toolkit.Init(options);
+
 			Renderer = new NewRenderer(CurrentHost, Interface.CurrentOptions, FileSystem);
 			CurrentRoute = new CurrentRoute(CurrentHost, Renderer);
 			TrainManager = new TrainManager(CurrentHost, Renderer, Interface.CurrentOptions, FileSystem);
-			string error;
-			if (!CurrentHost.LoadPlugins(FileSystem, Interface.CurrentOptions, out error, TrainManager, Renderer))
+			if (!CurrentHost.LoadPlugins(FileSystem, Interface.CurrentOptions, out string error, TrainManager, Renderer))
 			{
 				MessageBox.Show(error, @"OpenBVE", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				return;
 			}
-			
+			GameMenu.Instance = new GameMenu();
 			// command line arguments
 			string objectsToLoad = string.Empty;
 			if (args.Length != 0)
@@ -150,16 +166,18 @@ namespace RouteViewer
 				}
 
 			}
+			if (CurrentHost.Platform == HostPlatform.MicrosoftWindows)
+			{
+				// Tell Windows that the main game is managing it's own DPI
+				SetProcessDPIAware();
+			}
 
-			var options = new ToolkitOptions();
-			options.Backend = PlatformBackend.PreferX11;
-			Toolkit.Init(options);
 			string folder = Program.FileSystem.GetDataFolder("Languages");
 			Translations.LoadLanguageFiles(folder);
 			Interface.CurrentOptions.ObjectOptimizationBasicThreshold = 1000;
 			Interface.CurrentOptions.ObjectOptimizationFullThreshold = 250;
 			// application
-			currentGraphicsMode = new GraphicsMode(new ColorFormat(8, 8, 8, 8), 24, 8, Interface.CurrentOptions.AntiAliasingLevel);
+			Renderer.GraphicsMode = new GraphicsMode(new ColorFormat(8, 8, 8, 8), 24, 8, Interface.CurrentOptions.AntiAliasingLevel);
 			if (Renderer.Screen.Width == 0 || Renderer.Screen.Height == 0)
 			{
 				//Duff values saved, so reset to something sensible else we crash
@@ -167,29 +185,29 @@ namespace RouteViewer
 				Renderer.Screen.Height = 768;
 			}
 			Renderer.CameraTrackFollower = new TrackFollower(Program.CurrentHost);
-			currentGameWindow = new RouteViewer(Renderer.Screen.Width, Renderer.Screen.Height, currentGraphicsMode, "Route Viewer", GameWindowFlags.Default);
-			currentGameWindow.Visible = true;
-			currentGameWindow.TargetUpdateFrequency = 0;
-			currentGameWindow.TargetRenderFrequency = 0;
-			currentGameWindow.Title = "Route Viewer";
+			Renderer.GameWindow = new RouteViewer(Renderer.Screen.Width, Renderer.Screen.Height, Renderer.GraphicsMode, "Route Viewer", GameWindowFlags.Default);
+			Renderer.GameWindow.Visible = true;
+			Renderer.GameWindow.TargetUpdateFrequency = 0;
+			Renderer.GameWindow.TargetRenderFrequency = 0;
+			Renderer.GameWindow.Title = "Route Viewer";
 			processCommandLineArgs = true;
-			currentGameWindow.Run();
+			Renderer.GameWindow.Run();
 			//Unload
 			Sounds.DeInitialize();
 		}
 		
 		// load route
-		internal static bool LoadRoute(Bitmap bitmap = null) {
+		internal static bool LoadRoute(byte[] textureBytes = null) {
 			if (string.IsNullOrEmpty(CurrentRouteFile))
 			{
 				return false;
 			}
-			Renderer.UpdateViewport();
+			Renderer.UpdateViewport(ViewportChangeMode.NoChange);
 			bool result;
 			try
 			{
 				Encoding encoding = TextEncoding.GetSystemEncodingFromFile(CurrentRouteFile);
-				Loading.Load(CurrentRouteFile, encoding, bitmap);
+				Loading.Load(CurrentRouteFile, encoding, textureBytes);
 				result = true;
 			} catch (Exception ex) {
 				MessageBox.Show(ex.Message, Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
@@ -232,6 +250,8 @@ namespace RouteViewer
 				}
 				Renderer.trackColors[key].Render();
 			}
+
+			Renderer.CurrentInterface = InterfaceType.Normal;
 			return result;
 		}
 
@@ -276,7 +296,7 @@ namespace RouteViewer
 			{
 				Program.CurrentlyLoading = true;
 				Renderer.RenderScene(0.0);
-				Program.currentGameWindow.SwapBuffers();
+				Program.Renderer.GameWindow.SwapBuffers();
 				CameraAlignment a = Renderer.Camera.Alignment;
 				if (Program.LoadRoute())
 				{
@@ -292,28 +312,64 @@ namespace RouteViewer
 			}
 		}
 
+		internal static void MouseWheelEvent(object sender, MouseWheelEventArgs e)
+		{
+			switch (Program.Renderer.CurrentInterface)
+			{
+				case InterfaceType.Menu:
+				case InterfaceType.GLMainMenu:
+					Game.Menu.ProcessMouseScroll(e.Delta);
+					break;
+			}
+		}
+
+		internal static void MouseMoveEvent(object sender, MouseMoveEventArgs e)
+		{
+			switch (Program.Renderer.CurrentInterface)
+			{
+				case InterfaceType.Menu:
+				case InterfaceType.GLMainMenu:
+					Game.Menu.ProcessMouseMove(e.X, e.Y);
+					break;
+			}
+		}
+
 		internal static void MouseEvent(object sender, MouseButtonEventArgs e)
 		{
-			if (e.Button == OpenTK.Input.MouseButton.Left)
+			switch (Renderer.CurrentInterface)
 			{
-				MouseButton = e.Mouse.LeftButton == ButtonState.Pressed ? 1 : 0;
+				case InterfaceType.Menu:
+				case InterfaceType.GLMainMenu:
+					if (e.IsPressed)
+					{
+						// viewer hooks up and down to same event
+						Game.Menu.ProcessMouseDown(e.X, e.Y);
+					}
+					break;
+				default:
+					if (e.Button == OpenTK.Input.MouseButton.Left)
+					{
+						MouseButton = e.Mouse.LeftButton == ButtonState.Pressed ? 1 : 0;
+					}
+					if (e.Button == OpenTK.Input.MouseButton.Right)
+					{
+						MouseButton = e.Mouse.RightButton == ButtonState.Pressed ? 2 : 0;
+					}
+					if (e.Button == OpenTK.Input.MouseButton.Middle)
+					{
+						MouseButton = e.Mouse.RightButton == ButtonState.Pressed ? 3 : 0;
+					}
+					previousMouseState = Mouse.GetState();
+					if (MouseButton == 0)
+					{
+						Renderer.Camera.AlignmentDirection.Yaw = 0.0;
+						Renderer.Camera.AlignmentDirection.Pitch = 0.0;
+						Renderer.Camera.AlignmentDirection.Position.X = 0.0;
+						Renderer.Camera.AlignmentDirection.Position.Y = 0.0;
+					}
+					break;
 			}
-			if (e.Button == OpenTK.Input.MouseButton.Right)
-			{
-				MouseButton = e.Mouse.RightButton == ButtonState.Pressed ? 2 : 0;
-			}
-			if (e.Button == OpenTK.Input.MouseButton.Middle)
-			{
-				MouseButton = e.Mouse.RightButton == ButtonState.Pressed ? 3 : 0;
-			}
-			previousMouseState = Mouse.GetState();
-			if (MouseButton == 0)
-			{
-				Renderer.Camera.AlignmentDirection.Yaw = 0.0;
-				Renderer.Camera.AlignmentDirection.Pitch = 0.0;
-				Renderer.Camera.AlignmentDirection.Position.X = 0.0;
-				Renderer.Camera.AlignmentDirection.Position.Y = 0.0;
-			}
+			
 		}
 
 		internal static MouseState currentMouseState;
@@ -321,10 +377,8 @@ namespace RouteViewer
 
 		internal static void MouseMovement()
 		{
-			if (MouseButton == 0)
-			{
-				return;
-			}
+			if (MouseButton == 0 || Program.Renderer.CurrentInterface != InterfaceType.Normal) return;
+
 			currentMouseState = Mouse.GetState();
 			if (currentMouseState != previousMouseState)
 			{
@@ -352,14 +406,20 @@ namespace RouteViewer
 			Application.DoEvents();
 			CurrentlyLoading = true;
 			CurrentRouteFile = e.FileName;
-			LoadRoute();
-			ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
+			lock (Renderer.VisibilityUpdateLock)
+			{
+				UpdateCaption();
+				LoadRoute();
+				ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
+			}
+
 			CurrentlyLoading = false;
 			Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
 			UpdateCaption();
+
 		}
 
-		internal static void keyDownEvent(object sender, KeyboardKeyEventArgs e)
+		internal static void KeyDownEvent(object sender, KeyboardKeyEventArgs e)
 		{
 			double speedModified = (ShiftPressed ? 2.0 : 1.0) * (ControlPressed ? 4.0 : 1.0) * (AltPressed ? 8.0 : 1.0);
 			switch (e.Key)
@@ -381,64 +441,94 @@ namespace RouteViewer
 					{
 						return;
 					}
+
+					if (JumpToPositionEnabled)
+					{
+						JumpToPositionEnabled = false;
+						JumpToPositionValue = string.Empty;
+					}
+					byte[] textureBytes = {};
 					if (CurrentRouteFile != null && CurrentlyLoading == false)
 					{
-						
-						Bitmap bitmap = null;
 						CurrentlyLoading = true;
-						Renderer.OptionInterface = false;
-						if (!Interface.CurrentOptions.LoadingBackground)
+						lock (Renderer.VisibilityUpdateLock)
 						{
-							Renderer.RenderScene(0.0);
-							currentGameWindow.SwapBuffers();
-							bitmap = new Bitmap(Renderer.Screen.Width, Renderer.Screen.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-							BitmapData bData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadWrite, bitmap.PixelFormat);
-							GL.ReadPixels(0, 0, Renderer.Screen.Width, Renderer.Screen.Height, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, bData.Scan0);
-							bitmap.UnlockBits(bData);
-							bitmap.RotateFlip(RotateFlipType.RotateNoneFlipY);
+							Renderer.OptionInterface = false;
+							UpdateCaption();
+							if (!Interface.CurrentOptions.LoadingBackground)
+							{
+								Renderer.RenderScene(0.0);
+								Renderer.GameWindow.SwapBuffers();
+								textureBytes = new byte[Renderer.Screen.Width * Renderer.Screen.Height * 4];
+								GL.ReadPixels(0, 0, Renderer.Screen.Width, Renderer.Screen.Height, PixelFormat.Rgba, PixelType.UnsignedByte, textureBytes);
+								// GL.ReadPixels is reversed for what it wants as a texture, so we've got to flip it
+								byte[] tmp = new byte[Renderer.Screen.Width * 4]; // temp row
+								int currentLine = 0;
+								while (currentLine < Renderer.Screen.Height / 2)
+								{
+									int start = currentLine * Renderer.Screen.Width * 4;
+									int flipStart = (Renderer.Screen.Height - currentLine - 1) * Renderer.Screen.Width * 4;
+									Buffer.BlockCopy(textureBytes, start, tmp, 0, Renderer.Screen.Width * 4);
+									Buffer.BlockCopy(textureBytes, flipStart, textureBytes, start, Renderer.Screen.Width * 4);
+									Buffer.BlockCopy(tmp, 0, textureBytes, flipStart, Renderer.Screen.Width * 4);
+									currentLine++;
+								}
+							}
+
+							Renderer.Reset();
+							CameraAlignment a = Renderer.Camera.Alignment;
+
+							if (LoadRoute(textureBytes))
+							{
+								Renderer.Camera.Alignment = a;
+								Program.Renderer.CameraTrackFollower.UpdateAbsolute(-1.0, true, false);
+								Program.Renderer.CameraTrackFollower.UpdateAbsolute(a.TrackPosition, true, false);
+								ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
+							}
+							else
+							{
+								Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
+								Renderer.UpdateViewport(ViewportChangeMode.NoChange);
+								World.UpdateAbsoluteCamera(0.0);
+								Program.Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
+							}
 						}
-						Renderer.Reset();
-						CameraAlignment a = Renderer.Camera.Alignment;
-						if (LoadRoute(bitmap))
-						{
-							Renderer.Camera.Alignment = a;
-							Program.Renderer.CameraTrackFollower.UpdateAbsolute(-1.0, true, false);
-							Program.Renderer.CameraTrackFollower.UpdateAbsolute(a.TrackPosition, true, false);
-							//Renderer.UpdateVisibility(a.TrackPosition, true);
-							ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
-						}
-						else
-						{
-							Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
-							Renderer.UpdateViewport();
-							World.UpdateAbsoluteCamera(0.0);
-							Program.Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
-						}
+
 						CurrentlyLoading = false;
 						Renderer.OptionInterface = true;
-						if (bitmap != null)
-						{
-							bitmap.Dispose();
-						}
 						GCSettings.LargeObjectHeapCompactionMode =  GCLargeObjectHeapCompactionMode.CompactOnce; 
 						GC.Collect();
+						UpdateCaption();
 						
 					}
 					break;
 				case Key.F7:
+					if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+					{
+						return;
+					}
+					
 					if (CurrentlyLoading)
 					{
 						break;
 					}
+
+					if (JumpToPositionEnabled)
+					{
+						JumpToPositionEnabled = false;
+						JumpToPositionValue = string.Empty;
+					}
+
+					string previousRoute = CurrentRouteFile;
 					OpenFileDialog Dialog = new OpenFileDialog();
 					Dialog.CheckFileExists = true;
-					Dialog.Filter = @"All Supported Routes|*.csv;*.rw;*.dat|CSV/RW files|*.csv;*.rw|Mechanik Routes|*.dat|All files|*";
+					Dialog.Filter = @"All Supported Routes|*.csv;*.rw;*.dat;*.txt|CSV/RW files|*.csv;*.rw|Mechanik Routes|*.dat|BVE5 Routes|*.txt|All files|*";
 					if (Dialog.ShowDialog() == DialogResult.OK)
 					{
-						
 						Application.DoEvents();
 						CurrentlyLoading = true;
 						CurrentRouteFile = Dialog.FileName;
+						UpdateCaption();
 						bool canLoad = false;
 						for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
 						{
@@ -448,44 +538,49 @@ namespace RouteViewer
 								break;
 							}
 						}
-						if (canLoad && LoadRoute())
-						{
-							ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
-							Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
-							Renderer.UpdateViewport();
-							World.UpdateAbsoluteCamera(0.0);
-							Program.Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
-						}
-						else
-						{
-							bool isObject = false;
-							for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
-							{
-								if (Program.CurrentHost.Plugins[i].Object != null && Program.CurrentHost.Plugins[i].Object.CanLoadObject(CurrentRouteFile))
-								{
-									isObject = true;
-									break;
-								}
-							}
 
-							if (isObject)
+						lock (Renderer.VisibilityUpdateLock)
+						{
+							if (canLoad && LoadRoute())
 							{
-								// oops, that's actually an object- Let's show Object Viewer
-								string File = System.IO.Path.Combine(Application.StartupPath, "ObjectViewer.exe");
-								if (System.IO.File.Exists(File))
-								{
-									System.Diagnostics.Process.Start(File, CurrentRouteFile);
-								}
+								ObjectManager.UpdateAnimatedWorldObjects(0.0, true);
+								Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
+								Renderer.UpdateViewport(ViewportChangeMode.NoChange);
+								World.UpdateAbsoluteCamera(0.0);
+								Program.Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
 							}
 							else
 							{
-								MessageBox.Show("No plugins found capable of loading routefile: " +Environment.NewLine + CurrentRouteFile);
+								bool isObject = false;
+								for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
+								{
+									if (Program.CurrentHost.Plugins[i].Object != null && Program.CurrentHost.Plugins[i].Object.CanLoadObject(CurrentRouteFile))
+									{
+										isObject = true;
+										break;
+									}
+								}
+
+								if (isObject)
+								{
+									// oops, that's actually an object- Let's show Object Viewer
+									string File = System.IO.Path.Combine(Application.StartupPath, "ObjectViewer.exe");
+									if (System.IO.File.Exists(File))
+									{
+										System.Diagnostics.Process.Start(File, CurrentRouteFile);
+									}
+								}
+								else
+								{
+									MessageBox.Show("No plugins found capable of loading routefile: " + Environment.NewLine + CurrentRouteFile);
+								}
+
+								CurrentRouteFile = previousRoute;
 							}
-							
+
 							Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
-							Renderer.UpdateViewport();
+							Renderer.UpdateViewport(ViewportChangeMode.NoChange);
 							World.UpdateAbsoluteCamera(0.0);
-							CurrentRouteFile = null;
 							Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
 						}
 						CurrentlyLoading = false;
@@ -503,12 +598,17 @@ namespace RouteViewer
 					Dialog.Dispose();
 					break;
 				case Key.F8:
+					if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+					{
+						return;
+					}
+
 					if (CurrentlyLoading)
 					{
 						//Don't allow the user to update the settings during loading, bad idea..
 						break;
 					}
-					if (formOptions.ShowOptions() == DialogResult.OK)
+					if (FormOptions.ShowOptions() == DialogResult.OK)
 					{
 						UpdateGraphicsSettings();
 					}
@@ -518,6 +618,13 @@ namespace RouteViewer
 					Renderer.Camera.AlignmentDirection.Position.Y = 0;
 					break;
 				case Key.F9:
+					if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+					{
+						Program.Renderer.CurrentInterface = InterfaceType.Menu;
+						Game.Menu.PushMenu(MenuType.ErrorList);
+						return;
+					}
+
 					if (Interface.LogMessages.Count != 0)
 					{
 						formMessages.ShowMessages();
@@ -559,10 +666,24 @@ namespace RouteViewer
 					Renderer.Camera.AlignmentDirection.Yaw = CameraProperties.ExteriorTopAngularSpeed * speedModified;
 					break;
 				case Key.Up:
-					Renderer.Camera.AlignmentDirection.Pitch = CameraProperties.ExteriorTopAngularSpeed * speedModified;
+					if (Renderer.CurrentInterface != InterfaceType.Normal)
+					{
+						Game.Menu.ProcessCommand(Translations.Command.MenuUp, 0);
+					}
+					else
+					{
+						Renderer.Camera.AlignmentDirection.Pitch = CameraProperties.ExteriorTopAngularSpeed * speedModified;
+					}
 					break;
 				case Key.Down:
-					Renderer.Camera.AlignmentDirection.Pitch = -CameraProperties.ExteriorTopAngularSpeed * speedModified;
+					if (Renderer.CurrentInterface != InterfaceType.Normal)
+					{
+						Game.Menu.ProcessCommand(Translations.Command.MenuDown, 0);
+					}
+					else
+					{
+						Renderer.Camera.AlignmentDirection.Pitch = -CameraProperties.ExteriorTopAngularSpeed * speedModified;
+					}
 					break;
 				case Key.KeypadDivide:
 					Renderer.Camera.AlignmentDirection.Roll = -CameraProperties.ExteriorTopAngularSpeed * speedModified;
@@ -577,10 +698,10 @@ namespace RouteViewer
 					Renderer.Camera.AlignmentDirection.Zoom = -CameraProperties.ZoomTopSpeed * speedModified;
 					break;
 				case Key.Keypad1:
-					Game.ApplyPointOfInterest(-1, true);
+					Program.CurrentRoute.ApplyPointOfInterest(TrackDirection.Reverse);
 					break;
 				case Key.Keypad7:
-					Game.ApplyPointOfInterest(1, true);
+					Program.CurrentRoute.ApplyPointOfInterest(TrackDirection.Forwards);
 					break;
 				case Key.PageUp:
 					JumpToStation(1);
@@ -590,7 +711,7 @@ namespace RouteViewer
 					break;
 				case Key.Keypad5:
 					Renderer.Camera.Reset(Program.CurrentRoute.Tracks[0].Direction == TrackDirection.Reverse);
-					Renderer.UpdateViewport();
+					Renderer.UpdateViewport(ViewportChangeMode.NoChange);
 					World.UpdateAbsoluteCamera(0.0);
 					Program.Renderer.UpdateViewingDistances(Program.CurrentRoute.CurrentBackground.BackgroundImageDistance);
 					break;
@@ -660,6 +781,11 @@ namespace RouteViewer
 					}
 					break;
 				case Key.Enter:
+					if (Renderer.CurrentInterface != InterfaceType.Normal)
+					{
+						Game.Menu.ProcessCommand(Translations.Command.MenuEnter, 0);
+						return;
+					}
 					if (JumpToPositionEnabled)
 					{
 						if (JumpToPositionValue.Length != 0)
@@ -679,8 +805,7 @@ namespace RouteViewer
 							{
 								direction = 0;
 							}
-							double value;
-							if (double.TryParse(JumpToPositionValue, NumberStyles.Float, CultureInfo.InvariantCulture,out value))
+							if (double.TryParse(JumpToPositionValue, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
 							{
 								if (value < CurrentRoute.Tracks[0].Elements[CurrentRoute.Tracks[0].Elements.Length - 1].StartingTrackPosition + 100 && value > MinimumJumpToPositionValue - 100)
 								{
@@ -701,12 +826,29 @@ namespace RouteViewer
 					JumpToPositionEnabled = false;
 					break;
 				case Key.Escape:
-					JumpToPositionEnabled = false;
+					if (JumpToPositionEnabled)
+					{
+						JumpToPositionEnabled = false;
+					}
+					else
+					{
+						if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+						{
+							Program.Renderer.GameWindow.TargetRenderFrequency = 0;
+							Program.Renderer.CurrentInterface = InterfaceType.Menu;
+							Game.Menu.PushMenu(MenuType.GameStart);
+						}
+					}
 					break;
 				case Key.R:
 					Renderer.SwitchOpenGLVersion();
 					break;
 				case Key.P:
+					if (CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+					{
+						// no WinForms support
+						return;
+					}
 					if (CurrentRouteFile != null && CurrentlyLoading == false)
 					{
 						if (pathForm == null || pathForm.IsDisposed)
@@ -735,7 +877,7 @@ namespace RouteViewer
 			}
 		}
 
-		internal static void keyUpEvent(object sender, KeyboardKeyEventArgs e)
+		internal static void KeyUpEvent(object sender, KeyboardKeyEventArgs e)
 		{
 			switch (e.Key)
 			{
@@ -788,11 +930,12 @@ namespace RouteViewer
 
 		// update caption
 		internal static void UpdateCaption() {
-			if (CurrentRouteFile != null) {
-				currentGameWindow.Title = System.IO.Path.GetFileName(CurrentRouteFile) + " - " + Application.ProductName;
+			if (CurrentRouteFile != null)
+			{
+				Renderer.GameWindow.Title = Program.CurrentlyLoading ? @"Loading: " + System.IO.Path.GetFileName(CurrentRouteFile) + " - " + Application.ProductName : System.IO.Path.GetFileName(CurrentRouteFile) + " - " + Application.ProductName;
 			} else
 			{
-				currentGameWindow.Title = Application.ProductName;
+				Renderer.GameWindow.Title = Application.ProductName;
 			}
 		}
 	}

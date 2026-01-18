@@ -1,4 +1,4 @@
-﻿using OpenBveApi.Trains;
+using OpenBveApi.Trains;
 using TrainManager.Trains;
 
 namespace OpenBve
@@ -14,13 +14,17 @@ namespace OpenBve
 
 			internal BogusPretrainAI(TrainBase train)
 			{
-				this.TimeLastProcessed = 0.0;
-				this.CurrentInterval = 1.0;
-				this.Train = train;
+				TimeLastProcessed = 0.0;
+				CurrentInterval = 1.0;
+				Train = train;
 			}
 
-			public override void Trigger(double TimeElapsed)
+			public override void Trigger(double timeElapsed)
 			{
+				if (Train.Cars.Length == 0)
+				{
+					return;
+				}
 				if (Program.CurrentRoute.SecondsSinceMidnight - TimeLastProcessed >= CurrentInterval)
 				{
 					TimeLastProcessed = Program.CurrentRoute.SecondsSinceMidnight;

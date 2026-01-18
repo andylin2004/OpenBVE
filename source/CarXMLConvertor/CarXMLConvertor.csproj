@@ -36,10 +36,23 @@
     <Prefer32Bit>false</Prefer32Bit>
     <LangVersion>7.0</LangVersion>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GLMenu|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>..\..\bin_debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.0</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\OpenBveApi\OpenBveApi.csproj">
       <Project>{27134980-4415-4375-A564-40A9014DFA5F}</Project>
       <Name>OpenBveApi</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Plugins\Formats.OpenBve\Formats.OpenBve.csproj">
+      <Project>{7ed7b285-fae6-4b34-acc5-87399f27c8bc}</Project>
+      <Name>Formats.OpenBve</Name>
     </ProjectReference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -53,6 +66,7 @@
     <Compile Include="Convert.Panel2.cs" />
     <Compile Include="Convert.PanelAnimated.cs" />
     <Compile Include="Convert.TrainDat.cs" />
+    <Compile Include="Host.cs" />
     <Compile Include="mainForm.cs">
       <SubType>Form</SubType>
     </Compile>

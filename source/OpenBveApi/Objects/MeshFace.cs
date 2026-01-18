@@ -30,8 +30,9 @@ namespace OpenBveApi.Objects
 
 		/// <summary>Creates a new MeshFace using the specified vertex indicies and the default material</summary>
 		/// <param name="Vertices">The vertex indicies</param>
+		/// <param name="material">The material</param>
 		/// <param name="Type">The type of OpenGL face drawing to use</param>
-		public MeshFace(int[] Vertices, FaceFlags Type = FaceFlags.NotSet)
+		public MeshFace(int[] Vertices, ushort material, FaceFlags Type = FaceFlags.NotSet)
 		{
 			this.Vertices = new MeshFaceVertex[Vertices.Length];
 			for (int i = 0; i < Vertices.Length; i++)
@@ -39,7 +40,7 @@ namespace OpenBveApi.Objects
 				this.Vertices[i] = new MeshFaceVertex(Vertices[i]);
 			}
 
-			Material = 0;
+			Material = material;
 			Flags = 0;
 			IboStartIndex = 0;
 			NormalsIboStartIndex = 0;
@@ -47,6 +48,13 @@ namespace OpenBveApi.Objects
 			{
 				Flags |= Type;
 			}
+		}
+
+		/// <summary>Creates a new MeshFace using the specified vertex indicies and the default material</summary>
+		/// <param name="Vertices">The vertex indicies</param>
+		/// <param name="Type">The type of OpenGL face drawing to use</param>
+		public MeshFace(int[] Vertices, FaceFlags Type = FaceFlags.NotSet) : this(Vertices, 0, Type)
+		{
 		}
 
 		/// <summary>Creates a new MeshFace using the specified vertex indices and material</summary>
@@ -63,7 +71,6 @@ namespace OpenBveApi.Objects
 		}
 
 		/// <summary>Creates a new MeshFace containing <param name="numVertices">N</param> vertices</summary>
-		/// <param name="numVertices">The number of vertices in the face</param>
 		public MeshFace(int numVertices)
 		{
 			Vertices = new MeshFaceVertex[numVertices];
@@ -73,6 +80,19 @@ namespace OpenBveApi.Objects
 			NormalsIboStartIndex = 0;
 		}
 
+		/// <summary>Appends an array of verticies to the MeshFace</summary>
+		/// <param name="additionalVerticies">The verticies to append</param>
+		/// <remarks>This does not check the MeshFace for duplicates</remarks>
+		public void AppendVerticies(int[] additionalVerticies)
+		{
+			int oldLength = Vertices.Length;
+			Array.Resize(ref Vertices, oldLength + additionalVerticies.Length);
+			for (int i = 0; i < additionalVerticies.Length; i++)
+			{
+				Vertices[oldLength + i] = new MeshFaceVertex(additionalVerticies[i]);
+			}
+		}
+
 		/// <summary>Flips the MeshFace</summary>
 		public void Flip()
 		{
@@ -80,9 +100,7 @@ namespace OpenBveApi.Objects
 			{
 				for (int i = 0; i < Vertices.Length; i += 2)
 				{
-					MeshFaceVertex x = Vertices[i];
-					Vertices[i] = Vertices[i + 1];
-					Vertices[i + 1] = x;
+					(Vertices[i], Vertices[i + 1]) = (Vertices[i + 1], Vertices[i]);
 				}
 			}
 			else
@@ -90,9 +108,7 @@ namespace OpenBveApi.Objects
 				int n = Vertices.Length;
 				for (int i = 0; i < (n >> 1); i++)
 				{
-					MeshFaceVertex x = Vertices[i];
-					Vertices[i] = Vertices[n - i - 1];
-					Vertices[n - i - 1] = x;
+					(Vertices[i], Vertices[n - i - 1]) = (Vertices[n - i - 1], Vertices[i]);
 				}
 			}
 		}

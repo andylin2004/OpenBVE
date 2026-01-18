@@ -1,5 +1,6 @@
-﻿#pragma warning disable 0659, 0661
+#pragma warning disable 0659, 0661
 using OpenBveApi.Colors;
+// ReSharper disable MergeCastWithTypeCheck
 
 namespace OpenBveApi.Textures
 {
@@ -30,6 +31,21 @@ namespace OpenBveApi.Textures
 			NumberOfFrames = bytes.Length;
 		}
 
+		/// <summary>Creates a byte array origin</summary>
+		/// <param name="width">The width of the underlying texture</param>
+		/// <param name="height">The height of the underlying texture</param>
+		/// <param name="bytes">The bytes</param>
+		public ByteArrayOrigin(int width, int height, byte[] bytes)
+		{
+			Width = width;
+			Height = height;
+			TextureBytes = new[]
+			{
+				bytes
+			};
+			NumberOfFrames = bytes.Length;
+		}
+
 		/// <summary>Gets the texture from this origin.</summary>
 		/// <param name="texture">Receives the texture.</param>
 		/// <returns>Whether the texture could be obtained successfully.</returns>
@@ -37,10 +53,10 @@ namespace OpenBveApi.Textures
 		{
 			if (TextureBytes.Length == 1)
 			{
-				texture = new Texture(Width, Height, 32, TextureBytes[0], new Color24[0]);
+				texture = new Texture(Width, Height, PixelFormat.RGBAlpha, TextureBytes[0], new Color24[0]);
 				return true;
 			}
-			texture = new Texture(Width, Height, 32, TextureBytes, FrameInterval);
+			texture = new Texture(Width, Height, PixelFormat.RGBAlpha, TextureBytes, FrameInterval);
 			return true;
 		}
 
@@ -50,9 +66,9 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether the two origins are equal.</returns>
 		public static bool operator ==(ByteArrayOrigin a, ByteArrayOrigin b)
 		{
-			if (object.ReferenceEquals(a, b)) return true;
-			if (object.ReferenceEquals(a, null)) return false;
-			if (object.ReferenceEquals(b, null)) return false;
+			if (ReferenceEquals(a, b)) return true;
+			if (a is null) return false;
+			if (b is null) return false;
 			if (a.FrameInterval != b.FrameInterval) return false;
 			if (a.NumberOfFrames != b.NumberOfFrames) return false;
 			if (a.Width != b.Width) return false;
@@ -66,9 +82,9 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether the two origins are unequal.</returns>
 		public static bool operator !=(ByteArrayOrigin a, ByteArrayOrigin b)
 		{
-			if (object.ReferenceEquals(a, b)) return false;
-			if (object.ReferenceEquals(a, null)) return true;
-			if (object.ReferenceEquals(b, null)) return true;
+			if (ReferenceEquals(a, b)) return false;
+			if (a is null) return true;
+			if (b is null) return true;
 			if (a.FrameInterval == b.FrameInterval) return false;
 			if (a.NumberOfFrames == b.NumberOfFrames) return false;
 			if (a.Width == b.Width) return false;
@@ -81,9 +97,8 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether this instance is equal to the specified object.</returns>
 		public override bool Equals(object obj)
 		{
-			if (object.ReferenceEquals(this, obj)) return true;
-			if (object.ReferenceEquals(this, null)) return false;
-			if (object.ReferenceEquals(obj, null)) return false;
+			if (ReferenceEquals(this, obj)) return true;
+			if (obj is null) return false;
 			if (!(obj is ByteArrayOrigin)) return false;
 			if (FrameInterval == ((ByteArrayOrigin)obj).FrameInterval) return false;
 			if (NumberOfFrames == ((ByteArrayOrigin)obj).NumberOfFrames) return false;

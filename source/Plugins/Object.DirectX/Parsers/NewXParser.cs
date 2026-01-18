@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Object.DirectX;
 using OpenBve.Formats.DirectX;
 using OpenBveApi.Colors;
 using OpenBveApi.Interface;
@@ -37,12 +38,12 @@ namespace Plugin
 {
 	class NewXParser
 	{
-		internal static StaticObject ReadObject(string FileName, Encoding Encoding)
+		internal static StaticObject ReadObject(string fileName, Encoding encoding)
 		{
 			rootMatrix = Matrix4D.NoTransformation;
-			currentFolder = Path.GetDirectoryName(FileName);
-			currentFile = FileName;
-			byte[] Data = File.ReadAllBytes(FileName);
+			currentFolder = Path.GetDirectoryName(fileName);
+			currentFile = fileName;
+			byte[] Data = File.ReadAllBytes(fileName);
 			
 			if (Data.Length < 16 || Data[0] != 120 | Data[1] != 111 | Data[2] != 102 | Data[3] != 32)
 			{
@@ -51,19 +52,19 @@ namespace Plugin
 				string relativePath = Encoding.ASCII.GetString(Data);
 				if (!OpenBveApi.Path.ContainsInvalidChars(relativePath))
 				{
-					return ReadObject(OpenBveApi.Path.CombineFile(Path.GetDirectoryName(FileName), relativePath), Encoding);
+					return ReadObject(OpenBveApi.Path.CombineFile(Path.GetDirectoryName(fileName), relativePath), encoding);
 				}
 			}
 
 			// floating-point format
-			int FloatingPointSize;
+			int floatingPointSize;
 			if (Data[12] == 48 & Data[13] == 48 & Data[14] == 51 & Data[15] == 50)
 			{
-				FloatingPointSize = 32;
+				floatingPointSize = 32;
 			}
 			else if (Data[12] == 48 & Data[13] == 48 & Data[14] == 54 & Data[15] == 52)
 			{
-				FloatingPointSize = 64;
+				floatingPointSize = 64;
 			}
 			else
 			{
@@ -74,7 +75,7 @@ namespace Plugin
 			if (Data[8] == 116 & Data[9] == 120 & Data[10] == 116 & Data[11] == 32)
 			{
 				// textual flavor
-				string[] Lines = File.ReadAllLines(FileName, Encoding);
+				string[] Lines = File.ReadAllLines(fileName, encoding);
 				// strip away comments
 				bool Quote = false;
 				for (int i = 0; i < Lines.Length; i++) {
@@ -88,16 +89,16 @@ namespace Plugin
 						}
 					}
 					//Convert runs of whitespace to single
-					var list = Lines[i].Split(new char[] { }).Where(s => !string.IsNullOrWhiteSpace(s));
+					var list = Lines[i].Split().Where(s => !string.IsNullOrWhiteSpace(s));
 					Lines[i] = string.Join(" ", list);
 				}
 				StringBuilder Builder = new StringBuilder();
 				for (int i = 0; i < Lines.Length; i++) {
 					Builder.Append(Lines[i]);
-					Builder.Append(" ");
+					Builder.Append(' ');
 				}
 				string Content = Builder.ToString();
-				Content = Content.Substring(17).Trim(new char[] { });
+				Content = Content.Substring(17).Trim();
 				return LoadTextualX(Content);
 			}
 
@@ -107,14 +108,14 @@ namespace Plugin
 				//Uncompressed binary, so skip the header
 				newData = new byte[Data.Length - 16];
 				Array.Copy(Data, 16, newData, 0, Data.Length - 16);
-				return LoadBinaryX(newData, FloatingPointSize);
+				return LoadBinaryX(newData, floatingPointSize);
 			}
 
 			if (Data[8] == 116 & Data[9] == 122 & Data[10] == 105 & Data[11] == 112)
 			{
 				// compressed textual flavor
 				newData = MSZip.Decompress(Data);
-				string Text = Encoding.GetString(newData);
+				string Text = encoding.GetString(newData);
 				return LoadTextualX(Text);
 			}
 
@@ -122,20 +123,20 @@ namespace Plugin
 			{
 				//Compressed binary
 				//16 bytes of header, then 8 bytes of padding, followed by the actual compressed data
-				byte[] Uncompressed = MSZip.Decompress(Data);
-				return LoadBinaryX(Uncompressed, FloatingPointSize);
+				byte[] uncompressedData = MSZip.Decompress(Data);
+				return LoadBinaryX(uncompressedData, floatingPointSize);
 			}
 
 			// unsupported flavor
-			Plugin.currentHost.AddMessage(MessageType.Error, false, "Unsupported X object file encountered in " + FileName);
+			Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Unsupported X object file encountered in " + fileName);
 			return null;
 		}
 		
 		private static StaticObject LoadTextualX(string Text)
 		{
-			Text = Text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim(new char[] { });
-			StaticObject obj = new StaticObject(Plugin.currentHost);
-			MeshBuilder builder = new MeshBuilder(Plugin.currentHost);
+			Text = Text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\t", " ").Trim();
+			StaticObject obj = new StaticObject(Plugin.CurrentHost);
+			MeshBuilder builder = new MeshBuilder(Plugin.CurrentHost);
 			Material material = new Material();
 			Block block = new TextualBlock(Text);
 			while (block.Position() < block.Length() - 5)
@@ -143,7 +144,7 @@ namespace Plugin
 				Block subBlock = block.ReadSubBlock();
 				ParseSubBlock(subBlock, ref obj, ref builder, ref material);
 			}
-			builder.Apply(ref obj);
+			builder.Apply(ref obj, false, false);
 			obj.Mesh.CreateNormals();
 			if (rootMatrix != Matrix4D.NoTransformation)
 			{
@@ -161,6 +162,7 @@ namespace Plugin
 		private static Matrix4D rootMatrix;
 		private static int currentLevel = 0;
 		private static int transformStart = 0;
+		private static VertexElement[] vertexElements;
 
 		private static readonly Dictionary<string, Material> rootMaterials = new Dictionary<string, Material>();
 
@@ -222,7 +224,7 @@ namespace Plugin
 					currentLevel++;
 					if (builder.Vertices.Count != 0)
 					{
-						builder.Apply(ref obj);
+						builder.Apply(ref obj, false, false);
 						if (rootMatrix != Matrix4D.NoTransformation)
 						{
 							for (int i = transformStart; i < obj.Mesh.Vertices.Length; i++)
@@ -232,7 +234,7 @@ namespace Plugin
 						}
 						transformStart = obj.Mesh.Vertices.Length;
 						rootMatrix = Matrix4D.NoTransformation;
-						builder = new MeshBuilder(Plugin.currentHost);
+						builder = new MeshBuilder(Plugin.CurrentHost);
 					}
 					while (block.Position() < block.Length() - 5)
 					{
@@ -247,6 +249,10 @@ namespace Plugin
 						ParseSubBlock(subBlock, ref obj, ref builder, ref material);
 					}
 					currentLevel--;
+					if (builder.Vertices.Count == 0)
+					{
+						builder.TransformMatrix = Matrix4D.NoTransformation;
+					}
 					break;
 				case TemplateID.FrameTransformMatrix:
 					double[] matrixValues = new double[16];
@@ -257,7 +263,7 @@ namespace Plugin
 
 					if (currentLevel > 1)
 					{
-						builder.TransformMatrix = new Matrix4D(matrixValues);
+						builder.TransformMatrix = new Matrix4D(matrixValues) * builder.TransformMatrix;
 					}
 					else
 					{
@@ -266,22 +272,23 @@ namespace Plugin
 					}
 					break;
 				case TemplateID.Mesh:
+					currentLevel++;
 					if (builder.Vertices.Count != 0)
 					{
-						builder.Apply(ref obj);
-						builder = new MeshBuilder(Plugin.currentHost);
+						builder.Apply(ref obj, false, false);
+						builder = new MeshBuilder(Plugin.CurrentHost);
 					}
-					int nVerts = block.ReadUInt();
+					int nVerts = block.ReadInt();
 					if (nVerts == 0)
 					{
 						//Some null objects contain an empty mesh
-						Plugin.currentHost.AddMessage(MessageType.Warning, false, "nVertices should be greater than zero in Mesh " + block.Label);
+						Plugin.CurrentHost.AddMessage(MessageType.Warning, false, "nVertices should be greater than zero in Mesh " + block.Label);
 					}
 					for (int i = 0; i < nVerts; i++)
 					{
 						builder.Vertices.Add(new Vertex(new Vector3(block.ReadSingle(), block.ReadSingle(), block.ReadSingle())));
 					}
-					int nFaces = block.ReadUInt();
+					int nFaces = block.ReadInt();
 					if (nFaces == 0)
 					{
 						try
@@ -312,17 +319,17 @@ namespace Plugin
 					}
 					for (int i = 0; i < nFaces; i++)
 					{
-						int fVerts = block.ReadUInt();
+						int fVerts = block.ReadInt();
 						if (fVerts == 0)
 						{
 							// Assuming here that a face must contain vertices
-							Plugin.currentHost.AddMessage(MessageType.Warning, false, "fVerts was declared as zero");
+							Plugin.CurrentHost.AddMessage(MessageType.Warning, false, "fVerts was declared as zero");
 							break;
 						}
 						MeshFace f = new MeshFace(fVerts);
 						for (int j = 0; j < fVerts; j++)
 						{
-							f.Vertices[j].Index = block.ReadUInt();
+							f.Vertices[j].Index = block.ReadInt();
 						}
 						builder.Faces.Add(f);
 					}
@@ -332,14 +339,16 @@ namespace Plugin
 						subBlock = block.ReadSubBlock();
 						ParseSubBlock(subBlock, ref obj, ref builder, ref material);
 					}
+
+					currentLevel--;
 					break;
 				case TemplateID.MeshMaterialList:
-					int nMaterials = block.ReadUInt();
-					int nFaceIndices = block.ReadUInt();
+					int nMaterials = block.ReadInt();
+					int nFaceIndices = block.ReadInt();
 					if (nFaceIndices == 1 && builder.Faces.Count > 1)
 					{
 						//Single material for all faces
-						int globalMaterial = block.ReadUInt();
+						int globalMaterial = block.ReadInt();
 						for (int i = 0; i < builder.Faces.Count; i++)
 						{
 							MeshFace f = builder.Faces[i];
@@ -351,7 +360,7 @@ namespace Plugin
 					{
 						for (int i = 0; i < nFaceIndices; i++)
 						{
-							int fMaterial = block.ReadUInt();
+							int fMaterial = block.ReadInt();
 							MeshFace f = builder.Faces[i];
 							f.Material = (ushort) (fMaterial + 1);
 							builder.Faces[i] = f;
@@ -361,52 +370,92 @@ namespace Plugin
 					{
 						throw new Exception("nFaceIndices must match the number of faces in the mesh");
 					}
-					for (int i = 0; i < nMaterials; i++)
+
+					if (block is BinaryBlock && block.ReadString() == "{")
 					{
-						subBlock = block.ReadSubBlock(new[] { TemplateID.Material, TemplateID.TextureKey });
-						ParseSubBlock(subBlock, ref obj, ref builder, ref material);
+						// reference based materials
+						Array.Resize(ref builder.Materials, nMaterials + 1);
+						for (int i = 0; i < nMaterials; i++)
+						{
+							// YUCKY: skip bracket strings
+							string materialName = block.ReadString();
+							if (rootMaterials.ContainsKey(materialName))
+							{
+								builder.Materials[i + 1] = rootMaterials[materialName];
+							}
+							else
+							{
+								Plugin.CurrentHost.AddMessage(MessageType.Information, false, $"Material { materialName } was not found in DirectX binary file { currentFile }");
+								builder.Materials[i + 1] = new Material();
+							}
+							
+							block.ReadString();
+							if (i < nMaterials - 1)
+							{
+								block.ReadString();
+							}
+							
+						}
 					}
+					else
+					{
+						for (int i = 0; i < nMaterials; i++)
+						{
+							try
+							{
+								subBlock = block.ReadSubBlock(new[] { TemplateID.Material, TemplateID.TextureKey });
+								ParseSubBlock(subBlock, ref obj, ref builder, ref material);
+							}
+							catch (Exception ex)
+							{
+								if (ex is EndOfStreamException)
+								{
+									Plugin.CurrentHost.AddMessage(MessageType.Information, false, $"{ nMaterials } materials expected, but { i } found in DirectX binary file { currentFile }");
+								}
+								break;
+							}
+						}
+					}
+					
 					break;
 				case TemplateID.Material:
-					int m = builder.Materials.Length;
-					Array.Resize(ref builder.Materials, m + 1);
-					builder.Materials[m] = new Material();
-					builder.Materials[m].Color = new Color32((byte)(255 * block.ReadSingle()), (byte)(255 * block.ReadSingle()), (byte)(255 * block.ReadSingle()),(byte)(255 * block.ReadSingle()));
+					Material newMaterial = new Material();
+					newMaterial.Color = new Color32(block.ReadColor128);
 					double mPower = block.ReadSingle(); //TODO: Unsure what this does...
-					Color24 mSpecular = new Color24((byte)block.ReadSingle(), (byte)block.ReadSingle(), (byte)block.ReadSingle());
-					builder.Materials[m].EmissiveColor = new Color24((byte)(255 *block.ReadSingle()), (byte)(255 * block.ReadSingle()), (byte)(255 * block.ReadSingle()));
-					builder.Materials[m].Flags |= MaterialFlags.Emissive; //TODO: Check exact behaviour
+					Color24 mSpecular = new Color24(block.ReadColor96);
+					newMaterial.EmissiveColor = new Color24(block.ReadColor96);
+					newMaterial.Flags |= MaterialFlags.Emissive; //TODO: Check exact behaviour
 					if (Plugin.EnabledHacks.BlackTransparency)
 					{
-						builder.Materials[m].TransparentColor = Color24.Black; //TODO: Check, also can we optimise which faces have the transparent color set?
-						builder.Materials[m].Flags |= MaterialFlags.TransparentColor;
+						newMaterial.TransparentColor = Color24.Black; //TODO: Check, also can we optimise which faces have the transparent color set?
+						newMaterial.Flags |= MaterialFlags.TransparentColor;
+					}
+					
+					if (block.Position() < block.Length() - 5)
+					{
+						subBlock = block.ReadSubBlock(TemplateID.TextureFilename);
+						ParseSubBlock(subBlock, ref obj, ref builder, ref newMaterial);
 					}
 					if (currentLevel == 0)
 					{
 						// Key based material definitions
 						if (!string.IsNullOrEmpty(block.Label))
 						{
-							if (rootMaterials.ContainsKey(block.Label))
-							{
-								rootMaterials[block.Label] = builder.Materials[m];
-							}
-							else
-							{
-								rootMaterials.Add(block.Label, builder.Materials[m]);	
-							}
+							rootMaterials[block.Label] = newMaterial;
 						}
 					}
-					if (block.Position() < block.Length() - 5)
+					else
 					{
-						subBlock = block.ReadSubBlock(TemplateID.TextureFilename);
-						ParseSubBlock(subBlock, ref obj, ref builder, ref builder.Materials[m]);
+						int m = builder.Materials.Length;
+						Array.Resize(ref builder.Materials, m + 1);
+						builder.Materials[m] = newMaterial;
 					}
 					break;
 				case TemplateID.TextureFilename:
 					string texturePath = block.ReadString();
 					if (string.IsNullOrEmpty(texturePath))
 					{
-						Plugin.currentHost.AddMessage(MessageType.Information, false, $"An empty texture was specified for material " + material.Key);
+						Plugin.CurrentHost.AddMessage(MessageType.Information, false, $"An empty texture was specified for material { material.Key }");
 						material.DaytimeTexture = null;
 						break;
 					}
@@ -424,57 +473,62 @@ namespace Plugin
 					}
 					catch (Exception e)
 					{
-						Plugin.currentHost.AddMessage(MessageType.Error, false, $"Texture file path {texturePath} in file {currentFile} has the problem: {e.Message}");
+						Plugin.CurrentHost.AddMessage(MessageType.Error, false, $"Texture file path { texturePath } in file { currentFile } has the problem: { e.Message }");
 						material.DaytimeTexture = null;
 					}
 
 					if (!File.Exists(material.DaytimeTexture) && material.DaytimeTexture != null)
 					{
-						Plugin.currentHost.AddMessage(MessageType.Error, true, "Texure " + material.DaytimeTexture + " was not found in file " + currentFile);
+						Plugin.CurrentHost.AddMessage(MessageType.Error, true, $"Texture { material.DaytimeTexture } was not found in file { currentFile }");
 						material.DaytimeTexture = null;
 					}
 					break;
 				case TemplateID.MeshTextureCoords:
-					int nCoords = block.ReadUInt();
+					int nCoords = block.ReadInt();
 					for (int i = 0; i < nCoords; i++)
 					{
 						builder.Vertices[i].TextureCoordinates = new Vector2(block.ReadSingle(), block.ReadSingle());
 					}
 					break;
 				case TemplateID.MeshNormals:
-					int nNormals = block.ReadUInt();
+					int nNormals = block.ReadInt();
 					Vector3[] normals = new Vector3[nNormals];
 					for (int i = 0; i < nNormals; i++)
 					{
 						normals[i] = new Vector3(block.ReadSingle(), block.ReadSingle(), block.ReadSingle());
 						normals[i].Normalize();
 					}
-					int nFaceNormals = block.ReadUInt();
+					int nFaceNormals = block.ReadInt();
 					if (nFaceNormals != builder.Faces.Count)
 					{
 						throw new Exception("nFaceNormals must match the number of faces in the mesh");
 					}
 					for (int i = 0; i < nFaceNormals; i++)
 					{
-						int nVertexNormals = block.ReadUInt();
+						int nVertexNormals = block.ReadInt();
 						if (nVertexNormals != builder.Faces[i].Vertices.Length)
 						{
 							throw new Exception("nVertexNormals must match the number of verticies in the face");
 						}
 						for (int j = 0; j < nVertexNormals; j++)
 						{
-							builder.Faces[i].Vertices[j].Normal = normals[block.ReadUInt()];
+							int normalIdx = block.ReadInt();
+							if (normalIdx < normals.Length)
+							{
+								// Check normal index is valid
+								builder.Faces[i].Vertices[j].Normal = normals[normalIdx];
+							}
 						}
 					}
 					break;
 				case TemplateID.MeshVertexColors:
-					int nVertexColors = block.ReadUInt();
+					int nVertexColors = block.ReadInt();
 					for (int i = 0; i < nVertexColors; i++)
 					{
-						int idx = block.ReadUInt();
+						int idx = block.ReadInt();
 						if (idx >= builder.Vertices.Count)
 						{
-							Plugin.currentHost.AddMessage(MessageType.Warning, false, "MeshVertexColors index " + idx +  " should be less than nVertices in Mesh " + block.Label);
+							Plugin.CurrentHost.AddMessage(MessageType.Warning, false, $"MeshVertexColors index { idx } should be less than nVertices in Mesh { block.Label }");
 							continue;
 						}
 						ColoredVertex c = builder.Vertices[idx] as ColoredVertex;
@@ -492,7 +546,7 @@ namespace Plugin
 					}
 					break;
 				case TemplateID.MeshFaceWraps:
-					int nMeshFaceWraps = block.ReadUInt();
+					int nMeshFaceWraps = block.ReadInt();
 					if (nMeshFaceWraps != builder.Faces.Count)
 					{
 						throw new Exception("nMeshFaceWraps must match the number of faces in the mesh");
@@ -516,23 +570,112 @@ namespace Plugin
 						builder.Materials[ml] = rootMaterials[block.Label];
 					}
 					break;
+				case TemplateID.DeclData:
+					int numTemplates = (int)block.ReadDword();
+					vertexElements = new VertexElement[numTemplates];
+					for (int i = 0; i < numTemplates; i++)
+					{
+						vertexElements[i] = new VertexElement(block.ReadDword(), block.ReadDword(), block.ReadDword(), block.ReadDword());
+					}
+
+					int currentElement = 0;
+					int currentVertex = 0;
+					unsafe
+					{
+						// unsafe to convert dwords back to floats (used in this context as no precision problem)
+						int numRemainingDwords = (int)block.ReadDword();
+						while (numRemainingDwords > 0)
+						{
+							switch (vertexElements[currentElement].Usage)
+							{
+								default:
+									throw new NotImplementedException(vertexElements[currentElement].Usage + " is not implemented by this decoder.");
+								case D3DDeclUsage.D3DDECLUSAGE_NORMAL:
+									uint x = block.ReadDword();
+									uint y = block.ReadDword();
+									uint z = block.ReadDword();
+									Vector3 normal = new Vector3(*(float*)&x, *(float*)&y, *(float*)&z);
+
+									for (int i = 0; i < builder.Faces.Count; i++)
+									{
+										for (int j = 0; j < builder.Faces[i].Vertices.Length; j++)
+										{
+											if (builder.Faces[i].Vertices[j].Index == currentVertex)
+											{
+												builder.Faces[i].Vertices[j].Normal = normal;
+											}
+										}
+									}
+									numRemainingDwords -= 3;
+									break;
+								case D3DDeclUsage.D3DDECLUSAGE_TEXCOORD:
+									x = block.ReadDword();
+									y = block.ReadDword();
+									Vector2 texCoords = new Vector2(*(float*)&x, *(float*)&y);
+									if (vertexElements[currentElement].UsageIndex == 0)
+									{
+										// as additional D3DDECLUSAGE_TEXCOORD may also be used to store other user shader data per MSDN
+										builder.Vertices[currentVertex].TextureCoordinates = texCoords;
+									}
+									numRemainingDwords -= 2;
+									break;
+								case D3DDeclUsage.D3DDECLUSAGE_COLOR:
+									uint usageIndex = block.ReadDword();
+									uint r = block.ReadDword();
+									uint g = block.ReadDword();
+									uint b = block.ReadDword();
+									uint a = block.ReadDword();
+									if (usageIndex == 0)
+									{
+										// diffuse color
+										ColoredVertex c = builder.Vertices[currentVertex] as ColoredVertex;
+										if (c != null)
+										{
+											c.Color = new Color128(*(float*)&r, *(float*)&g, *(float*)&b, *(float*)&a);
+										}
+										else
+										{
+											builder.Vertices[currentVertex] = new ColoredVertex((Vertex)builder.Vertices[currentVertex], new Color128(*(float*)&r, *(float*)&g, *(float*)&b, *(float*)&a));
+										}
+									}
+									break;
+							}
+							
+							currentElement++;
+							if (currentElement > vertexElements.Length - 1)
+							{
+								// move to next vertex
+								currentElement = 0;
+								currentVertex++;
+							}
+
+						}
+					}
+
+					break;
 			}
 		}
 
-		private static StaticObject LoadBinaryX(byte[] Data, int FloatingPointSize)
+		private static StaticObject LoadBinaryX(byte[] objectBytes, int floatingPointSize)
 		{
-			Block block = new BinaryBlock(Data, FloatingPointSize);
-			block.FloatingPointSize = FloatingPointSize;
-			StaticObject obj = new StaticObject(Plugin.currentHost);
-			MeshBuilder builder = new MeshBuilder(Plugin.currentHost);
+			Block block = new BinaryBlock(objectBytes, floatingPointSize);
+			StaticObject obj = new StaticObject(Plugin.CurrentHost);
+			MeshBuilder builder = new MeshBuilder(Plugin.CurrentHost);
 			Material material = new Material();
 			while (block.Position() < block.Length())
 			{
 				Block subBlock = block.ReadSubBlock();
 				ParseSubBlock(subBlock, ref obj, ref builder, ref material);
 			}
-			builder.Apply(ref obj);
+			builder.Apply(ref obj, false, false);
 			obj.Mesh.CreateNormals();
+			if (rootMatrix != Matrix4D.NoTransformation)
+			{
+				for (int i = transformStart; i < obj.Mesh.Vertices.Length; i++)
+				{
+					obj.Mesh.Vertices[i].Coordinates.Transform(rootMatrix, false);
+				}
+			}
 			return obj;
 		}
 	}

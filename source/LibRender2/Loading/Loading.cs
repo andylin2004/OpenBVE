@@ -1,8 +1,10 @@
 ﻿using System;
+using LibRender2.Screens;
 using LibRender2.Text;
 using LibRender2.Textures;
 using OpenBveApi.Colors;
 using OpenBveApi.Graphics;
+using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Textures;
@@ -85,6 +87,7 @@ namespace LibRender2.Loadings
 		/// <summary>Draws on OpenGL canvas the route/train loading screen</summary>
 		public void DrawLoadingScreen(OpenGlFont Font, double RouteProgress, double TrainProgress = double.MaxValue)
 		{
+			renderer.CurrentInterface = InterfaceType.LoadScreen;
 			renderer.SetBlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); //FIXME: Remove when text switches between two renderer types
 			GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
@@ -155,7 +158,7 @@ namespace LibRender2.Loadings
 				double trainProgress = Math.Max(0.0, Math.Min(1.0, TrainProgress));
 
 				// draw progress message right above the second division
-				string text = Translations.GetInterfaceString(routeProgress < 1.0 ? "loading_loading_route" : trainProgress < 1.0 ? "loading_loading_train" : "message_loading");
+				string text = Translations.GetInterfaceString(HostApplication.OpenBve, routeProgress < 1.0 ? new[] {"loading","loading_route"} : trainProgress < 1.0 ? new[] {"loading","loading_train"} : new[] {"message","loading"});
 				renderer.OpenGlString.Draw(Font, text, new Vector2(halfWidth, progressTop - fontHeight - 6), TextAlignment.TopMiddle, Color128.White);
 
 				// sum of route progress and train progress arrives up to 2.0:

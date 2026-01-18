@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using OpenBveApi.Colors;
 
@@ -45,45 +45,79 @@ namespace OpenBveApi.Textures {
 		    if (region.Left < 0 || region.Top < 0 || region.Width <= 0 || region.Height <= 0 || region.Left + region.Width > texture.Width || region.Top + region.Height > texture.Height) {
 		        throw new ArgumentException();
 		    }
-		    if (texture.BitsPerPixel == 24 | texture.BitsPerPixel == 32) {
-		        int width = texture.Width;
-		        byte[] bytes = texture.Bytes;
-		        int clipLeft = region.Left;
-		        int clipTop = region.Top;
-		        int clipWidth = region.Width;
-		        int clipHeight = region.Height;
-		        if (texture.BitsPerPixel == 24) {
-		            byte[] newBytes = new byte[3 * clipWidth * clipHeight];
-		            int i = 0;
-		            for (int y = 0; y < clipHeight; y++) {
-		                int j = 3 * width * (clipTop + y) + 3 * clipLeft;
-		                for (int x = 0; x < clipWidth; x++) {
-		                    newBytes[i + 0] = bytes[j + 0];
-		                    newBytes[i + 1] = bytes[j + 1];
-		                    newBytes[i + 2] = bytes[j + 2];
-		                    i += 3;
-		                    j += 3;
-		                }
-		            }
-		            return new Texture(clipWidth, clipHeight, 24, newBytes, texture.Palette);
-		        } else {
-		            byte[] newBytes = new byte[4 * clipWidth * clipHeight];
-		            int i = 0;
-		            for (int y = 0; y < clipHeight; y++) {
-		                int j = 4 * width * (clipTop + y) + 4 * clipLeft;
-		                for (int x = 0; x < clipWidth; x++) {
-		                    newBytes[i + 0] = bytes[j + 0];
-		                    newBytes[i + 1] = bytes[j + 1];
-		                    newBytes[i + 2] = bytes[j + 2];
-		                    newBytes[i + 3] = bytes[j + 3];
-		                    i += 4;
-		                    j += 4;
-		                }
-		            }
-		            return new Texture(clipWidth, clipHeight, 32, newBytes, texture.Palette);
-		        }
-		    }
-		    throw new NotSupportedException();
+		    int width = texture.Width;
+		    byte[] bytes = texture.Bytes;
+		    int clipLeft = region.Left;
+		    int clipTop = region.Top;
+		    int clipWidth = region.Width;
+		    int clipHeight = region.Height;
+		    byte[] newBytes;
+		    int i = 0;
+		    switch (texture.PixelFormat)
+		    {
+			    case PixelFormat.Grayscale:
+				    newBytes = new byte[clipWidth * clipHeight];
+				    for (int y = 0; y < clipHeight; y++)
+				    {
+					    int j = width * (clipTop + y) + clipLeft;
+					    for (int x = 0; x < clipWidth; x++)
+					    {
+						    newBytes[i] = bytes[j];
+						    i++;
+						    j++;
+					    }
+				    }
+				    return new Texture(clipWidth, clipHeight, PixelFormat.Grayscale, newBytes, texture.Palette);
+				case PixelFormat.GrayscaleAlpha:
+				    newBytes = new byte[2 * clipWidth * clipHeight];
+				    for (int y = 0; y < clipHeight; y++)
+				    {
+					    int j = 2 * width * (clipTop + y) + 2 * clipLeft;
+					    for (int x = 0; x < clipWidth; x++)
+					    {
+						    newBytes[i + 0] = bytes[j + 0];
+						    newBytes[i + 1] = bytes[j + 1];
+							i += 2;
+						    j += 2;
+					    }
+				    }
+				    return new Texture(clipWidth, clipHeight, PixelFormat.Grayscale, newBytes, texture.Palette);
+				case PixelFormat.RGB:
+					newBytes = new byte[3 * clipWidth * clipHeight];
+					for (int y = 0; y < clipHeight; y++)
+					{
+						int j = 3 * width * (clipTop + y) + 3 * clipLeft;
+						for (int x = 0; x < clipWidth; x++)
+						{
+							newBytes[i + 0] = bytes[j + 0];
+							newBytes[i + 1] = bytes[j + 1];
+							newBytes[i + 2] = bytes[j + 2];
+							i += 3;
+							j += 3;
+						}
+					}
+					return new Texture(clipWidth, clipHeight, PixelFormat.RGB, newBytes, texture.Palette);
+				case PixelFormat.RGBAlpha:
+					newBytes = new byte[4 * clipWidth * clipHeight];
+					for (int y = 0; y < clipHeight; y++)
+					{
+						int j = 4 * width * (clipTop + y) + 4 * clipLeft;
+						for (int x = 0; x < clipWidth; x++)
+						{
+							newBytes[i + 0] = bytes[j + 0];
+							newBytes[i + 1] = bytes[j + 1];
+							newBytes[i + 2] = bytes[j + 2];
+							newBytes[i + 3] = bytes[j + 3];
+							i += 4;
+							j += 4;
+						}
+					}
+					return new Texture(clipWidth, clipHeight, PixelFormat.RGBAlpha, newBytes, texture.Palette);
+				
+				default:
+					throw new NotSupportedException();
+			}
+		    
 		}
 
 		private static Color24 GetClosestColor(Color24[] colorArray, Color24 baseColor)
@@ -129,55 +163,107 @@ namespace OpenBveApi.Textures {
 						break;
 				}
 			}
-			if (texture.BitsPerPixel == 32)
+			if (texture.MultipleFrames)
 			{
-				if (texture.MultipleFrames)
+				byte[][] newFrames = new byte[texture.TotalFrames][];
+				for (int i = 0; i < texture.TotalFrames; i++)
 				{
-					byte[][] newFrames = new byte[texture.TotalFrames][];
-					for (int i = 0; i < texture.TotalFrames; i++)
-					{
-						newFrames[i] = ApplyTransparentColor(texture.Bytes, texture.Width, texture.Height, color.Value);
-						texture.CurrentFrame++;
-					}
-
-					return new Texture(texture.Width, texture.Height, 32, newFrames, texture.FrameInterval);
+					newFrames[i] = ApplyTransparentColor(texture.Bytes, texture.PixelFormat, texture.Width, texture.Height, color.Value);
+					texture.CurrentFrame++;
 				}
-				return new Texture(texture.Width, texture.Height, 32, ApplyTransparentColor(texture.Bytes, texture.Width, texture.Height, color.Value), texture.Palette);
 
+				return new Texture(texture.Width, texture.Height, PixelFormat.RGBAlpha, newFrames, texture.FrameInterval);
 			}
-		    throw new NotSupportedException();
+			return new Texture(texture.Width, texture.Height, PixelFormat.RGBAlpha, ApplyTransparentColor(texture.Bytes, texture.PixelFormat, texture.Width, texture.Height, color.Value), texture.Palette);
 		}
 
-		private static byte[] ApplyTransparentColor(byte[] source, int width, int height, Color24 color)
+		private static byte[] ApplyTransparentColor(byte[] source, PixelFormat pixelFormat, int width, int height, Color24 color)
 		{
 			byte[] target = new byte[4 * width * height];
 			byte r = color.R;
 			byte g = color.G;
 			byte b = color.B;
-			if (source[0] == r && source[1] == g && source[2] == b) {
-				target[0] = 128;
-				target[1] = 128;
-				target[2] = 128;
-				target[3] = 0;
-			} else {
-				target[0] = source[0];
-				target[1] = source[1];
-				target[2] = source[2];
-				target[3] = source[3];
+
+			
+			int targetIndex = 0;
+			switch (pixelFormat)
+			{
+				case PixelFormat.Grayscale:
+					for (int i = 0; i < source.Length; i++, targetIndex += 4) {
+						if (source[i] == r && source[i] == g && source[i] == b)
+						{
+							target[targetIndex] = 0;
+							target[targetIndex + 1] = 0;
+							target[targetIndex + 2] = 0;
+							target[targetIndex + 3] = 0;
+						} else {
+							target[targetIndex] = source[i];
+							target[targetIndex + 1] = source[i];
+							target[targetIndex + 2] = source[i];
+							target[targetIndex + 3] = 255;
+						}
+					}
+					break;
+				case PixelFormat.GrayscaleAlpha:
+					for (int i = 0; i < source.Length; i += 2, targetIndex += 4) {
+						if (source[i] == r && source[i] == g && source[i] == b)
+						{
+							target[targetIndex] = 0;
+							target[targetIndex + 1] = 0;
+							target[targetIndex + 2] = 0;
+							target[targetIndex + 3] = 0;
+						} else {
+							target[targetIndex] = source[i];
+							target[targetIndex + 1] = source[i];
+							target[targetIndex + 2] = source[i];
+							target[targetIndex + 3] = source[i + 1];
+						}
+					}
+					break;
+				case PixelFormat.RGB:
+					for (int i = 0; i < source.Length; i += 3, targetIndex += 4) {
+						if (source[i] == r && source[i + 1] == g && source[i + 2] == b)
+						{
+							target[targetIndex] = 0;
+							target[targetIndex + 1] = 0;
+							target[targetIndex + 2] = 0;
+							target[targetIndex + 3] = 0;
+						} else {
+							target[targetIndex] = source[i];
+							target[targetIndex + 1] = source[i + 1];
+							target[targetIndex + 2] = source[i + 2];
+							target[targetIndex + 3] = 255;
+						}
+					}
+					break;
+				case PixelFormat.RGBAlpha:
+					if (source[0] == r && source[1] == g && source[2] == b) {
+						target[0] = 128;
+						target[1] = 128;
+						target[2] = 128;
+						target[3] = 0;
+					} else {
+						target[0] = source[0];
+						target[1] = source[1];
+						target[2] = source[2];
+						target[3] = source[3];
+					}
+					for (int i = 4; i < source.Length; i += 4) {
+						if (source[i] == r && source[i + 1] == g && source[i + 2] == b) {
+							target[i + 0] = target[i - 4];
+							target[i + 1] = target[i - 3];
+							target[i + 2] = target[i - 2];
+							target[i + 3] = 0;
+						} else {
+							target[i + 0] = source[i + 0];
+							target[i + 1] = source[i + 1];
+							target[i + 2] = source[i + 2];
+							target[i + 3] = source[i + 3];
+						}
+					}
+					break;
 			}
-			for (int i = 4; i < source.Length; i += 4) {
-				if (source[i] == r && source[i + 1] == g && source[i + 2] == b) {
-					target[i + 0] = target[i - 4];
-					target[i + 1] = target[i - 3];
-					target[i + 2] = target[i - 2];
-					target[i + 3] = 0;
-				} else {
-					target[i + 0] = source[i + 0];
-					target[i + 1] = source[i + 1];
-					target[i + 2] = source[i + 2];
-					target[i + 3] = source[i + 3];
-				}
-			}
+			
 			return target;
 		}
 	}

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using OpenBveApi.Interface;
 
 namespace OpenBveApi.Hosts
 {
@@ -10,9 +12,14 @@ namespace OpenBveApi.Hosts
 	{
 		/// <summary>Loads all non-runtime plugins.</summary>
 		/// <returns>Whether loading all plugins was successful.</returns>
-		public bool LoadPlugins(FileSystem.FileSystem fileSystem, BaseOptions currentOptions, out string errorMessage, object TrainManagerReference = null, object RendererReference = null)
+		public bool LoadPlugins(FileSystem.FileSystem fileSystem, BaseOptions currentOptions, out string errorMessage, object trainManagerReference = null, object rendererReference = null)
 		{
-			UnloadPlugins(out errorMessage);
+			if (Plugins != null && Plugins.Length != 0)
+			{
+				// plugins already loaded
+				errorMessage = string.Empty;
+				return true;
+			}
 			string folder = fileSystem.GetDataFolder("Plugins");
 			string[] files = {};
 			try
@@ -98,7 +105,7 @@ namespace OpenBveApi.Hosts
 
 						if (plugin.Texture != null | plugin.Sound != null | plugin.Object != null | plugin.Route != null | plugin.Train != null)
 						{
-							plugin.Load(this, fileSystem, currentOptions, TrainManagerReference, RendererReference);
+							plugin.Load(this, fileSystem, currentOptions, trainManagerReference, rendererReference);
 							list.Add(plugin);
 						}
 						else if (!iruntime)
@@ -123,14 +130,22 @@ namespace OpenBveApi.Hosts
 			errorMessage = builder.ToString().Trim(new char[] { });
 			if (errorMessage.Length != 0)
 			{
-				return false;
+				AddMessage(MessageType.Error, false, errorMessage);
 			}
 			return true;
 		}
 
+		private bool currentlyUnloading;
+
 		/// <summary>Unloads all non-runtime plugins.</summary>
 		public bool UnloadPlugins(out string errorMessage)
 		{
+			while (currentlyUnloading)
+			{
+				// if the unload function has been called from another thread (preview vs. game start?) we don't want to have two at once
+				Thread.Sleep(100);
+			}
+			currentlyUnloading = true;
 			StringBuilder builder = new StringBuilder();
 			if (Plugins != null)
 			{
@@ -149,11 +164,8 @@ namespace OpenBveApi.Hosts
 				Plugins = null;
 			}
 			errorMessage = builder.ToString().Trim(new char[] { });
-			if (errorMessage.Length != 0)
-			{
-				return false;
-			}
-			return true;
+			currentlyUnloading = false;
+			return errorMessage.Length == 0;
 		}
 	}
 }

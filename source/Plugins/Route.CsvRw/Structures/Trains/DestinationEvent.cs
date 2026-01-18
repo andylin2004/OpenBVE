@@ -4,9 +4,8 @@ using OpenBveApi.World;
 
 namespace CsvRwRouteParser
 {
-	internal class DestinationEvent
+	internal class DestinationEvent : AbstractStructure
 	{
-		internal readonly double TrackPosition;
 		internal readonly int Type;
 		internal readonly bool TriggerOnce;
 		internal readonly int BeaconStructureIndex;
@@ -17,9 +16,8 @@ namespace CsvRwRouteParser
 		internal readonly double Pitch;
 		internal readonly double Roll;
 
-		internal DestinationEvent(double trackPosition, int type, bool triggerOnce, int beaconStructureIndex, int nextDestination, int previousDestination, Vector2 position, double yaw, double pitch, double roll)
+		internal DestinationEvent(double trackPosition, int type, bool triggerOnce, int beaconStructureIndex, int nextDestination, int previousDestination, Vector2 position, double yaw, double pitch, double roll) : base(trackPosition)
 		{
-			TrackPosition = trackPosition;
 			Type = type;
 			TriggerOnce = triggerOnce;
 			BeaconStructureIndex = beaconStructureIndex;
@@ -33,11 +31,7 @@ namespace CsvRwRouteParser
 
 		internal void Create(Vector3 wpos, Transformation RailTransformation, double StartingDistance, double EndingDistance, ObjectDictionary Beacon)
 		{
-			UnifiedObject obj = null;
-			if (Beacon.ContainsKey(BeaconStructureIndex))
-			{
-				obj = Beacon[BeaconStructureIndex];
-			}
+			Beacon.TryGetValue(BeaconStructureIndex, out UnifiedObject obj);
 			if (obj != null)
 			{
 				double dx = Position.X;

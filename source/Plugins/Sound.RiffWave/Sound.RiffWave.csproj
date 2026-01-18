@@ -42,14 +42,24 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <OutputPath>..\..\..\bin_debug\</OutputPath>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <LangVersion>6</LangVersion>
+    <LangVersion>7</LangVersion>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
     <OutputPath>..\..\..\bin_release\</OutputPath>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <LangVersion>6</LangVersion>
+    <LangVersion>7</LangVersion>
     <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'GLMenu|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\GLMenu\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <FileAlignment>4096</FileAlignment>
+    <DebugType>Full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <LangVersion>7</LangVersion>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -66,6 +76,17 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ChunkID.cs" />
+    <Compile Include="Chunks\Chunk.cs" />
+    <Compile Include="Chunks\CuePoint.cs" />
+    <Compile Include="Chunks\DataChunk.cs" />
+    <Compile Include="Chunks\SilentChunk.cs" />
+    <Compile Include="Formats\WaveFormatAdPcm.cs" />
+    <Compile Include="Formats\WaveFormatEx.cs" />
+    <Compile Include="Formats\WaveFormatExtensible.cs" />
+    <Compile Include="Formats\WaveFormatMp3.cs" />
+    <Compile Include="Formats\WaveFormatPcm.cs" />
+    <Compile Include="Formats\WFormatTag.cs" />
     <Compile Include="Plugin.Parser.cs">
       <DependentUpon>Plugin.cs</DependentUpon>
     </Compile>
@@ -83,6 +104,7 @@
     <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup />
   <Target Name="AfterBuild">
     <ItemGroup>
       <OutputFiles Include="$(TargetDir)$(TargetName).*" />

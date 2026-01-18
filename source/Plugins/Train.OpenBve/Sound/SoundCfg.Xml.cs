@@ -2,14 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
+using Formats.OpenBve;
+using OpenBveApi;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
+using OpenBveApi.Motor;
 using SoundManager;
 using TrainManager.BrakeSystems;
 using TrainManager.Car;
 using TrainManager.Car.Systems;
 using TrainManager.Motor;
 using TrainManager.Power;
+using TrainManager.SafetySystems;
 using TrainManager.Trains;
 
 namespace Train.OpenBve
@@ -50,6 +54,8 @@ namespace Train.OpenBve
 			Vector3 right = new Vector3(1.3, 0.0, 0.0);
 			//Positioned at the front of the car, centered X and Y
 			Vector3 front = new Vector3(0.0, 0.0, 0.5 * car.Length);
+			//Positioned at the rear of the car centered X and Y
+			Vector3 rear = new Vector3(0.0, 0.0, -0.5 * car.Length);
 			//Positioned at the position of the panel / 3D cab (Remember that the panel is just an object in the world...)
 			Vector3 panel = new Vector3(car.Driver.X, car.Driver.Y, car.Driver.Z + 1.0);
 
@@ -59,13 +65,13 @@ namespace Train.OpenBve
 			XmlDocument currentXML = new XmlDocument();
 			//Load the marker's XML file 
 			currentXML.Load(fileName);
-			currentPath = System.IO.Path.GetDirectoryName(fileName);
+			currentPath = Path.GetDirectoryName(fileName);
 			if (currentXML.DocumentElement != null)
 			{
 				XmlNodeList DocumentNodes = currentXML.DocumentElement.SelectNodes("/openBVE/CarSounds");
 				if (DocumentNodes == null || DocumentNodes.Count == 0)
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, "No car sound nodes defined in XML file " + fileName);
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, "No car sound nodes defined in XML file " + fileName);
 					//If we have no appropriate nodes specified, return false and fallback to loading the legacy Sound.cfg file
 					throw new Exception("Empty sound.xml file");
 				}
@@ -75,13 +81,13 @@ namespace Train.OpenBve
 					{
 						foreach (XmlNode c in n.ChildNodes)
 						{
-							switch (c.Name.ToLowerInvariant())
+							Enum.TryParse(c.Name, true, out SoundCfgSection currentSection);
+							switch (currentSection)
 							{
-								case "ats":
-								case "plugin":
+								case SoundCfgSection.ATS:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of plugin sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of plugin sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -90,10 +96,10 @@ namespace Train.OpenBve
 									}
 									ParseDictionaryNode(c, out car.Sounds.Plugin, center, SoundCfgParser.mediumRadius);
 									break;
-								case "brake":
+								case SoundCfgSection.Brake:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of brake sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of brake sounds was defined in in XML file " + fileName);
 										break;
 									}
 									foreach (XmlNode cc in c.ChildNodes)
@@ -125,15 +131,15 @@ namespace Train.OpenBve
 												ParseNode(cc, out car.CarBrake.Release, center, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "brakehandle":
+								case SoundCfgSection.BrakeHandle:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of brake handle sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of brake handle sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -165,15 +171,15 @@ namespace Train.OpenBve
 												ParseNode(cc, out Train.Handles.Brake.Max, panel, SoundCfgParser.tinyRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "breaker":
+								case SoundCfgSection.Breaker:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of breaker sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of breaker sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -192,25 +198,26 @@ namespace Train.OpenBve
 												ParseNode(cc, out car.Breaker.ResumeOrInterrupt, panel, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "buzzer":
+								case SoundCfgSection.Buzzer:
 									if (!isDriverCar)
 									{
 										break;
 									}
 									ParseNode(c, out Train.SafetySystems.StationAdjust.AdjustAlarm, panel, SoundCfgParser.tinyRadius);
 									break;
-								case "compressor":
+								case SoundCfgSection.Compressor:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of compressor sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of compressor sounds was defined in in XML file " + fileName);
 										break;
 									}
-									if (car.CarBrake.brakeType != BrakeType.Main)
+
+									if (!(car.CarBrake is AirBrake airBrake) || airBrake.BrakeType != BrakeType.Main)
 									{
 										break;
 									}
@@ -221,28 +228,28 @@ namespace Train.OpenBve
 											case "attack":
 											case "start":
 												//Compressor starting sound
-												ParseNode(cc, out car.CarBrake.airCompressor.StartSound, center, SoundCfgParser.mediumRadius);
+												ParseNode(cc, out airBrake.Compressor.StartSound, center, SoundCfgParser.mediumRadius);
 												break;
 											case "loop":
 												//Compressor loop sound
-												ParseNode(cc, out car.CarBrake.airCompressor.LoopSound, center, SoundCfgParser.mediumRadius);
+												ParseNode(cc, out airBrake.Compressor.LoopSound, center, SoundCfgParser.mediumRadius);
 												break;
 											case "release":
 											case "stop":
 											case "end":
 												//Compressor end sound
-												ParseNode(cc, out car.CarBrake.airCompressor.EndSound, center, SoundCfgParser.mediumRadius);
+												ParseNode(cc, out airBrake.Compressor.EndSound, center, SoundCfgParser.mediumRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "door":
+								case SoundCfgSection.Door:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of door sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of door sounds was defined in in XML file " + fileName);
 										break;
 									}
 									foreach (XmlNode cc in c.ChildNodes)
@@ -266,23 +273,23 @@ namespace Train.OpenBve
 												ParseNode(cc, out car.Doors[1].CloseSound, right, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "flange":
+								case SoundCfgSection.Flange:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of flange sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of flange sounds was defined in in XML file " + fileName);
 										break;
 									}
-									ParseDictionaryNode(c, out car.Sounds.Flange, center, SoundCfgParser.mediumRadius);
+									ParseDictionaryNode(c, out car.Flange.Sounds, center, SoundCfgParser.mediumRadius);
 									break;
-								case "horn":
+								case SoundCfgSection.Horn:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of horn sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of horn sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -307,20 +314,18 @@ namespace Train.OpenBve
 												car.Horns[2].Loop = true;
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "loop":
-								case "noise":
+								case SoundCfgSection.Loop:
 									ParseNode(c, out car.Sounds.Loop, center, SoundCfgParser.mediumRadius);
 									break;
-								case "mastercontroller":
-								case "powerhandle":
+								case SoundCfgSection.MasterController:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of power handle sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of power handle sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -356,18 +361,18 @@ namespace Train.OpenBve
 												ParseNode(cc, out Train.Handles.Power.Max, panel, SoundCfgParser.tinyRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "motor":
+								case SoundCfgSection.Motor:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of motor sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of motor sounds was defined in in XML file " + fileName);
 										break;
 									}
-									if (!car.Specs.IsMotorCar)
+									if (!car.TractionModel.ProvidesPower)
 									{
 										break;
 									}
@@ -377,12 +382,12 @@ namespace Train.OpenBve
 										TrainXmlParser.MotorSoundXMLParsed = new bool[Train.Cars.Length];
 									}
 									TrainXmlParser.MotorSoundXMLParsed[car.Index] = true;
-									ParseMotorSoundTableNode(c, car, ref car.Sounds.Motor, center, SoundCfgParser.mediumRadius);
+									ParseMotorSoundTableNode(c, car, ref car.TractionModel.MotorSounds, center, SoundCfgParser.mediumRadius);
 									break;
-								case "pilotlamp":
+								case SoundCfgSection.PilotLamp:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of pilot-lamp sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of pilot-lamp sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -400,54 +405,47 @@ namespace Train.OpenBve
 												ParseNode(cc, out Train.SafetySystems.PilotLamp.OffSound, panel, SoundCfgParser.tinyRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "switch":
+								case SoundCfgSection.Switch:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of point front axle sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of point front axle sounds was defined in in XML file " + fileName);
 										break;
 									}
-									CarSound[] pointSounds;
-									ParseArrayNode(c, out pointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
+									ParseArrayNode(c, out CarSound[] pointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
 									// ReSharper disable once CoVariantArrayConversion
 									car.FrontAxle.PointSounds = pointSounds;
 									// ReSharper disable once CoVariantArrayConversion
 									car.RearAxle.PointSounds = pointSounds;
 									break;
-								case "pointfrontaxle":
-								case "switchfrontaxle":
+								case SoundCfgSection.SwitchFrontAxle:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of point front axle sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of point front axle sounds was defined in in XML file " + fileName);
 										break;
 									}
-
-									CarSound[] frontAxlePointSounds;
-									ParseArrayNode(c, out frontAxlePointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
+									ParseArrayNode(c, out CarSound[] frontAxlePointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
 									// ReSharper disable once CoVariantArrayConversion
 									car.FrontAxle.PointSounds = frontAxlePointSounds;
 									break;
-								case "pointrearaxle":
-								case "switchrearaxle":
+								case SoundCfgSection.SwitchRearAxle:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of point rear axle sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of point rear axle sounds was defined in in XML file " + fileName);
 										break;
 									}
-									CarSound[] rearAxlePointSounds;
-									ParseArrayNode(c, out rearAxlePointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
+									ParseArrayNode(c, out CarSound[] rearAxlePointSounds, new Vector3(0.0, 0.0, car.FrontAxle.Position), SoundCfgParser.smallRadius);
 									// ReSharper disable once CoVariantArrayConversion
 									car.RearAxle.PointSounds = rearAxlePointSounds;
 									break;
-								case "reverser":
-								case "reverserhandle":
+								case SoundCfgSection.Reverser:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of reverser sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of reverser sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
@@ -465,28 +463,26 @@ namespace Train.OpenBve
 												ParseNode(cc, out Train.Handles.Reverser.ReleaseSound, panel, SoundCfgParser.tinyRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "run":
+								case SoundCfgSection.Run:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of run sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of run sounds was defined in in XML file " + fileName);
 										break;
 									}
-									ParseDictionaryNode(c, out car.Sounds.Run, center, SoundCfgParser.mediumRadius);
+									ParseDictionaryNode(c, out car.Run.Sounds, center, SoundCfgParser.mediumRadius);
 									break;
-								case "shoe":
-								case "rub":
+								case SoundCfgSection.Shoe:
 									ParseNode(c, out car.CarBrake.Rub, center, SoundCfgParser.mediumRadius);
 									break;
-								case "suspension":
-								case "spring":
+								case SoundCfgSection.Suspension:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of suspension sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of suspension sounds was defined in in XML file " + fileName);
 										break;
 									}
 									foreach (XmlNode cc in c.ChildNodes)
@@ -495,22 +491,22 @@ namespace Train.OpenBve
 										{
 											case "left":
 												//Left suspension springs
-												ParseNode(cc, out car.Sounds.SpringL, left, SoundCfgParser.smallRadius);
+												ParseNode(cc, out car.Suspension.SpringL, left, SoundCfgParser.smallRadius);
 												break;
 											case "right":
 												//right suspension springs
-												ParseNode(cc, out car.Sounds.SpringR, right, SoundCfgParser.smallRadius);
+												ParseNode(cc, out car.Suspension.SpringR, right, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "requeststop":
+								case SoundCfgSection.RequestStop:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of request stop sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of request stop sounds was defined in in XML file " + fileName);
 										break;
 									}
 									foreach (XmlNode cc in c.ChildNodes)
@@ -527,27 +523,27 @@ namespace Train.OpenBve
 												ParseNode(cc, out car.Sounds.RequestStop[2], center, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
 										}
 									}
 									break;
-								case "touch":
+								case SoundCfgSection.Touch:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of touch sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of touch sounds was defined in in XML file " + fileName);
 										break;
 									}
 									if (!isDriverCar)
 									{
 										break;
 									}
-									ParseArrayNode(c, out car.Sounds.Touch, center, SoundCfgParser.mediumRadius);
+									ParseDictionaryNode(c, out car.Sounds.Touch, center, SoundCfgParser.mediumRadius);
 									break;
-								case "sanders":
+								case SoundCfgSection.Sanders:
 									if (!c.ChildNodes.OfType<XmlElement>().Any())
 									{
-										Plugin.currentHost.AddMessage(MessageType.Error, false, "An empty list of sanders sounds was defined in in XML file " + fileName);
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of sanders sounds was defined in in XML file " + fileName);
 										break;
 									}
 									Sanders sanders = car.ReAdhesionDevice as Sanders;
@@ -575,8 +571,115 @@ namespace Train.OpenBve
 												ParseNode(cc, out sanders.EmptySound, center, SoundCfgParser.smallRadius);
 												break;
 											default:
-												Plugin.currentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
 												break;
+										}
+									}
+									break;
+								case SoundCfgSection.Coupler:
+									if (!c.ChildNodes.OfType<XmlElement>().Any())
+									{
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of coupler sounds was defined in in XML file " + fileName);
+										break;
+									}
+									foreach (XmlNode cc in c.ChildNodes)
+									{
+										switch (cc.Name.ToLowerInvariant())
+										{
+											case "uncouple":
+												ParseNode(cc, out car.Coupler.UncoupleSound, rear, SoundCfgParser.smallRadius);
+												break;
+											case "couple":
+												ParseNode(cc, out car.Coupler.CoupleSound, rear, SoundCfgParser.smallRadius);
+												break;
+											case "couplecab":
+												ParseNode(cc, out car.Sounds.CoupleCab, rear, SoundCfgParser.smallRadius);
+												break;
+											case "uncouplecab":
+												ParseNode(cc, out car.Sounds.UncoupleCab, rear, SoundCfgParser.smallRadius);
+												break;
+											default:
+												Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Declaration " + cc.Name + " is unsupported in a " + c.Name + " node.");
+												break;
+										}
+									}
+									break;
+								case SoundCfgSection.DriverSupervisionDevice:
+									if (!c.ChildNodes.OfType<XmlElement>().Any())
+									{
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of driver supervision device sounds was defined in in XML file " + fileName);
+										break;
+									}
+									if (car.SafetySystems.TryGetTypedValue(SafetySystem.DriverSupervisionDevice, out DriverSupervisionDevice dsd))
+									{
+										foreach (XmlNode cc in c.ChildNodes)
+										{
+											switch (cc.Name.ToLowerInvariant())
+											{
+												case "alert":
+													ParseNode(cc, out dsd.AlertSound, center, SoundCfgParser.smallRadius);
+													break;
+												case "alarm":
+													ParseNode(cc, out dsd.AlarmSound, center, SoundCfgParser.smallRadius);
+													break;
+												case "reset":
+													ParseNode(cc, out dsd.ResetSound, center, SoundCfgParser.smallRadius);
+													break;
+											}
+										}
+									}
+
+									
+									break;
+								case SoundCfgSection.Headlights:
+									if (!c.ChildNodes.OfType<XmlElement>().Any())
+									{
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of headlights sounds was defined in in XML file " + fileName);
+										break;
+									}
+									if (Train.SafetySystems.Headlights == null)
+									{
+										break;
+									}
+
+									foreach (XmlNode cc in c.ChildNodes)
+									{
+										switch (cc.Name.ToLowerInvariant())
+										{
+											case "switch":
+												Vector3 pos = new Vector3(center);
+												ParseNode(cc, out Train.SafetySystems.Headlights.SwitchSoundBuffer, ref pos, SoundCfgParser.smallRadius);
+												break;
+										}
+									}
+									break;
+								case SoundCfgSection.Pantograph:
+									if (!c.ChildNodes.OfType<XmlElement>().Any())
+									{
+										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "An empty list of headlights sounds was defined in in XML file " + fileName);
+										break;
+									}
+
+									CarSound raiseSound = null, lowerSound = null;
+									foreach (XmlNode cc in c.ChildNodes)
+									{
+										switch (cc.Name.ToLowerInvariant())
+										{
+											case "raise":
+												ParseNode(cc, out raiseSound, center, SoundCfgParser.mediumRadius);
+												break;
+											case "lower":
+												ParseNode(cc, out lowerSound, center, SoundCfgParser.mediumRadius);
+												break;
+										}
+									}
+
+									for (int i = 0; i < Train.Cars.Length; i++)
+									{
+										if (Train.Cars[i].TractionModel.Components.TryGetTypedValue(EngineComponent.Pantograph, out Pantograph p))
+										{
+											p.RaiseSound = raiseSound.Clone();
+											p.LowerSound = lowerSound.Clone();
 										}
 									}
 									break;
@@ -637,7 +740,7 @@ namespace Train.OpenBve
 				int idx = -1;
 				if (c.Name.ToLowerInvariant() != "sound")
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
 				}
 				else
 				{
@@ -647,7 +750,7 @@ namespace Train.OpenBve
 						{
 							if (!NumberFormats.TryParseIntVb6(c.ChildNodes[i].InnerText.ToLowerInvariant(), out idx))
 							{
-								Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 								return;
 							}
 							break;
@@ -688,12 +791,12 @@ namespace Train.OpenBve
 						}
 						else
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Unsupported motor sound type in XML node " + node.Name);	
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Unsupported motor sound type in XML node " + node.Name);	
 						}
 					}
 					else
 					{
-						Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 					}
 				}
 			}
@@ -714,11 +817,11 @@ namespace Train.OpenBve
 					case "filename":
 						try
 						{
-							fileName = OpenBveApi.Path.CombineFile(currentPath, c.InnerText);
+							fileName = Path.CombineFile(currentPath, c.InnerText);
 							if (!System.IO.File.Exists(fileName))
 							{
 								//Valid path, but the file does not exist
-								Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " does not exist.");
+								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " does not exist.");
 								Sound = null;
 								return;
 							}
@@ -726,7 +829,7 @@ namespace Train.OpenBve
 						catch
 						{
 							//Probably invalid filename characters
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " is invalid.");
 							Sound = null;
 							return;
 						}
@@ -736,17 +839,17 @@ namespace Train.OpenBve
 						double x = 0.0, y = 0.0, z = 0.0;
 						if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[0], out x))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound radius X " + Arguments[0] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound radius X " + Arguments[0] + " in XML node " + node.Name + " is invalid.");
 							x = 0.0;
 						}
 						if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[1], out y))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound radius Y " + Arguments[1] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound radius Y " + Arguments[1] + " in XML node " + node.Name + " is invalid.");
 							y = 0.0;
 						}
 						if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[2], out z))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound radius Z " + Arguments[2] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound radius Z " + Arguments[2] + " in XML node " + node.Name + " is invalid.");
 							z = 0.0;
 						}
 						Position = new Vector3(x, y, z);
@@ -754,7 +857,7 @@ namespace Train.OpenBve
 					case "radius":
 						if (!NumberFormats.TryParseDoubleVb6(c.InnerText, out Radius))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound radius " + c.InnerText + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound radius " + c.InnerText + " in XML node " + node.Name + " is invalid.");
 						}
 						break;
 
@@ -763,12 +866,12 @@ namespace Train.OpenBve
 			if (fileName == null)
 			{
 				//No valid filename node specified
-				Plugin.currentHost.AddMessage(MessageType.Error, false, "XML node " + node.Name + " does not point to a valid sound file.");
+				Plugin.CurrentHost.AddMessage(MessageType.Error, false, "XML node " + node.Name + " does not point to a valid sound file.");
 				Sound = null;
 				return;
 			}
 
-			Plugin.currentHost.RegisterSound(fileName, Radius, out var sndHandle);
+			Plugin.CurrentHost.RegisterSound(fileName, Radius, out var sndHandle);
 			Sound = sndHandle as SoundBuffer;
 		}
 
@@ -787,11 +890,11 @@ namespace Train.OpenBve
 					case "filename":
 						try
 						{
-							fileName = OpenBveApi.Path.CombineFile(currentPath, c.InnerText);
+							fileName = Path.CombineFile(currentPath, c.InnerText);
 							if (!System.IO.File.Exists(fileName))
 							{
 								//Valid path, but the file does not exist
-								Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " does not exist.");
+								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " does not exist.");
 								Sound = new CarSound();
 								return;
 							}
@@ -799,7 +902,7 @@ namespace Train.OpenBve
 						catch
 						{
 							//Probably invalid filename characters
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound path " + c.InnerText + " in XML node " + node.Name + " is invalid.");
 							Sound = new CarSound();
 							return;
 						}
@@ -809,17 +912,17 @@ namespace Train.OpenBve
 						double x = 0.0, y = 0.0, z = 0.0;
 						if (Arguments.Length >= 1 && Arguments[0].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[0], out x))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound position X " + Arguments[0] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound position X " + Arguments[0] + " in XML node " + node.Name + " is invalid.");
 							x = 0.0;
 						}
 						if (Arguments.Length >= 2 && Arguments[1].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[1], out y))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound position Y " + Arguments[1] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound position Y " + Arguments[1] + " in XML node " + node.Name + " is invalid.");
 							y = 0.0;
 						}
 						if (Arguments.Length >= 3 && Arguments[2].Length > 0 && !NumberFormats.TryParseDoubleVb6(Arguments[2], out z))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "Sound position Z " + Arguments[2] + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Sound position Z " + Arguments[2] + " in XML node " + node.Name + " is invalid.");
 							z = 0.0;
 						}
 						Position = new Vector3(x,y,z);
@@ -827,7 +930,7 @@ namespace Train.OpenBve
 					case "radius":
 						if (!NumberFormats.TryParseDoubleVb6(c.InnerText, out Radius))
 						{
-							Plugin.currentHost.AddMessage(MessageType.Error, false, "The sound radius " + c.InnerText + " in XML node " + node.Name + " is invalid.");
+							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "The sound radius " + c.InnerText + " in XML node " + node.Name + " is invalid.");
 						}
 						break;
 					
@@ -836,11 +939,11 @@ namespace Train.OpenBve
 			if (fileName == null)
 			{
 				//No valid filename node specified
-				Plugin.currentHost.AddMessage(MessageType.Error, false, "XML node " + node.Name + " does not point to a valid sound file.");
+				Plugin.CurrentHost.AddMessage(MessageType.Error, false, "XML node " + node.Name + " does not point to a valid sound file.");
 				Sound = new CarSound();
 				return;
 			}
-			Sound = new CarSound(Plugin.currentHost, fileName, Radius, Position);
+			Sound = new CarSound(Plugin.CurrentHost, fileName, Radius, Position);
 		}
 
 		/// <summary>Parses an XML node containing a list of sounds into a car sound array</summary>
@@ -856,7 +959,7 @@ namespace Train.OpenBve
 				int idx = -1;
 				if (c.Name.ToLowerInvariant() != "sound")
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
 				}
 				else
 				{
@@ -866,7 +969,7 @@ namespace Train.OpenBve
 						{
 							if (!NumberFormats.TryParseIntVb6(c.ChildNodes[i].InnerText.ToLowerInvariant(), out idx))
 							{
-								Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 								return;
 							}
 							break;
@@ -885,7 +988,7 @@ namespace Train.OpenBve
 					}
 					else
 					{
-						Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 					}
 				}
 			}
@@ -904,7 +1007,7 @@ namespace Train.OpenBve
 				int idx = -1;
 				if (c.Name.ToLowerInvariant() != "sound")
 				{
-					Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
+					Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array node " + c.Name + " in XML node " + node.Name);
 				}
 				else
 				{
@@ -914,7 +1017,7 @@ namespace Train.OpenBve
 						{
 							if (!NumberFormats.TryParseIntVb6(c.ChildNodes[i].InnerText.ToLowerInvariant(), out idx))
 							{
-								Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 								return;
 							}
 							break;
@@ -923,18 +1026,11 @@ namespace Train.OpenBve
 					if (idx >= 0)
 					{
 						ParseNode(c, out var sound, Position, Radius);
-						if (Sounds.ContainsKey(idx))
-						{
-							Sounds[idx] = sound;
-						}
-						else
-						{
-							Sounds.Add(idx, sound);
-						}
+						Sounds[idx] = sound;
 					}
 					else
 					{
-						Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
+						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid array index " + c.Name + " in XML node " + node.Name);
 					}
 				}
 			}

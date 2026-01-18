@@ -1,4 +1,7 @@
 using OpenBveApi.Math;
+using OpenBveApi.Routes;
+using System;
+using System.Collections.Generic;
 
 namespace OpenBveApi.Trains
 {
@@ -6,10 +9,10 @@ namespace OpenBveApi.Trains
 	public class AbstractCar
 	{
 		/// <summary>Front axle about which the car pivots</summary>
-		public Axle FrontAxle;
+		public AbstractAxle FrontAxle;
 
 		/// <summary>Rear axle about which the car pivots</summary>
-		public Axle RearAxle;
+		public AbstractAxle RearAxle;
 
 		/// <summary>The width of the car in meters</summary>
 		public double Width;
@@ -30,23 +33,26 @@ namespace OpenBveApi.Trains
 		/// <summary>The textual description for this car</summary>
 		public string Description;
 
-		/// <summary>The empty mass of the car</summary>
+		/// <summary>The empty mass of the car in kilograms</summary>
 		public double EmptyMass;
 
-		/// <summary>Returns the current mass of the car including cargo</summary>
-		public double CurrentMass
-		{
-			get
-			{
-				return EmptyMass + CargoMass;
-			}
-		}
+		/// <summary>Returns the current mass of the car including cargo in kilograms</summary>
+		public double CurrentMass => EmptyMass + CargoMass;
 
-		/// <summary>The current mass of any cargo in the car</summary>
+		/// <summary>The current mass of any cargo in the car in kilograms</summary>
 		public double CargoMass;
 
 		/// <summary>Contains the current brightness values</summary>
 		public Brightness Brightness;
+
+		/// <summary>The driving wheel sets on the car</summary>
+		public List<Wheels> DrivingWheels = new List<Wheels>();
+
+		/// <summary>The trailing wheel sets on the car</summary>
+		public List<Wheels> TrailingWheels = new List<Wheels>();
+
+		/// <summary>Returns the available power supplies to this car</summary>
+		public virtual Dictionary<PowerSupplyTypes, PowerSupply> AvailablePowerSupplies => new Dictionary<PowerSupplyTypes, PowerSupply>();
 
 		/// <summary>Creates the in-world co-ordinates for a sound attached to this car</summary>
 		public virtual void CreateWorldCoordinates(Vector3 Car, out Vector3 Position, out Vector3 Direction)
@@ -56,22 +62,14 @@ namespace OpenBveApi.Trains
 		}
 
 		/// <summary>Gets the track position of this car</summary>
-		public virtual double TrackPosition
-		{
-			get
-			{
-				return 0.0;
-			}
-		}
+		public virtual double TrackPosition => 0.0;
 
 		/// <summary>The index of the car within the train</summary>
 		public virtual int Index
 		{
-			get
-			{
-				// A single car is by itself a train, hence index zero
-				return 0;
-			}
+			// A single car is by itself a train, hence index zero
+			get => 0;
+			set => throw new NotSupportedException("Cannot set the index of a single car");
 		}
 
 		/// <summary>Call this method to reverse (flip) the car</summary>
@@ -82,6 +80,18 @@ namespace OpenBveApi.Trains
 
 		/// <summary>Opens the car doors</summary>
 		public virtual void OpenDoors(bool Left, bool Right)
+		{
+
+		}
+
+		/// <summary>Uncouples the car</summary>
+		public virtual void Uncouple(bool Front, bool Rear)
+		{
+
+		}
+
+		/// <summary>Derails this car</summary>
+		public virtual void Derail()
 		{
 
 		}

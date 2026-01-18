@@ -1,16 +1,16 @@
+using OpenBveApi.FileSystem;
+using OpenBveApi.Hosts;
+using OpenBveApi.Interface;
+using OpenTK;
+using Reactive.Bindings;
+using SoundManager;
 using System;
 using System.Reactive.Concurrency;
 using System.Windows.Forms;
-using OpenBveApi.FileSystem;
-using OpenBveApi.Interface;
-using Reactive.Bindings;
-using SoundManager;
 using TrainEditor2.Audio;
 using TrainEditor2.Graphics;
 using TrainEditor2.Systems;
 using TrainEditor2.Views;
-using TrainManager;
-using TrainManager = TrainEditor2.Simulation.TrainManager.TrainManager;
 
 namespace TrainEditor2
 {
@@ -45,9 +45,19 @@ namespace TrainEditor2
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show(Translations.GetInterfaceString("errors_filesystem_invalid") + Environment.NewLine + Environment.NewLine + ex.Message, Translations.GetInterfaceString("program_title"), MessageBoxButtons.OK, MessageBoxIcon.Hand);
+				MessageBox.Show(Translations.GetInterfaceString(HostApplication.OpenBve, new [] {"errors","filesystem_invalid"}) + Environment.NewLine + Environment.NewLine + ex.Message, Translations.GetInterfaceString(HostApplication.TrainEditor2, new[] {"program","title"}), MessageBoxButtons.OK, MessageBoxIcon.Hand);
 				return;
 			}
+
+			//Switch between SDL2 and native backends; use native backend by default
+			var options = new ToolkitOptions();
+
+			if (CurrentHost.Platform == HostPlatform.FreeBSD)
+			{
+				// The OpenTK X11 backend is broken on FreeBSD, so force SDL2
+				options.Backend = PlatformBackend.Default;
+			}
+			Toolkit.Init(options);
 
 			Interface.LoadOptions();
 
@@ -56,8 +66,7 @@ namespace TrainEditor2
 			SoundApi = new SoundApi(CurrentHost);
 			SoundApi.Initialize(SoundRange.Medium);
 
-			string error;
-			if (!CurrentHost.LoadPlugins(FileSystem, Interface.CurrentOptions, out error, null, Renderer))
+			if (!CurrentHost.LoadPlugins(FileSystem, Interface.CurrentOptions, out string error, null, Renderer))
 			{
 				SoundApi.DeInitialize();
 				MessageBox.Show(error, @"OpenBVE", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -72,7 +81,7 @@ namespace TrainEditor2
 			CurrentHost.UnloadPlugins(out error);
 			SoundApi.DeInitialize();
 
-			Interface.SaveOptions();
+			Interface.CurrentOptions.Save(OpenBveApi.Path.CombineFile(Program.FileSystem.SettingsFolder, "1.5.0/options_te2.cfg"));
 		}
 	}
 }

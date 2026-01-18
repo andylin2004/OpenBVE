@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Globalization;
 using OpenBveApi.World;
+// ReSharper disable UnusedMember.Global
+// ReSharper disable MergeCastWithTypeCheck
 
 namespace OpenBveApi.Math {
 	/// <summary>Represents a three-dimensional vector.</summary>
@@ -55,19 +58,19 @@ namespace OpenBveApi.Math {
 				switch (i)
 				{
 					case 0:
-						if (!double.TryParse(splitString[i], out v.X))
+						if (!double.TryParse(splitString[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.X))
 						{
 							success = false;
 						}
 						break;
 					case 1:
-						if (!double.TryParse(splitString[i], out v.Y))
+						if (!double.TryParse(splitString[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.Y))
 						{
 							success = false;
 						}
 						break;
 					case 2:
-						if (!double.TryParse(splitString[i], out v.Z))
+						if (!double.TryParse(splitString[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.Z))
 						{
 							success = false;
 						}
@@ -97,19 +100,19 @@ namespace OpenBveApi.Math {
 				switch (i)
 				{
 					case 0:
-						if (!double.TryParse(arguments[i], out v.X))
+						if (!double.TryParse(arguments[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.X))
 						{
 							success = false;
 						}
 						break;
 					case 1:
-						if (!double.TryParse(arguments[i], out v.Y))
+						if (!double.TryParse(arguments[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.Y))
 						{
 							success = false;
 						}
 						break;
 					case 2:
-						if (!double.TryParse(arguments[i], out v.Z))
+						if (!double.TryParse(arguments[i], NumberStyles.Float, CultureInfo.InvariantCulture, out v.Z))
 						{
 							success = false;
 						}
@@ -120,24 +123,24 @@ namespace OpenBveApi.Math {
 		}
 
 		/// <summary>Interpolates between two Vector3 values using a simple Cosine algorithm</summary>
-		/// <param name="Vector1">The first vector</param>
-		/// <param name="Vector2">The second vector</param>
+		/// <param name="vector1">The first vector</param>
+		/// <param name="vector2">The second vector</param>
 		/// <param name="mu">The position on the curve of the new vector</param>
 		/// <returns>The interpolated vector</returns>
-		public static Vector3 CosineInterpolate(Vector3 Vector1, Vector3 Vector2, double mu)
+		public static Vector3 CosineInterpolate(Vector3 vector1, Vector3 vector2, double mu)
 		{
 			double mu2 = (1 - System.Math.Cos(mu * System.Math.PI)) / 2;
-			return new Vector3((Vector1.X * (1 - mu2) + Vector2.X * mu2), (Vector1.Y * (1 - mu2) + Vector2.Y * mu2), (Vector1.Z * (1 - mu2) + Vector2.Z * mu2));
+			return new Vector3((vector1.X * (1 - mu2) + vector2.X * mu2), (vector1.Y * (1 - mu2) + vector2.Y * mu2), (vector1.Z * (1 - mu2) + vector2.Z * mu2));
 		}
 
 		/// <summary>Linearly interpolates between two vectors</summary>
-		/// <param name="Vector1">The first vector</param>
-		/// <param name="Vector2">The second vector</param>
+		/// <param name="vector1">The first vector</param>
+		/// <param name="vector2">The second vector</param>
 		/// <param name="mu">The position on the interpolation curve of the new vector</param>
 		/// <returns>The interpolated vector</returns>
-		public static Vector3 LinearInterpolate(Vector3 Vector1, Vector3 Vector2, double mu)
+		public static Vector3 LinearInterpolate(Vector3 vector1, Vector3 vector2, double mu)
 		{
-			return new Vector3(Vector1.X + ((Vector2.X - Vector1.X) * mu), Vector1.Y + ((Vector2.Y - Vector1.Y) * mu), Vector1.Z + ((Vector2.Z - Vector1.Z) * mu));
+			return new Vector3(vector1.X + ((vector2.X - vector1.X) * mu), vector1.Y + ((vector2.Y - vector1.Y) * mu), vector1.Z + ((vector2.Z - vector1.Z) * mu));
 		}
 		
 		/// <summary>Converts a Vector3 to a Vector3f</summary>
@@ -441,6 +444,15 @@ namespace OpenBveApi.Math {
 		}
 
 		/// <summary>Rotates the vector on the perpendicular world plane (Used by the .Turn command)</summary>
+		/// <param name="angle">The angle.</param>
+		public void RotatePlane(double angle)
+		{
+			double cosa = System.Math.Cos(angle);
+			double sina = System.Math.Sin(angle);
+			RotatePlane(cosa, sina);
+		}
+
+		/// <summary>Rotates the vector on the perpendicular world plane (Used by the .Turn command)</summary>
 		/// <param name="cosa">The cosine of the angle.</param>
 		/// <param name="sina">The sine of the angle.</param>
 		public void RotatePlane(double cosa, double sina)
@@ -505,6 +517,13 @@ namespace OpenBveApi.Math {
 			if (this.Z < -tolerance) return false;
 			if (this.Z > tolerance) return false;
 			return true;
+		}
+
+		/// <summary>Gets the magnitude of the vector</summary>
+		/// <returns>The magnitude</returns>
+		public double Magnitude()
+		{
+			return 1.0 / Norm();
 		}
 		
 		/// <summary>Gets the euclidean norm.</summary>
@@ -646,10 +665,17 @@ namespace OpenBveApi.Math {
 		public static bool IsNullVector(Vector3 vector) {
 			return vector.X == 0.0 & vector.Y == 0.0 & vector.Z == 0.0;
 		}
-		
-		/// <summary>Gets the euclidean norm of the specified vector.</summary>
-		/// <param name="vector">The vector.</param>
-		/// <returns>The euclidean norm.</returns>
+
+		/// <summary>Tests to see whether the vector is finite (no components are double or infinity.</summary>
+		/// <returns>A boolean indicating whether the vector is finite</returns>
+		public static bool IsFinite(Vector3 vector)
+        {
+            return !double.IsNaN(vector.X) && !double.IsInfinity(vector.X) && !double.IsNaN(vector.Y) && !double.IsInfinity(vector.Y) && !double.IsNaN(vector.Z) && !double.IsInfinity(vector.Z);
+        }
+
+        /// <summary>Gets the euclidean norm of the specified vector.</summary>
+        /// <param name="vector">The vector.</param>
+        /// <returns>The euclidean norm.</returns>
 		public static double Norm(Vector3 vector) {
 			return System.Math.Sqrt(vector.X * vector.X + vector.Y * vector.Y + vector.Z * vector.Z);
 		}
@@ -662,12 +688,12 @@ namespace OpenBveApi.Math {
 		}
 
 		/// <summary>Returns a normalized vector based on a 2D vector in the XZ plane and an additional Y-coordinate.</summary>
-		/// <param name="Vector">The vector in the XZ-plane. The X and Y components in Vector represent the X- and Z-coordinates, respectively.</param>
+		/// <param name="vector">The vector in the XZ-plane. The X and Y components in Vector represent the X- and Z-coordinates, respectively.</param>
 		/// <param name="Y">The Y-coordinate.</param>
-		public static Vector3 GetVector3(Vector2 Vector, double Y)
+		public static Vector3 GetVector3(Vector2 vector, double Y)
 		{
-			double t = 1.0 / System.Math.Sqrt(Vector.X * Vector.X + Vector.Y * Vector.Y + Y * Y);
-			return new Vector3(t * Vector.X, t * Y, t * Vector.Y);
+			double t = 1.0 / System.Math.Sqrt(vector.X * vector.X + vector.Y * vector.Y + Y * Y);
+			return new Vector3(t * vector.X, t * Y, t * vector.Y);
 		}
 
 		/// <summary>Transforms the Vector based upon the given transform matrix</summary>
@@ -693,15 +719,14 @@ namespace OpenBveApi.Math {
 			Y = y;
 			Z = z;
 		}
-
+		
 		/// <summary>Transforms a vector by a quaternion rotation.</summary>
 		/// <param name="vec">The vector to transform.</param>
 		/// <param name="quat">The quaternion to rotate the vector by.</param>
 		/// <returns>The result of the operation.</returns>
 		public static Vector3 Transform(Vector3 vec, Quaternion quat)
 		{
-			Vector3 result;
-			Transform(ref vec, ref quat, out result);
+			Transform(ref vec, ref quat, out Vector3 result);
 			return result;
 		}
 
@@ -735,6 +760,19 @@ namespace OpenBveApi.Math {
 			}
 			double dot = Dot(firstVector, secondVector);
 			return new Vector3(secondVector.X * dot / squareMagnitude, secondVector.Y * dot / squareMagnitude, secondVector.Z * dot / squareMagnitude);
+		}
+
+		/// <summary>Returns a new Vector that is the linear blend of the 2 given Vectors</summary>
+		/// <param name="a">First input vector</param>
+		/// <param name="b">Second input vector</param>
+		/// <param name="blend">The blend factor. a when blend=0, b when blend=1.</param>
+		/// <returns>a when blend=0, b when blend=1, and a linear combination otherwise</returns>
+		public static Vector3 Lerp(Vector3 a, Vector3 b, float blend)
+		{
+			a.X = blend * (b.X - a.X) + a.X;
+			a.Y = blend * (b.Y - a.Y) + a.Y;
+			a.Z = blend * (b.Z - a.Z) + a.Z;
+			return a;
 		}
 
 		/// <summary>Determines whether this is a zero (0,0,0) vector</summary>
@@ -777,7 +815,8 @@ namespace OpenBveApi.Math {
 		/// <summary>Returns the representation of the vector in string format</summary>
 		public override string ToString()
 		{
-			string toString = this.X + " , " + this.Y + " , " + this.Z;
+			CultureInfo c = CultureInfo.InvariantCulture;
+			string toString = this.X.ToString(c) + " , " + this.Y.ToString(c) + " , " + this.Z.ToString(c);
 			return toString;
 		}
 	}

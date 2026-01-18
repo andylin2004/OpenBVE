@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using LibRender2;
 using OpenBveApi;
 using OpenBveApi.FileSystem;
@@ -6,7 +7,7 @@ using OpenBveApi.Hosts;
 using OpenBveApi.Trains;
 using RouteManager2;
 using TrainManager.Trains;
-using TrackFollowingObject = TrainManager.Trains.TrackFollowingObject;
+using ScriptedTrain = TrainManager.Trains.ScriptedTrain;
 
 namespace TrainManager
 {
@@ -22,11 +23,11 @@ namespace TrainManager
 		internal static Random RandomNumberGenerator = new Random();
 
 		/// <summary>The list of trains available in the simulation.</summary>
-		public TrainBase[] Trains = { };
+		public List<TrainBase> Trains = new List<TrainBase>();
 		/// <summary>A reference to the train of the Trains element that corresponds to the player's train.</summary>
 		public static TrainBase PlayerTrain = null;
 		/// <summary>The list of TrackFollowingObject available on other tracks in the simulation.</summary>
-		public AbstractTrain[] TFOs = { };
+		public List<AbstractTrain> TFOs = new List<AbstractTrain>();
 		/// <summary>Stores a reference to the current options</summary>
 		internal static BaseOptions CurrentOptions;
 		/// <summary>Stores the plugin error message string, or a null reference if no error encountered</summary>
@@ -43,7 +44,7 @@ namespace TrainManager
 		/// <summary>Un-derails all trains within the simulation</summary>
 		public void UnderailTrains()
 		{
-			System.Threading.Tasks.Parallel.For(0, Trains.Length, i =>
+			System.Threading.Tasks.Parallel.For(0, Trains.Count, i =>
 			{
 				UnderailTrain(Trains[i]);
 			});
@@ -59,7 +60,7 @@ namespace TrainManager
 			{
 				Train.Cars[i].Specs.RollDueToTopplingAngle = 0.0;
 				Train.Cars[i].Derailed = false;
-				if (Train.Cars[i].Specs.IsMotorCar && Train.Cars[i].Sounds.Loop != null)
+				if (Train.Cars[i].TractionModel.ProvidesPower && Train.Cars[i].Sounds.Loop != null)
 				{
 					Train.Cars[i].Sounds.Loop.Play(Train.Cars[i], true);
 				}
@@ -71,13 +72,13 @@ namespace TrainManager
 		/// <param name="ForceUpdate">Whether this is a forced update</param>
 		public void UpdateTrainObjects(double TimeElapsed, bool ForceUpdate)
 		{
-			for (int i = 0; i < Trains.Length; i++)
+			for (int i = 0; i < Trains.Count; i++)
 			{
 				Trains[i].UpdateObjects(TimeElapsed, ForceUpdate);
 			}
 
 			// ReSharper disable once PossibleInvalidCastExceptionInForeachLoop
-			foreach (TrackFollowingObject Train in TFOs) //Must not use var, as otherwise the wrong inferred type
+			foreach (ScriptedTrain Train in TFOs) //Must not use var, as otherwise the wrong inferred type
 			{
 				Train.UpdateObjects(TimeElapsed, ForceUpdate);
 			}
@@ -87,9 +88,9 @@ namespace TrainManager
 		public void JumpTFO()
 		{
 			// ReSharper disable once PossibleInvalidCastExceptionInForeachLoop
-			foreach (TrackFollowingObject Train in TFOs) //Must not use var, as otherwise the wrong inferred type
+			foreach (ScriptedTrain Train in TFOs) //Must not use var, as otherwise the wrong inferred type
 			{
-				Train.Jump(-1);
+				Train.Jump(-1, 0);
 			}
 		}
 	}

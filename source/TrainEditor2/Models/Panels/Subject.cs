@@ -1,47 +1,12 @@
 ﻿using System;
 using System.Globalization;
+using Formats.OpenBve;
 using OpenBveApi.Interface;
-using Prism.Mvvm;
+using TrainEditor2.Extensions;
 using TrainEditor2.Systems;
 
 namespace TrainEditor2.Models.Panels
 {
-	internal enum SubjectBase
-	{
-		Acc,
-		Atc,
-		Ats,
-		Bc,
-		LocoBrakeCylinder,
-		Bp,
-		LocoBrakePipe,
-		Brake,
-		LocoBrake,
-		Csc,
-		Door,
-		DoorL,
-		DoorR,
-		DoorButtonL,
-		DoorButtonR,
-		Er,
-		Hour,
-		Kmph,
-		Min,
-		Motor,
-		Mph,
-		Mr,
-		Ms,
-		Power,
-		Rev,
-		Sap,
-		Sec,
-		True,
-		Klaxon,
-		PrimaryKlaxon,
-		SecondaryKlaxon,
-		MusicKlaxon
-	}
-
 	internal enum SubjectSuffix
 	{
 		None,
@@ -50,62 +15,38 @@ namespace TrainEditor2.Models.Panels
 
 	internal class Subject : BindableBase, ICloneable
 	{
-		private SubjectBase _base;
+		private Panel2Subject _base;
 		private int baseOption;
 		private SubjectSuffix suffix;
 		private int suffixOption;
 
-		internal SubjectBase Base
+		internal Panel2Subject Base
 		{
-			get
-			{
-				return _base;
-			}
-			set
-			{
-				SetProperty(ref _base, value);
-			}
+			get => _base;
+			set => SetProperty(ref _base, value);
 		}
 
 		internal int BaseOption
 		{
-			get
-			{
-				return baseOption;
-			}
-			set
-			{
-				SetProperty(ref baseOption, value);
-			}
+			get => baseOption;
+			set => SetProperty(ref baseOption, value);
 		}
 
 		internal SubjectSuffix Suffix
 		{
-			get
-			{
-				return suffix;
-			}
-			set
-			{
-				SetProperty(ref suffix, value);
-			}
+			get => suffix;
+			set => SetProperty(ref suffix, value);
 		}
 
 		internal int SuffixOption
 		{
-			get
-			{
-				return suffixOption;
-			}
-			set
-			{
-				SetProperty(ref suffixOption, value);
-			}
+			get => suffixOption;
+			set => SetProperty(ref suffixOption, value);
 		}
 
 		internal Subject()
 		{
-			Base = SubjectBase.True;
+			Base = Panel2Subject.True;
 			BaseOption = -1;
 			Suffix = SubjectSuffix.None;
 			SuffixOption = -1;
@@ -117,9 +58,9 @@ namespace TrainEditor2.Models.Panels
 
 			switch (Base)
 			{
-				case SubjectBase.Ats:
-				case SubjectBase.DoorL:
-				case SubjectBase.DoorR:
+				case Panel2Subject.ATS:
+				case Panel2Subject.DoorL:
+				case Panel2Subject.DoorR:
 					if (BaseOption >= 0)
 					{
 						result += BaseOption;
@@ -143,6 +84,11 @@ namespace TrainEditor2.Models.Panels
 		public object Clone()
 		{
 			return MemberwiseClone();
+		}
+
+		internal static Subject StringToSubject(string value, Panel2Sections errorLocation)
+		{
+			return StringToSubject(value, errorLocation.ToString());
 		}
 
 		internal static Subject StringToSubject(string value, string errorLocation)
@@ -170,9 +116,8 @@ namespace TrainEditor2.Models.Panels
 					if (value[i] == 'd' | value[i] == 'D')
 					{
 						result.Suffix = SubjectSuffix.D;
-						int n;
 
-						if (int.TryParse(value.Substring(i + 1), NumberStyles.Integer, culture, out n))
+						if (int.TryParse(value.Substring(i + 1), NumberStyles.Integer, culture, out int n))
 						{
 							result.SuffixOption = n;
 							value = value.Substring(0, i);
@@ -182,8 +127,7 @@ namespace TrainEditor2.Models.Panels
 			}
 
 			// transform subject
-			SubjectBase _base;
-			bool ret = Enum.TryParse(value, true, out _base);
+			bool ret = Enum.TryParse(value, true, out Panel2Subject _base);
 			result.Base = _base;
 
 			if (!ret)
@@ -193,11 +137,10 @@ namespace TrainEditor2.Models.Panels
 				if (value.StartsWith("ats", StringComparison.OrdinalIgnoreCase))
 				{
 					string a = value.Substring(3);
-					int n;
 
-					if (int.TryParse(a, NumberStyles.Integer, culture, out n))
+					if (int.TryParse(a, NumberStyles.Integer, culture, out int n))
 					{
-						result.Base = SubjectBase.Ats;
+						result.Base = Panel2Subject.ATS;
 						result.BaseOption = n;
 						unsupported = false;
 					}
@@ -205,11 +148,10 @@ namespace TrainEditor2.Models.Panels
 				else if (value.StartsWith("doorl", StringComparison.OrdinalIgnoreCase))
 				{
 					string a = value.Substring(5);
-					int n;
 
-					if (int.TryParse(a, NumberStyles.Integer, culture, out n))
+					if (int.TryParse(a, NumberStyles.Integer, culture, out int n))
 					{
-						result.Base = SubjectBase.DoorL;
+						result.Base = Panel2Subject.DoorL;
 						result.BaseOption = n;
 						unsupported = false;
 					}
@@ -217,11 +159,10 @@ namespace TrainEditor2.Models.Panels
 				else if (value.StartsWith("doorr", StringComparison.OrdinalIgnoreCase))
 				{
 					string a = value.Substring(5);
-					int n;
 
-					if (int.TryParse(a, NumberStyles.Integer, culture, out n))
+					if (int.TryParse(a, NumberStyles.Integer, culture, out int n))
 					{
-						result.Base = SubjectBase.DoorR;
+						result.Base = Panel2Subject.DoorR;
 						result.BaseOption = n;
 						unsupported = false;
 					}
@@ -229,7 +170,7 @@ namespace TrainEditor2.Models.Panels
 
 				if (unsupported)
 				{
-					result.Base = SubjectBase.True;
+					result.Base = Panel2Subject.True;
 					Interface.AddMessage(MessageType.Error, false, $"Invalid subject {value} encountered in {errorLocation}");
 				}
 			}

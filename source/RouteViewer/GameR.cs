@@ -16,6 +16,7 @@ using RouteManager2.Climate;
 using RouteManager2.SignalManager;
 using RouteManager2.SignalManager.PreTrain;
 using RouteManager2.Stations;
+using RouteManager2.Tracks;
 using TrainManager.Trains;
 
 namespace RouteViewer {
@@ -23,30 +24,32 @@ namespace RouteViewer {
 
 		// date and time
 		internal static double SecondsSinceMidnight = 0.0;
+		/// <summary>The in-game menu system</summary>
+		internal static readonly GameMenu Menu = GameMenu.Instance;
 
 		// ================================
 
-		internal static void Reset() {
-			Program.Renderer.Reset();
+		internal static void Reset(bool resetRenderer = true) {
+			if (resetRenderer)
+			{
+				Program.Renderer.Reset();
+			}
+			
 			// track manager
 			Program.CurrentRoute.Tracks = new Dictionary<int, Track>();
-			Track t = new Track
-			{
-				Elements = new TrackElement[0]
-			};
-			Program.CurrentRoute.Tracks.Add(0, t);
+			Program.CurrentRoute.Tracks.Add(0, new Track());
 			// train manager
-			Program.TrainManager.Trains = new TrainBase[] { };
+			Program.TrainManager.Trains = new List<TrainBase>();
 			// game
 			Interface.LogMessages.Clear();
-			Program.CurrentHost.MissingFiles.Clear();
+			Program.CurrentHost.ClearErrors();
 			Program.CurrentRoute.Comment = "";
 			Program.CurrentRoute.Image = "";
 			Program.CurrentRoute.Atmosphere = new Atmosphere();
 			Program.CurrentRoute.LightDefinitions = new LightDefinition[] { };
 			Program.CurrentRoute.Stations = new RouteStation[] { };
 			Program.CurrentRoute.Sections = new Section[] { };
-			Program.CurrentRoute.BufferTrackPositions = new double[] { };
+			Program.CurrentRoute.BufferTrackPositions = new List<BufferStop>();
 			Program.CurrentRoute.PointsOfInterest = new PointOfInterest[] { };
 			Program.CurrentRoute.BogusPreTrainInstructions = new BogusPreTrainInstruction[] { };
 			Interface.CurrentOptions.TrainName = "";
@@ -70,55 +73,5 @@ namespace RouteViewer {
 			Program.Sounds.StopAllSounds();
 			GC.Collect();
 		}
-
-		// ================================
-
-		internal static bool ApplyPointOfInterest(int Value, bool Relative) {
-			double t = 0.0;
-			int j = -1;
-			if (Relative) {
-				// relative
-				if (Value < 0) {
-					// previous poi
-					t = double.NegativeInfinity;
-					for (int i = 0; i < Program.CurrentRoute.PointsOfInterest.Length; i++) {
-						if (Program.CurrentRoute.PointsOfInterest[i].TrackPosition < Program.Renderer.CameraTrackFollower.TrackPosition) {
-							if (Program.CurrentRoute.PointsOfInterest[i].TrackPosition > t) {
-								t = Program.CurrentRoute.PointsOfInterest[i].TrackPosition;
-								j = i;
-							}
-						}
-					}
-				} else if (Value > 0) {
-					// next poi
-					t = double.PositiveInfinity;
-					for (int i = 0; i < Program.CurrentRoute.PointsOfInterest.Length; i++) {
-						if (Program.CurrentRoute.PointsOfInterest[i].TrackPosition > Program.Renderer.CameraTrackFollower.TrackPosition) {
-							if (Program.CurrentRoute.PointsOfInterest[i].TrackPosition < t) {
-								t = Program.CurrentRoute.PointsOfInterest[i].TrackPosition;
-								j = i;
-							}
-						}
-					}
-				}
-			} else {
-				// absolute
-				j = Value >= 0 & Value < Program.CurrentRoute.PointsOfInterest.Length ? Value : -1;
-			}
-			// process poi
-			if (j >= 0) {
-				Program.Renderer.CameraTrackFollower.UpdateAbsolute(t, true, false);
-				Program.Renderer.Camera.Alignment.Position = Program.CurrentRoute.PointsOfInterest[j].TrackOffset;
-				Program.Renderer.Camera.Alignment.Yaw = Program.CurrentRoute.PointsOfInterest[j].TrackYaw;
-				Program.Renderer.Camera.Alignment.Pitch = Program.CurrentRoute.PointsOfInterest[j].TrackPitch;
-				Program.Renderer.Camera.Alignment.Roll = Program.CurrentRoute.PointsOfInterest[j].TrackRoll;
-				Program.Renderer.Camera.Alignment.TrackPosition = t;
-				World.UpdateAbsoluteCamera(0.0);
-				return true;
-			}
-
-			return false;
-		}
-
 	}
 }

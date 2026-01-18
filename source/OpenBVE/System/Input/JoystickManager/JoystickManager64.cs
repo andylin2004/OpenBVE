@@ -4,9 +4,9 @@ using PIEHid64Net;
 
 namespace OpenBve.Input
 {
-	class JoystickManager64 : JoystickManager
+	internal class JoystickManager64 : JoystickManager
 	{
-		internal PIEDevice[] devices;
+		private readonly PIEDevice[] devices;
 
 		internal JoystickManager64()
 		{
@@ -16,17 +16,7 @@ namespace OpenBve.Input
 			}
 		}
 		
-		internal override int RailDriverCount
-		{
-			get
-			{
-				if (devices == null)
-				{
-					return 0;
-				}
-				return devices.Length;
-			} 
-		}
+		internal override int RailDriverCount => devices?.Length ?? 0;
 
 		internal override void RefreshJoysticks()
 		{
@@ -38,39 +28,39 @@ namespace OpenBve.Input
 					var state = OpenTK.Input.Joystick.GetState(i);
 					Guid foundGuid = OpenTK.Input.Joystick.GetGuid(i);
 					var description = OpenTK.Input.Joystick.GetCapabilities(i);
-					if (description.ToString() == "{Axes: 0; Buttons: 0; Hats: 0; IsConnected: True}")
+					if (description.ButtonCount == 0 && description.HatCount == 0 && description.AxisCount == 0 && description.IsConnected)
 					{
+						// Broken joystick drivers- pointless attempting to go any further
 						break;
 					}
-					//A joystick with 56 buttons and zero axis is likely the RailDriver, which is bugged in openTK
-					if (description.ToString() != "{Axes: 0; Buttons: 56; Hats: 0; IsConnected: True}")
+					// A joystick with 56 buttons and zero axis is likely the RailDriver, which is bugged in openTK
+					// OpenTK also returns an empty GUID if we call GetState on an invalid joystick
+					if (description.AxisCount == 0 && description.ButtonCount == 56 && description.IsConnected || foundGuid == Guid.Empty) continue;
+					if (Program.CurrentHost.MonoRuntime)
 					{
-						if (Program.CurrentHost.MonoRuntime)
+						if (description.AxisCount == 0 && description.ButtonCount == 0 && description.HatCount == 0)
 						{
-							if (description.AxisCount == 0 && description.ButtonCount == 0 && description.HatCount == 0)
-							{
-								continue;
-							}
+							continue;
 						}
-						else
+					}
+					else
+					{
+						if (!state.IsConnected)
 						{
-							if (!state.IsConnected)
-							{
-								continue;
-							}
+							continue;
 						}
+					}
 
-						StandardJoystick newJoystick = new StandardJoystick(i);
+					StandardJoystick newJoystick = new StandardJoystick(i);
 
-						if (AttachedJoysticks.ContainsKey(newJoystick.GetGuid()))
-						{
-							AttachedJoysticks[newJoystick.GetGuid()].Handle = i;
-							AttachedJoysticks[newJoystick.GetGuid()].Disconnected = false;
-						}
-						else
-						{
-							AttachedJoysticks.Add(newJoystick.GetGuid(), newJoystick);
-						}
+					if (AttachedJoysticks.ContainsKey(newJoystick.GetGuid()))
+					{
+						AttachedJoysticks[newJoystick.GetGuid()].Handle = i;
+						AttachedJoysticks[newJoystick.GetGuid()].Disconnected = false;
+					}
+					else
+					{
+						AttachedJoysticks.Add(newJoystick.GetGuid(), newJoystick);
 					}
 				}
 				catch
@@ -95,7 +85,7 @@ namespace OpenBve.Input
 							//Raildriver controller
 							RailDriver64 newJoystick = new RailDriver64(devices[i])
 							{
-								Name = "RailDriver Desktop Cab Controller (32-bit)",
+								Name = "RailDriver Desktop Cab Controller (64-bit)",
 								Handle = i,
 								wData = new byte[]
 								{

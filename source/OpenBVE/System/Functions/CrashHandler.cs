@@ -1,19 +1,20 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using OpenBveApi.Hosts;
-
+// ReSharper disable LocalizableElement
+// Note: Crashes may occur before languages have been loaded, so this file cannot be localised
 namespace OpenBve
 {
     /// <summary>Provides functions for handling crashes, and producing an appropriate error log</summary>
-    class CrashHandler
+    internal class CrashHandler
     {
-        static readonly System.Globalization.CultureInfo Culture = System.Globalization.CultureInfo.InvariantCulture;
-        static readonly string CrashLog = OpenBveApi.Path.CombineFile(Program.FileSystem.SettingsFolder,"OpenBVE Crash- " + DateTime.Now.ToString("yyyy.M.dd[HH.mm]") + ".log");
+        private static readonly string CrashLog = OpenBveApi.Path.CombineFile(Program.FileSystem.SettingsFolder,"OpenBVE Crash- " + DateTime.Now.ToString("yyyy.M.dd[HH.mm]") + ".log");
         /// <summary>Catches all unhandled exceptions within the current appdomain</summary>
-        internal static void CurrentDomain_UnhandledException(Object sender, UnhandledExceptionEventArgs e)
+        internal static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
 	        if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size !=4)
 	        {
@@ -28,7 +29,7 @@ namespace OpenBve
                 if (ex is ArgumentOutOfRangeException && ex.Message == "Specified argument was out of the range of valid values.\r\nParameter name: button")
                 {
                     //If a joystick with an excessive number of axis or buttons is connected, at the least show a nice error message, rather than simply dissapearing
-                    MessageBox.Show("An unsupported joystick is connected: \n \n Too many buttons. \n \n Please unplug all USB joysticks & gamepads and try again.");
+                    Program.ShowMessageBox("An unsupported joystick is connected: \n \n Too many buttons. \n \n Please unplug all USB joysticks & gamepads and try again.", Application.ProductName);
                     Environment.Exit(0);
                 }
                 if (ex is ArgumentOutOfRangeException && ex.Message == "Specified argument was out of the range of valid values.\r\nParameter name: axis")
@@ -37,7 +38,7 @@ namespace OpenBve
                     MessageBox.Show("An unsupported joystick is connected: \n \n Too many axis. \n \n Please unplug all USB joysticks & gamepads and try again.");
                     Environment.Exit(0);
                 }
-                MessageBox.Show("Unhandled exception:\n\n" + ex.Message, "OpenBVE", MessageBoxButtons.OK, MessageBoxIcon.Hand);
+                Program.ShowMessageBox("Unhandled exception:\n\n" + ex.Message, Application.ProductName);
                 LogCrash(ex + Environment.StackTrace);
 
             }
@@ -45,8 +46,8 @@ namespace OpenBve
             {
                 try
                 {
-                    MessageBox.Show("A fatal exception occured inside the UnhandledExceptionHandler:" + Environment.NewLine + Environment.NewLine
-                        + exc.Message, "", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                    Program.ShowMessageBox("A fatal exception occured inside the UnhandledExceptionHandler:" + Environment.NewLine + Environment.NewLine
+                        + exc.Message, Application.ProductName);
                         LogCrash(exc + Environment.StackTrace);
                 }
                 finally
@@ -87,13 +88,13 @@ namespace OpenBve
         }
 
         /// <summary>This function logs an unhandled crash to disk</summary>
-        internal static void LogCrash(string ExceptionText)
+        internal static void LogCrash(string exceptionText)
         {
 			Program.FileSystem.AppendToLogFile("WARNING: Program crashing. Creating CrashLog file: " + CrashLog);
 			using (StreamWriter outputFile = new StreamWriter(CrashLog))
             {
                 //Basic information
-                outputFile.WriteLine(DateTime.Now);
+                outputFile.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 outputFile.WriteLine("OpenBVE " + Application.ProductVersion + " Crash Log");
                 var Platform = "Unknown";
                 if (OpenTK.Configuration.RunningOnWindows)
@@ -146,7 +147,7 @@ namespace OpenBve
                 //Track position and viewing distance
                 try
                 {
-	                outputFile.WriteLine("Current track position is: " + Program.Renderer.CameraTrackFollower.TrackPosition.ToString("0.00", Culture) + " m");
+	                outputFile.WriteLine("Current track position is: " + Program.Renderer.CameraTrackFollower.TrackPosition.ToString("0.00", CultureInfo.InvariantCulture) + " m");
 	                outputFile.WriteLine("Current viewing distance is: " + Interface.CurrentOptions.ViewingDistance);
                 }
                 catch
@@ -155,7 +156,7 @@ namespace OpenBve
                 }
                 
                 outputFile.WriteLine("The exception caught was as follows: ");
-                outputFile.WriteLine(ExceptionText);
+                outputFile.WriteLine(exceptionText);
                 try
                 {
 	                double MemoryUsed;
@@ -184,7 +185,7 @@ namespace OpenBve
 			using (StreamWriter outputFile = new StreamWriter(CrashLog))
             {
                 //Basic information
-                outputFile.WriteLine(DateTime.Now);
+                outputFile.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 outputFile.WriteLine("OpenBVE " + Application.ProductVersion + " Crash Log");
                 var Platform = "Unknown";
                 if (OpenTK.Configuration.RunningOnWindows)
@@ -254,7 +255,8 @@ namespace OpenBve
 	                outputFile.WriteLine("This may indicate a wider system issue.");
                 }
             }
-
-        }
+            // Attempt to gracefully shutdown the renderer to terminate hanging threads etc.
+            Loading.Cancel = true;
+		}
     }
 }

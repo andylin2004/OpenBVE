@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using OpenBveApi;
 using OpenBveApi.Colors;
 using OpenBveApi.Trains;
@@ -9,7 +8,7 @@ using TrainManager;
 
 namespace OpenBve
 {
-	partial class MessageManager
+	internal partial class MessageManager
 	{
 		/// <summary>Contains the current textual messages</summary>
 		internal static readonly List<AbstractMessage> TextualMessages = new List<AbstractMessage>();
@@ -25,12 +24,17 @@ namespace OpenBve
 		/// <param name="key">The textual key identifiying this message</param>
 		internal static void AddMessage(string Text, MessageDependency Depencency, GameMode Mode, MessageColor Color, double Timeout, string key)
 		{
+			if (TrainManagerBase.PlayerTrain == null)
+			{
+				Program.FileSystem.AppendToLogFile(Text);
+				return;
+			}
 			if (Interface.CurrentOptions.GameMode <= Mode)
 			{
 				GameMessage message = new GameMessage
 				{
 					InternalText = Text,
-					MessageToDisplay = String.Empty,
+					MessageToDisplay = string.Empty,
 					Depencency = Depencency,
 					Color = Color,
 					Timeout = Timeout,
@@ -139,11 +143,11 @@ namespace OpenBve
 		}
 
 		/// <summary>Updates all current messages</summary>
-		internal static void UpdateMessages()
+		internal static void UpdateMessages(double timeElapsed)
 		{
 			for (int i = TextualMessages.Count -1; i >= 0; i--)
 			{
-				TextualMessages[i].Update();
+				TextualMessages[i].Update(timeElapsed);
 				if (TextualMessages[i].QueueForRemoval)
 				{
 					TextualMessages.RemoveAt(i);
@@ -151,7 +155,7 @@ namespace OpenBve
 			}
 			for (int i = ImageMessages.Count - 1; i >= 0; i--)
 			{
-				ImageMessages[i].Update();
+				ImageMessages[i].Update(timeElapsed);
 				if (ImageMessages[i].QueueForRemoval)
 				{
 					ImageMessages.RemoveAt(i);

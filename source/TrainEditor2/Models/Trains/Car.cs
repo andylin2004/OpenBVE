@@ -1,5 +1,9 @@
 ﻿using System;
-using Prism.Mvvm;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
+using System.Xml.Linq;
+using TrainEditor2.Extensions;
 
 namespace TrainEditor2.Models.Trains
 {
@@ -18,67 +22,60 @@ namespace TrainEditor2.Models.Trains
 
 			internal bool DefinedAxles
 			{
-				get
-				{
-					return definedAxles;
-				}
-				set
-				{
-					SetProperty(ref definedAxles, value);
-				}
+				get => definedAxles;
+				set => SetProperty(ref definedAxles, value);
 			}
 
 			internal double FrontAxle
 			{
-				get
-				{
-					return frontAxle;
-				}
-				set
-				{
-					SetProperty(ref frontAxle, value);
-				}
+				get => frontAxle;
+				set => SetProperty(ref frontAxle, value);
 			}
 
 			internal double RearAxle
 			{
-				get
-				{
-					return rearAxle;
-				}
-				set
-				{
-					SetProperty(ref rearAxle, value);
-				}
+				get => rearAxle;
+				set => SetProperty(ref rearAxle, value);
 			}
 
 			internal bool Reversed
 			{
-				get
-				{
-					return reversed;
-				}
-				set
-				{
-					SetProperty(ref reversed, value);
-				}
+				get => reversed;
+				set => SetProperty(ref reversed, value);
 			}
 
 			internal string Object
 			{
-				get
-				{
-					return _object;
-				}
-				set
-				{
-					SetProperty(ref _object, value);
-				}
+				get => _object;
+				set => SetProperty(ref _object, value);
 			}
 
 			public object Clone()
 			{
 				return MemberwiseClone();
+			}
+
+			internal void WriteExtensionsCfg(string fileName, StringBuilder builder, int bogieIndex)
+			{
+				builder.AppendLine($"[Bogie{bogieIndex.ToString(CultureInfo.InvariantCulture)}]");
+				Utilities.WriteKey(builder, "Object", Utilities.MakeRelativePath(fileName, Object));
+
+				if (DefinedAxles)
+				{
+					Utilities.WriteKey(builder, "Axles", RearAxle, FrontAxle);
+				}
+
+				Utilities.WriteKey(builder, "Reversed", Reversed.ToString());
+			}
+
+			internal void WriteXML(string fileName, XElement carNode, bool isFront)
+			{
+				XElement bogieElement = new XElement(isFront ? "FrontBogie" : "RearBogie",
+					new XElement("FrontAxle", FrontAxle),
+					new XElement("RearAxle", RearAxle),
+					new XElement("Reversed", Reversed),
+					new XElement("Object", Utilities.MakeRelativePath(fileName, Object)));
+				carNode.Add(bogieElement);
 			}
 		}
 
@@ -103,244 +100,126 @@ namespace TrainEditor2.Models.Trains
 		private string _object;
 		private bool loadingSway;
 
+		internal ObservableCollection<ParticleSource> particleSources = new ObservableCollection<ParticleSource>();
+
 		internal double Mass
 		{
-			get
-			{
-				return mass;
-			}
-			set
-			{
-				SetProperty(ref mass, value);
-			}
+			get => mass;
+			set => SetProperty(ref mass, value);
 		}
 
 		internal double Length
 		{
-			get
-			{
-				return length;
-			}
-			set
-			{
-				SetProperty(ref length, value);
-			}
+			get => length;
+			set => SetProperty(ref length, value);
 		}
 
 		internal double Width
 		{
-			get
-			{
-				return width;
-			}
-			set
-			{
-				SetProperty(ref width, value);
-			}
+			get => width;
+			set => SetProperty(ref width, value);
 		}
 
 		internal double Height
 		{
-			get
-			{
-				return height;
-			}
-			set
-			{
-				SetProperty(ref height, value);
-			}
+			get => height;
+			set => SetProperty(ref height, value);
 		}
 
 		internal double CenterOfGravityHeight
 		{
-			get
-			{
-				return centerOfGravityHeight;
-			}
-			set
-			{
-				SetProperty(ref centerOfGravityHeight, value);
-			}
+			get => centerOfGravityHeight;
+			set => SetProperty(ref centerOfGravityHeight, value);
 		}
 
 		internal bool DefinedAxles
 		{
-			get
-			{
-				return definedAxles;
-			}
-			set
-			{
-				SetProperty(ref definedAxles, value);
-			}
+			get => definedAxles;
+			set => SetProperty(ref definedAxles, value);
 		}
 
 		internal double FrontAxle
 		{
-			get
-			{
-				return frontAxle;
-			}
-			set
-			{
-				SetProperty(ref frontAxle, value);
-			}
+			get => frontAxle;
+			set => SetProperty(ref frontAxle, value);
 		}
 
 		internal double RearAxle
 		{
-			get
-			{
-				return rearAxle;
-			}
-			set
-			{
-				SetProperty(ref rearAxle, value);
-			}
+			get => rearAxle;
+			set => SetProperty(ref rearAxle, value);
 		}
 
 		internal Bogie FrontBogie
 		{
-			get
-			{
-				return frontBogie;
-			}
-			set
-			{
-				SetProperty(ref frontBogie, value);
-			}
+			get => frontBogie;
+			set => SetProperty(ref frontBogie, value);
 		}
 
 		internal Bogie RearBogie
 		{
-			get
-			{
-				return rearBogie;
-			}
-			set
-			{
-				SetProperty(ref rearBogie, value);
-			}
+			get => rearBogie;
+			set => SetProperty(ref rearBogie, value);
 		}
 
 		internal double ExposedFrontalArea
 		{
-			get
-			{
-				return exposedFrontalArea;
-			}
-			set
-			{
-				SetProperty(ref exposedFrontalArea, value);
-			}
+			get => exposedFrontalArea;
+			set => SetProperty(ref exposedFrontalArea, value);
 		}
 
 		internal double UnexposedFrontalArea
 		{
-			get
-			{
-				return unexposedFrontalArea;
-			}
-			set
-			{
-				SetProperty(ref unexposedFrontalArea, value);
-			}
+			get => unexposedFrontalArea;
+			set => SetProperty(ref unexposedFrontalArea, value);
 		}
 
 		internal Performance Performance
 		{
-			get
-			{
-				return performance;
-			}
-			set
-			{
-				SetProperty(ref performance, value);
-			}
+			get => performance;
+			set => SetProperty(ref performance, value);
 		}
 
 		internal Delay Delay
 		{
-			get
-			{
-				return delay;
-			}
-			set
-			{
-				SetProperty(ref delay, value);
-			}
+			get => delay;
+			set => SetProperty(ref delay, value);
 		}
 
 		internal Move Move
 		{
-			get
-			{
-				return move;
-			}
-			set
-			{
-				SetProperty(ref move, value);
-			}
+			get => move;
+			set => SetProperty(ref move, value);
 		}
 
 		internal Brake Brake
 		{
-			get
-			{
-				return brake;
-			}
-			set
-			{
-				SetProperty(ref brake, value);
-			}
+			get => brake;
+			set => SetProperty(ref brake, value);
 		}
 
 		internal Pressure Pressure
 		{
-			get
-			{
-				return pressure;
-			}
-			set
-			{
-				SetProperty(ref pressure, value);
-			}
+			get => pressure;
+			set => SetProperty(ref pressure, value);
 		}
 
 		internal bool Reversed
 		{
-			get
-			{
-				return reversed;
-			}
-			set
-			{
-				SetProperty(ref reversed, value);
-			}
+			get => reversed;
+			set => SetProperty(ref reversed, value);
 		}
 
 		internal string Object
 		{
-			get
-			{
-				return _object;
-			}
-			set
-			{
-				SetProperty(ref _object, value);
-			}
+			get => _object;
+			set => SetProperty(ref _object, value);
 		}
 
 		internal bool LoadingSway
 		{
-			get
-			{
-				return loadingSway;
-			}
-			set
-			{
-				SetProperty(ref loadingSway, value);
-			}
+			get => loadingSway;
+			set => SetProperty(ref loadingSway, value);
 		}
 
 		internal Car()
@@ -379,6 +258,25 @@ namespace TrainEditor2.Models.Trains
 			car.Pressure = (Pressure)Pressure.Clone();
 			return car;
 		}
+
+		public void WriteExtensionsCfg(string fileName, StringBuilder builder, int carIndex)
+		{
+			builder.AppendLine($"[Car{carIndex.ToString(CultureInfo.InvariantCulture)}]");
+			Utilities.WriteKey(builder, "Object", Utilities.MakeRelativePath(fileName, Object));
+			Utilities.WriteKey(builder, "Length", Length);
+
+			if (DefinedAxles)
+			{
+				Utilities.WriteKey(builder, "Axles", RearAxle, FrontAxle);
+			}
+
+			Utilities.WriteKey(builder, "Reversed", Reversed.ToString());
+			Utilities.WriteKey(builder, "LoadingSway", LoadingSway.ToString());
+			FrontBogie.WriteExtensionsCfg(fileName, builder, carIndex * 2);
+			RearBogie.WriteExtensionsCfg(fileName, builder, carIndex * 2 + 1);
+		}
+
+		public abstract void WriteXML(string fileName, XElement trainNode, Train train, int i);
 	}
 
 	internal class MotorCar : Car
@@ -388,26 +286,14 @@ namespace TrainEditor2.Models.Trains
 
 		internal Acceleration Acceleration
 		{
-			get
-			{
-				return acceleration;
-			}
-			set
-			{
-				SetProperty(ref acceleration, value);
-			}
+			get => acceleration;
+			set => SetProperty(ref acceleration, value);
 		}
 
 		internal Motor Motor
 		{
-			get
-			{
-				return motor;
-			}
-			set
-			{
-				SetProperty(ref motor, value);
-			}
+			get => motor;
+			set => SetProperty(ref motor, value);
 		}
 
 		internal MotorCar()
@@ -449,6 +335,38 @@ namespace TrainEditor2.Models.Trains
 			car.Motor = (Motor)Motor.Clone();
 			return car;
 		}
+
+		public override void WriteXML(string fileName, XElement trainNode, Train train, int i)
+		{
+			XElement carElement = new XElement("Car",
+				new XElement("Mass", Mass),
+				new XElement("Length", Length),
+				new XElement("Width", Width),
+				new XElement("Height", Height),
+				new XElement("CenterOfGravityHeight", CenterOfGravityHeight),
+				new XElement("FrontAxle", FrontAxle),
+				new XElement("RearAxle", RearAxle),
+				new XElement("ExposedFrontalArea", ExposedFrontalArea),
+				new XElement("UnexposedFrontalArea", UnexposedFrontalArea),
+				new XElement("Reversed", Reversed),
+				new XElement("Object", Utilities.MakeRelativePath(fileName, Object)),
+				new XElement("LoadingSway", LoadingSway)
+			);
+			Brake.WriteXML(fileName, carElement, true);
+			FrontBogie.WriteXML(fileName, carElement, true);
+			RearBogie.WriteXML(fileName, carElement, false);
+			Acceleration.WriteXML(fileName, carElement);
+			if (i == train.Cab.DriverCar)
+			{
+				train.Cab.WriteXML(fileName, carElement);
+			}
+
+			for (int p = 0; p < particleSources.Count; p++)
+			{
+				particleSources[p].WriteXML(fileName, carElement);
+			}
+			trainNode.Add(carElement);
+		}
 	}
 
 	internal class TrailerCar : Car
@@ -479,6 +397,37 @@ namespace TrainEditor2.Models.Trains
 			Reversed = car.Reversed;
 			Object = car.Object;
 			LoadingSway = car.LoadingSway;
+		}
+
+		public override void WriteXML(string fileName, XElement trainNode, Train train, int i)
+		{
+			XElement carElement = new XElement("Car",
+				new XElement("Mass", Mass),
+				new XElement("Length", Length),
+				new XElement("Width", Width),
+				new XElement("Height", Height),
+				new XElement("CenterOfGravityHeight", CenterOfGravityHeight),
+				new XElement("FrontAxle", FrontAxle),
+				new XElement("RearAxle", RearAxle),
+				new XElement("ExposedFrontalArea", ExposedFrontalArea),
+				new XElement("UnexposedFrontalArea", UnexposedFrontalArea),
+				new XElement("Reversed", Reversed),
+				new XElement("Object", Utilities.MakeRelativePath(fileName, Object)),
+				new XElement("LoadingSway", LoadingSway)
+			);
+			Brake.WriteXML(fileName, carElement, false);
+			FrontBogie.WriteXML(fileName, carElement, true);
+			RearBogie.WriteXML(fileName, carElement, false);
+			if (i == train.Cab.DriverCar)
+			{
+				train.Cab.WriteXML(fileName, carElement);
+			}
+
+			for (int p = 0; p < particleSources.Count; p++)
+			{
+				particleSources[p].WriteXML(fileName, carElement);
+			}
+			trainNode.Add(carElement);
 		}
 	}
 }

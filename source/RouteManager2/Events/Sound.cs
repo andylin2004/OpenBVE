@@ -79,19 +79,34 @@ namespace RouteManager2.Events
 		/// <param name="trackFollower">The TrackFollower</param>
 		public override void Trigger(int direction, TrackFollower trackFollower)
 		{
-			if (SoundsBase.SuppressSoundEvents) return;
+			if (SoundsBase.SuppressSoundEvents)
+			{
+				/*
+				 * SuppressSoundEvents is *only* set whilst the train is processing a jump
+				 * Use this fact to reset the sound event trigger, so single-time announcements work correctly
+				 */
+				DontTriggerAnymore = false;
+				return;
+			}
 			EventTriggerType triggerType = trackFollower.TriggerType;
 			if (triggerType == EventTriggerType.FrontCarFrontAxle | triggerType == EventTriggerType.OtherCarFrontAxle | triggerType == EventTriggerType.OtherCarRearAxle | triggerType == EventTriggerType.RearCarRearAxle)
 			{
 				if (!PlayerTrainOnly | trackFollower.Train.IsPlayerTrain)
 				{
-					if (AllCars && triggerType == EventTriggerType.OtherCarRearAxle)
+					if (AllCars)
 					{
 						/*
 						 * For a multi-car announce, we only want the front axles to trigger
 						 * However, we also want the rear car, rear axle to run the final processing of DontTriggerAnymore
 						 */
-						return;
+						switch (triggerType)
+						{
+							case EventTriggerType.OtherCarRearAxle:
+								return;
+							case EventTriggerType.RearCarRearAxle:
+								this.DontTriggerAnymore = this.Once;
+								return;
+						}
 					}
 					double pitch = 1.0;
 					double gain = 1.0;
@@ -111,14 +126,12 @@ namespace RouteManager2.Events
 						}
 						if (buffer != null)
 						{
-							if (AllCars || triggerType != EventTriggerType.RearCarRearAxle)
-							{
-								currentHost.PlaySound(buffer, pitch, gain, Position, trackFollower.Car, false);
-							}
+							currentHost.PlaySound(buffer, pitch, gain, Position, trackFollower.Car, false);
 						}
 					}
-					if (!AllCars || triggerType == EventTriggerType.RearCarRearAxle)
+					if (!AllCars)
 					{
+						// All cars case is handled above
 						this.DontTriggerAnymore = this.Once;
 					}
 				}

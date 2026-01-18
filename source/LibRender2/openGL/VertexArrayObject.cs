@@ -1,12 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using OpenBveApi.Colors;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Objects;
 using OpenBveApi.Routes;
 using OpenTK.Graphics.OpenGL;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace LibRender2
 {
@@ -90,7 +90,7 @@ namespace LibRender2
 		}
 
 		/// <summary>
-		/// Update the VertexData into the the VBO
+		/// Updates the VertexData in the the VBO
 		/// </summary>
 		public void UpdateVBO(LibRenderVertex[] VertexData, int Offset = 0)
 		{
@@ -167,16 +167,40 @@ namespace LibRender2
 		/// <param name="isDynamic">Whether the mesh is dynamic (e.g. part of an animated object / train)</param>
 		/// <param name="vertexLayout">The vertex layout to use</param>
 		/// <param name="renderer">A reference to the base renderer</param>
-		public static void CreateVAO(ref Mesh mesh, bool isDynamic, VertexLayout vertexLayout, BaseRenderer renderer)
+		public static void CreateVAO(Mesh mesh, bool isDynamic, VertexLayout vertexLayout, BaseRenderer renderer)
 		{
+			if (!renderer.GameWindow.Context.IsCurrent)
+			{
+				renderer.RunInRenderThread(() =>
+				{
+					createVAO(mesh, isDynamic, vertexLayout, renderer);
+				}, 2000);
+			}
+			else
+			{
+				createVAO(mesh, isDynamic, vertexLayout, renderer);
+			}
+		}
+
+		
+		private static void createVAO(Mesh mesh, bool isDynamic, VertexLayout vertexLayout, BaseRenderer renderer)
+		{
+			if (mesh == null)
+			{
+				return;
+			}
 			try
 			{
 				var hint = isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw;
 
-				var vertexData = new List<LibRenderVertex>();
+				/* n.b. Initial length should be at least number of vertices in mesh. (may be greater if some are re-used with different UV)
+				 *      This marginally helps loading very large objects (as default C# list starts at a capacity of 4 then doubles exponentially)     
+				 */
+
+				var vertexData = new List<LibRenderVertex>(mesh.Vertices.Length);
 				var indexData = new List<uint>();
 
-				var normalsVertexData = new List<LibRenderVertex>();
+				var normalsVertexData = new List<LibRenderVertex>(mesh.Vertices.Length * 2);
 				var normalsIndexData = new List<uint>();
 
 				for (int i = 0; i < mesh.Faces.Length; i++)
@@ -186,26 +210,9 @@ namespace LibRender2
 
 					foreach (var vertex in mesh.Faces[i].Vertices)
 					{
-						var data = new LibRenderVertex
-						{
-							Position = mesh.Vertices[vertex.Index].Coordinates,
-							Normal = vertex.Normal,
-							UV = new Vector2f(mesh.Vertices[vertex.Index].TextureCoordinates),
-							Color = (mesh.Vertices[vertex.Index] as ColoredVertex)?.Color ?? Color128.White
-						};
-
-						vertexData.Add(data);
-
-						var normalsData = new LibRenderVertex[2];
-						normalsData[0].Position = data.Position;
-						normalsData[1].Position = data.Position + data.Normal;
-
-						for (int j = 0; j < normalsData.Length; j++)
-						{
-							normalsData[j].Color = Color128.White;
-						}
-
-						normalsVertexData.AddRange(normalsData);
+						vertexData.Add(new LibRenderVertex(mesh.Vertices[vertex.Index], vertex.Normal));
+						normalsVertexData.Add(new LibRenderVertex(mesh.Vertices[vertex.Index].Coordinates));
+						normalsVertexData.Add(new LibRenderVertex(mesh.Vertices[vertex.Index].Coordinates + vertex.Normal));
 					}
 
 					indexData.AddRange(Enumerable.Range(mesh.Faces[i].IboStartIndex, mesh.Faces[i].Vertices.Length).Select(x => (uint)x));

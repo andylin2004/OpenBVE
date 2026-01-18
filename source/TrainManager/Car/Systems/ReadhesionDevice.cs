@@ -27,9 +27,9 @@ namespace TrainManager.Car
 		public BveReAdhesionDevice(CarBase car, ReadhesionDeviceType type) : base(car)
 		{
 			this.DeviceType = type;
-			this.MaximumAccelerationOutput = Double.PositiveInfinity;
+			this.MaximumAccelerationOutput = double.PositiveInfinity;
 			this.ApplicationFactor = 0.0;
-			if (Car.Specs.IsMotorCar)
+			if (Car.TractionModel.ProvidesPower)
 			{
 				switch (type)
 				{
@@ -67,11 +67,9 @@ namespace TrainManager.Car
 			}
 		}
 
-		/// <summary>Called once a frame to update the re-adhesion device when powering</summary>
-		/// <param name="CurrentAcceleration">The current acceleration output</param>
-		public override void Update(double CurrentAcceleration)
+		public override void Update(double TimeElapsed)
 		{
-			if (TrainManagerBase.currentHost.InGameTime < NextUpdateTime)
+			if (TrainManagerBase.currentHost.InGameTime < NextUpdateTime || Car.TractionModel.MaximumCurrentAcceleration == -1)
 			{
 				return;
 			}
@@ -79,7 +77,7 @@ namespace TrainManager.Car
 			NextUpdateTime = TrainManagerBase.currentHost.InGameTime + this.UpdateInterval;
 			if (Car.FrontAxle.CurrentWheelSlip | Car.RearAxle.CurrentWheelSlip)
 			{
-				MaximumAccelerationOutput = CurrentAcceleration * this.ApplicationFactor;
+				MaximumAccelerationOutput = Car.TractionModel.MaximumCurrentAcceleration * this.ApplicationFactor;
 				TimeStable = 0.0;
 			}
 			else
@@ -88,7 +86,7 @@ namespace TrainManager.Car
 				if (TimeStable >= this.ReleaseInterval)
 				{
 					TimeStable -= this.ReleaseInterval;
-					if (this.ReleaseFactor != 0.0 & MaximumAccelerationOutput <= CurrentAcceleration + 1.0)
+					if (this.ReleaseFactor != 0.0 & MaximumAccelerationOutput <= Car.TractionModel.MaximumCurrentAcceleration + 1.0)
 					{
 						if (MaximumAccelerationOutput < 0.025)
 						{

@@ -59,6 +59,9 @@
 	</Patch>
 	<!-- Hakone- Tozan Railway -->
 	<!-- Viewing distance is required to stop terrain re-appearing on sharp curves -->
+	<!-- NOTE: Couple of glitches due to the ObjectVisibility setting, however do not enable this as it causes others -->
+	<!-- https://github.com/leezer3/OpenBVE/issues/907 -->
+	<!-- v0.6-->
 	<Patch>
 		<Hash>3404C2FA1D32366C0B5FEEAFCEF9EA842AECE937F469CBCD82D6E2424418176D</Hash>
 		<FileName>1.csv</FileName>
@@ -75,6 +78,15 @@
 		<Expression Number="1292">.Sta 上大平台信号場(着);;C;0;0;0;0;;;0;</Expression>
 		<ViewingDistance>250</ViewingDistance>
 	</Patch>
+	<!-- v0.6b-->
+	<Patch>
+		<Hash>6BB6E15B46CA9E46E6235C764A7FF5D1EA13AED145130BA8D96DA40529AA333F</Hash>
+		<FileName>1.csv</FileName>
+		<Expression Number="748">.Sta 出山信号場(着);;C;0;0;0;0;;;0;</Expression>
+		<Expression Number="1099">.Sta 大平台(着);;C;0;1;1;0;;25;50;</Expression>
+		<Expression Number="1293">.Sta 上大平台信号場(着);;C;0;0;0;0;;;0;</Expression>
+		<ViewingDistance>250</ViewingDistance>
+	</Patch>
 	<!-- cyber_blue_liner -->
 	<!-- BVE2 routefiles -->
 	<Patch>
@@ -84,7 +96,7 @@
 	</Patch>
 	<Patch>
 		<Hash>5AECCC4F118C85EE087F1A13817CBC9CDACD1113084AAF610CDEDA5CC77DAA4C</Hash>
-		<FileName>4005M・Solｦ5Zc・.csv</FileName>
+		<FileName>4005M繝ｻSol・ｦ5Zc繝ｻ.csv</FileName>
 		<ReducedColorTransparency>true</ReducedColorTransparency>
 	</Patch>
 	<Patch>
@@ -130,8 +142,41 @@
 	</Patch>
 	<Patch>
 		<Hash>5A7E23851B3621FA24FFBAC20AEBD04D89431EDE9CB03F6644B356BF26E2FE92</Hash>
-		<FileName>4005M・Solｦ5Zc・.csv</FileName>
+		<FileName>4005M繝ｻSol・ｦ5Zc繝ｻ.csv</FileName>
 		<ReducedColorTransparency>true</ReducedColorTransparency>
+	</Patch>
+	<!-- Tokyo Monorail Haneda Line -->
+	<!-- BVE2 routefiles -->
+	<Patch>
+		<Hash>CB439820AB9669B13957E103A3ABE14CD32A81A179A48C77D4C4CD15CBDFF22F</Hash>
+		<FileName>F1407.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
+	</Patch>
+	<Patch>
+		<Hash>06A63505848716C9D943FA7884DC2B4667348E62B3BC4DF701F5DDE9ADFDB1C2</Hash>
+		<FileName>G1617.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
+	</Patch>
+	<Patch>
+		<Hash>53BDBE8A11CB8296AFAD06C324DCF4CFC2BA54469A85B8C97371DEE24210D374</Hash>
+		<FileName>1327H.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
+	</Patch>
+	<!-- BVE4 routefiles -->
+	<Patch>
+		<Hash>F9E332C908A8BDAAB73B5D3ED246CAF4BFF04EB3308AB80ABC9FE1C0860C5D50</Hash>
+		<FileName>F1407.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
+	</Patch>
+	<Patch>
+		<Hash>8A761C18EE3B3041FFDAC68267FECEF55A80BADD8007C8B839EEE992EDEBEC90</Hash>
+		<FileName>G1617.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
+	</Patch>
+	<Patch>
+		<Hash>C292164821AA50539466F8C5F2C460B09F105E6085AC68D9D2B27CB65A6E4779</Hash>
+		<FileName>1327H.csv</FileName>
+		<AccurateObjectDisposal>true</AccurateObjectDisposal>
 	</Patch>
   </RoutePatches>
 </openBVE>

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using OpenBveApi.Colors;
 using OpenBveApi.Hosts;
 using OpenBveApi.Math;
@@ -65,8 +66,7 @@ namespace LibRender2.Overlays
 		{
 			double halfDistance = (Math.Max(Renderer.currentOptions.ViewingDistance, 1000) / 2.0) * 1.1;
 			int numElements = (int)(halfDistance / BlockLength);
-			int startElement;
-			if (!Display || !Visible(Renderer.CameraTrackFollower.TrackPosition, out startElement))
+			if (!Display || !Visible(Renderer.CameraTrackFollower.TrackPosition, out int startElement))
 			{
 				return;
 			}
@@ -77,33 +77,44 @@ namespace LibRender2.Overlays
 				return;
 			}
 
-			List<Vector3> points = new List<Vector3>();
+			List<List<Vector3>> sections = new List<List<Vector3>>{ new List<Vector3>() };
+			bool lastElementInvalid = false;
+			
 			for (int e = firstElement; e < lastElement; e++)
 			{
 				if (currentHost.Tracks[RailKey].Elements[e].WorldPosition != Vector3.Zero)
 				{
-					points.Add(new Vector3(currentHost.Tracks[RailKey].Elements[e].WorldPosition.X, currentHost.Tracks[RailKey].Elements[e].WorldPosition.Y + 0.5, currentHost.Tracks[RailKey].Elements[e].WorldPosition.Z));
+					bool invalidElement = currentHost.Tracks[RailKey].Elements[e].InvalidElement;
+					
+					if (invalidElement && lastElementInvalid)
+					{
+						if(sections.Last().Count > 0) sections.Add(new List<Vector3>());
+					}
+					else
+					{
+						sections.Last().Add(new Vector3(currentHost.Tracks[RailKey].Elements[e].WorldPosition.X, currentHost.Tracks[RailKey].Elements[e].WorldPosition.Y + 0.5, currentHost.Tracks[RailKey].Elements[e].WorldPosition.Z));
+					}
+					lastElementInvalid = invalidElement;
 				}
-						
 			}
 
-			if (points.Count == 0)
+			foreach (var points in sections)
 			{
-				return;
-			}
-			
-			GL.LineWidth(LineWidth);
-			GL.Begin(PrimitiveType.LineStrip);
-			
-			
-			for (int j = 0; j < points.Count; j++)
-			{
-				GL.Color3(Color.R, Color.G, Color.B);
-				GL.Vertex3(points[j].X, points[j].Y, -points[j].Z);
-			}
+				if (points.Count == 0) continue;
+				
+				GL.LineWidth(LineWidth);
+				GL.Begin(PrimitiveType.LineStrip);
+				
+				
+				for (int j = 0; j < points.Count; j++)
+				{
+					GL.Color3(Color.R, Color.G, Color.B);
+					GL.Vertex3(points[j].X, points[j].Y, -points[j].Z);
+				}
 
-			GL.End();
-			GL.LineWidth(1);
+				GL.End();
+				GL.LineWidth(1);
+			}
 		}
 
 
@@ -116,6 +127,7 @@ namespace LibRender2.Overlays
 			Color = color;
 			LineWidth = 2;
 			Display = true;
+			Description = host.Tracks[RailKey].Name;
 		}
 
 	}

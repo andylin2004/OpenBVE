@@ -1,4 +1,7 @@
-﻿#pragma warning disable 0659, 0661
+﻿using System;
+// ReSharper disable MergeCastWithTypeCheck
+
+#pragma warning disable 0659, 0661
 
 namespace OpenBveApi.Textures
 {
@@ -13,6 +16,10 @@ namespace OpenBveApi.Textures
 		public readonly TextureParameters Parameters;
 
 		private readonly Hosts.HostInterface currentHost;
+		/// <summary>The last modification time (on load) of this texture</summary>
+		public DateTime LastModificationTime;
+		/// <summary>The file size (on load) of this texture</summary>
+		public long FileSize;
 
 		// --- constructors ---
 		/// <summary>Creates a new path origin.</summary>
@@ -21,9 +28,11 @@ namespace OpenBveApi.Textures
 		/// <param name="Host">The callback function to the host application</param>
 		public PathOrigin(string path, TextureParameters parameters, Hosts.HostInterface Host)
 		{
-			this.Path = path;
-			this.Parameters = parameters;
-			this.currentHost = Host;
+			Path = path;
+			Parameters = parameters;
+			currentHost = Host;
+			LastModificationTime = System.IO.File.GetLastWriteTime(path);
+			FileSize = new System.IO.FileInfo(path).Length;
 		}
 
 		// --- functions ---
@@ -32,7 +41,7 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether the texture could be obtained successfully.</returns>
 		public override bool GetTexture(out Texture texture)
 		{
-			if (!currentHost.LoadTexture(this.Path, this.Parameters, out texture))
+			if (!currentHost.LoadTexture(Path, Parameters, out texture))
 			{
 				texture = null;
 				return false;
@@ -48,9 +57,9 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether the two origins are equal.</returns>
 		public static bool operator ==(PathOrigin a, PathOrigin b)
 		{
-			if (object.ReferenceEquals(a, b)) return true;
-			if (object.ReferenceEquals(a, null)) return false;
-			if (object.ReferenceEquals(b, null)) return false;
+			if (ReferenceEquals(a, b)) return true;
+			if (a is null) return false;
+			if (b is null) return false;
 			return a.Path == b.Path;
 		}
 
@@ -60,9 +69,9 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether the two origins are unequal.</returns>
 		public static bool operator !=(PathOrigin a, PathOrigin b)
 		{
-			if (object.ReferenceEquals(a, b)) return false;
-			if (object.ReferenceEquals(a, null)) return true;
-			if (object.ReferenceEquals(b, null)) return true;
+			if (ReferenceEquals(a, b)) return false;
+			if (a is null) return true;
+			if (b is null) return true;
 			return a.Path != b.Path;
 		}
 
@@ -71,17 +80,16 @@ namespace OpenBveApi.Textures
 		/// <returns>Whether this instance is equal to the specified object.</returns>
 		public override bool Equals(object obj)
 		{
-			if (object.ReferenceEquals(this, obj)) return true;
-			if (object.ReferenceEquals(this, null)) return false;
-			if (object.ReferenceEquals(obj, null)) return false;
+			if (ReferenceEquals(this, obj)) return true;
+			if (obj is null) return false;
 			if (!(obj is PathOrigin)) return false;
-			return this.Path == ((PathOrigin) obj).Path;
+			return Path == ((PathOrigin) obj).Path;
 		}
 
 		/// <summary>Returns a string representing the absolute on-disk path of this texture</summary>
 		public override string ToString()
 		{
-			return this.Path;
+			return Path;
 		}
 	}
 }

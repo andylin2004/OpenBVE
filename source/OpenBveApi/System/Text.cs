@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
 
 namespace OpenBveApi
 {
@@ -72,6 +73,12 @@ namespace OpenBveApi
 			}
 			Builder.Append(Text, Start, Text.Length - Start);
 			return Builder.ToString();
+		}
+
+		/// <summary>Provides an escaped copy of a string</summary>
+		public static string Escape(this string text)
+		{
+			return new XElement("t", text).LastNode.ToString();
 		}
 
 		/// <summary>Determines whether the specified string is encoded using Shift_JIS (Japanese)</summary>
@@ -219,6 +226,19 @@ namespace OpenBveApi
 				String = String.Substring(1, String.Length - 2);
 			}
 			return String;
+		}
+
+		/// <summary>Performs a string split to an array with a consistant length</summary>
+		/// <param name="text">The string to split</param>
+		/// <param name="separator">The separator character</param>
+		/// <param name="desiredLength">The desired length</param>
+		/// <returns>The split string</returns>
+		public static string[] ConsistantSplit(this string text, char separator, int desiredLength)
+		{
+			string[] result = new string[desiredLength];
+			string[] splitString = text.Split(separator);
+			Array.Copy(splitString, result, System.Math.Min(desiredLength, splitString.Length));
+			return result;
 		}
 	}
 }

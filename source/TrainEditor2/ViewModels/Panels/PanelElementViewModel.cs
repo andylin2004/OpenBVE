@@ -1,4 +1,6 @@
 ﻿using System.Globalization;
+using Formats.OpenBve;
+using OpenBveApi.Math;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -29,36 +31,28 @@ namespace TrainEditor2.ViewModels.Panels
 
 			LocationX = element
 				.ToReactivePropertyAsSynchronized(
-					x => x.LocationX,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Location,
+					x => x.X.ToString(culture),
+					x => new Vector2(x.Parse(), element.Location.Y),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			LocationY = element
 				.ToReactivePropertyAsSynchronized(
-					x => x.LocationY,
-					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Location,
+					x => x.Y.ToString(culture),
+					x => new Vector2(element.Location.X, x.Parse()),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);

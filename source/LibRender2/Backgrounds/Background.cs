@@ -149,7 +149,7 @@ namespace LibRender2.Backgrounds
 				renderer.DefaultShader.SetCurrentModelViewMatrix(Matrix4D.Scale(scale) * renderer.CurrentViewMatrix);
 
 				// fog
-				if (renderer.OptionFog)
+				if (renderer.Fog.Enabled)
 				{
 					renderer.DefaultShader.SetIsFog(true);
 					renderer.DefaultShader.SetFog(renderer.Fog);
@@ -215,7 +215,7 @@ namespace LibRender2.Backgrounds
 				GL.BindTexture(TextureTarget.Texture2D, t.OpenGlTextures[(int)OpenGlTextureWrapMode.RepeatClamp].Name);
 				renderer.LastBoundTexture = t.OpenGlTextures[(int)OpenGlTextureWrapMode.RepeatClamp];
 				GL.Color4(1.0f, 1.0f, 1.0f, alpha);
-				if (renderer.OptionFog)
+				if (renderer.Fog.Enabled)
 				{
 					GL.Enable(EnableCap.Fog);
 				}
@@ -312,6 +312,9 @@ namespace LibRender2.Backgrounds
 		/// <param name="data">The background object</param>
 		private void RenderBackgroundObject(BackgroundObject data)
 		{
+			GL.Enable(EnableCap.Blend);
+			// alpha test
+			renderer.SetAlphaFunc(AlphaFunction.Greater, 0.0f);
 			if (renderer.AvailableNewRenderer)
 			{
 				renderer.DefaultShader.Activate();
@@ -319,7 +322,7 @@ namespace LibRender2.Backgrounds
 
 				if (data.Object.Mesh.VAO == null)
 				{
-					VAOExtensions.CreateVAO(ref data.Object.Mesh, false, renderer.DefaultShader.VertexLayout, renderer);
+					VAOExtensions.CreateVAO(data.Object.Mesh, false, renderer.DefaultShader.VertexLayout, renderer);
 				}
 			}
 
@@ -347,15 +350,16 @@ namespace LibRender2.Backgrounds
 						data.Object.Mesh.Materials[face.Material].WrapMode = wrap;
 					}
 				}
-
+				GL.Enable(EnableCap.DepthClamp);
 				if (renderer.AvailableNewRenderer)
 				{
-					renderer.RenderFace(renderer.DefaultShader, new ObjectState(data.Object), face, Matrix4D.NoTransformation, Matrix4D.Scale(1.0) * renderer.CurrentViewMatrix);
+					renderer.RenderFace(renderer.DefaultShader, data.ObjectState, face, Matrix4D.NoTransformation, Matrix4D.Scale(1.0) * renderer.CurrentViewMatrix);
 				}
 				else
 				{
-					renderer.RenderFaceImmediateMode(new ObjectState(data.Object), face, Matrix4D.NoTransformation, Matrix4D.Scale(1.0) * renderer.CurrentViewMatrix);
+					renderer.RenderFaceImmediateMode(data.ObjectState, face, Matrix4D.NoTransformation, Matrix4D.Scale(1.0) * renderer.CurrentViewMatrix);
 				}
+				GL.Disable(EnableCap.DepthClamp);
 			}
 		}
 	}

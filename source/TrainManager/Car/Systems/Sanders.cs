@@ -1,4 +1,28 @@
-﻿using SoundManager;
+﻿//Simplified BSD License (BSD-2-Clause)
+//
+//Copyright (c) 2025, Christopher Lees, The OpenBVE Project
+//
+//Redistribution and use in source and binary forms, with or without
+//modification, are permitted provided that the following conditions are met:
+//
+//1. Redistributions of source code must retain the above copyright notice, this
+//   list of conditions and the following disclaimer.
+//2. Redistributions in binary form must reproduce the above copyright notice,
+//   this list of conditions and the following disclaimer in the documentation
+//   and/or other materials provided with the distribution.
+//
+//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+//DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+//ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+//(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+//LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+//ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+//SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+using SoundManager;
 
 namespace TrainManager.Car.Systems
 {
@@ -14,8 +38,8 @@ namespace TrainManager.Car.Systems
 		public double ActivationTime;
 		/// <summary>If a number of shots is available, the number remaining</summary>
 		public int NumberOfShots;
-		/// <summary>Whether the sanders are currently active</summary>
-		public bool Active;
+		/// <summary>The current state</summary>
+		public SandersState State;
 		/// <summary>The type of sanders</summary>
 		public readonly SandersType Type;
 		/// <summary>The sound played when the sanders are activated</summary>
@@ -28,12 +52,16 @@ namespace TrainManager.Car.Systems
 		public CarSound EmptySound;
 		/// <summary>The sound played when activation is attempted whilst empty</summary>
 		public CarSound EmptyActivationSound;
+		/// <summary>The maximum speed at which the sanders are effective</summary>
+		public readonly double MaximumSpeed;
 
 		private bool emptied = false;
+
 		private double timer;
-		public Sanders(CarBase car, SandersType type) : base(car)
+		public Sanders(CarBase car, SandersType type, double maximumSpeed = double.MaxValue) : base(car)
 		{
 			Type = type;
+			MaximumSpeed = maximumSpeed;
 		}
 
 		public override void Update(double timeElapsed)
@@ -43,15 +71,16 @@ namespace TrainManager.Car.Systems
 				return;
 			}
 
-			if (Active)
+			if (State != SandersState.Inactive)
 			{
 				if ((ActivationSound != null && !ActivationSound.IsPlaying) || ActivationSound == null)
 				{
-					if (LoopSound != null)
-					{
-						LoopSound.Play(Car, true);
-					}
+					LoopSound?.Play(Car, true);
 				}
+			}
+			else
+			{
+				LoopSound?.Stop();
 			}
 
 			if (SandLevel <= 0)
@@ -59,14 +88,10 @@ namespace TrainManager.Car.Systems
 				SandLevel = 0;
 				if (SandingRate != 0)
 				{
-					Active = false;
+					State = SandersState.ActiveEmpty;
 					if (!emptied)
 					{
-						if (EmptySound != null)
-						{
-							EmptySound.Play(Car, false);
-						}
-
+						EmptySound?.Play(Car, false);
 						emptied = true;
 					}
 				}
@@ -85,22 +110,22 @@ namespace TrainManager.Car.Systems
 					if (Car.FrontAxle.CurrentWheelSlip)
 					{
 						timer += timeElapsed;
-						if (timer > ActivationTime && !Active)
+						if (timer > ActivationTime && State == SandersState.Inactive && !emptied)
 						{
-							Toggle();
+							SetActive(true);
 						}
 					}
 					else
 					{
 						timer = 0;
-						if (Active)
+						if (State != SandersState.Inactive)
 						{
-							Toggle();
+							SetActive(false);
 						}
 					}
 					break;
 				case SandersType.NumberOfShots:
-					if (Active)
+					if (State == SandersState.Inactive)
 					{
 						timer -= timeElapsed;
 						if (timer <= 0)
@@ -113,7 +138,7 @@ namespace TrainManager.Car.Systems
 			}
 		}
 
-		public void Toggle()
+		public void SetActive(bool willBeActive)
 		{
 			if (Type == SandersType.NotFitted)
 			{
@@ -130,21 +155,17 @@ namespace TrainManager.Car.Systems
 				}
 				return;
 			}
-			if (Active)
-			{
+
+			// Deactivate
+			if(State != SandersState.Inactive && !willBeActive) {
 				if (Type == SandersType.NumberOfShots && timer > 0)
 				{
 					// Can't cancel shot based
 					return;
 				}
-				Active = false;
-				if (DeActivationSound != null)
-				{
-					DeActivationSound.Play(Car, false);	
-				}
-			}
-			else
-			{
+
+				DeActivationSound?.Play(Car, false);
+			} else if(State == SandersState.Inactive && willBeActive) {
 				if (Type == SandersType.NumberOfShots)
 				{
 					if (NumberOfShots <= 0)
@@ -154,12 +175,19 @@ namespace TrainManager.Car.Systems
 					NumberOfShots--;
 					timer = ApplicationTime;
 				}
-				Active = true;
-				if (ActivationSound != null)
-				{
-					ActivationSound.Play(Car, false);	
-				}
+
+				ActivationSound?.Play(Car, false);
 			}
+
+			if (willBeActive)
+			{
+				State = SandersState.Active;
+			}
+		}
+
+		public void Toggle()
+		{
+			SetActive(State != SandersState.Inactive);
 		}
 	}
 }

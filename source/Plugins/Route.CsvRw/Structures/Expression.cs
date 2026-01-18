@@ -34,16 +34,14 @@ namespace CsvRwRouteParser
 				string t = Text.Substring(0, Equals);
 				if (Section.ToLowerInvariant() == "cycle" & SectionAlwaysPrefix)
 				{
-					double b;
-					if (NumberFormats.TryParseDoubleVb6(t, out b))
+					if (NumberFormats.TryParseDoubleVb6(t, out double b))
 					{
 						t = ".Ground(" + b + ")";
 					}
 				}
 				else if (Section.ToLowerInvariant() == "signal" & SectionAlwaysPrefix)
 				{
-					double b;
-					if (NumberFormats.TryParseDoubleVb6(t, out b))
+					if (NumberFormats.TryParseDoubleVb6(t, out double b))
 					{
 						t = ".Void(" + b + ")";
 					}
@@ -54,7 +52,7 @@ namespace CsvRwRouteParser
 			}
 		}
 
-		/// <summary>Separates an expression into it's consituent command and arguments</summary>
+		/// <summary>Separates an expression into it's constituent command and arguments</summary>
 		/// <param name="Command">The command</param>
 		/// <param name="ArgumentSequence">The sequence of arguments contained within the expression</param>
 		/// <param name="Culture">The current culture</param>
@@ -63,7 +61,7 @@ namespace CsvRwRouteParser
 		/// <param name="CurrentSection">The current section being processed</param>
 		internal void SeparateCommandsAndArguments(out string Command, out string ArgumentSequence, System.Globalization.CultureInfo Culture, bool RaiseErrors, bool IsRw, string CurrentSection)
 		{
-			bool openingerror = false, closingerror = false;
+			bool openingError = false, closingError = false;
 			int i, firstClosingBracket = 0;
 			if (Plugin.CurrentOptions.EnableBveTsHacks)
 			{
@@ -78,10 +76,20 @@ namespace CsvRwRouteParser
 					//Same hack as above, found in Minobu route for BVE2
 					Text = "Texture.Background" + Text.Substring(19, Text.Length - 19);
 				}
+				else if (Text.StartsWith("Structure. ", StringComparison.InvariantCultureIgnoreCase))
+				{
+					//Another variant, this time from JR 内房Line
+					Text = "Structure." + Text.Substring(11, Text.Length - 11);
+				}
 				else if (Text.EndsWith(")height(0)", StringComparison.InvariantCultureIgnoreCase))
 				{
 					//Heavy Coal original RW- Fix starting station
 					Text = Text.Substring(0, Text.Length - 9);
+				}
+				else if (Text.StartsWith(".Sta (貨)", StringComparison.OrdinalIgnoreCase))
+				{
+					// 普通播州赤穂行 - brackets in station name
+					Text = ".Sta [貨]"+ Text.Substring(8);
 				}
 
 				if (IsRw && CurrentSection.ToLowerInvariant() == "track")
@@ -90,24 +98,22 @@ namespace CsvRwRouteParser
 					int idx = Text.LastIndexOf(')');
 					if (idx != -1 && idx != Text.Length)
 					{
-						// ReSharper disable once NotAccessedVariable
-						double d;
-						string s = this.Text.Substring(idx + 1, this.Text.Length - idx - 1).Trim();
-						if (NumberFormats.TryParseDoubleVb6(s, out d))
+						string s = Text.Substring(idx + 1, Text.Length - idx - 1).Trim();
+						if (NumberFormats.TryParseDoubleVb6(s, out double _))
 						{
-							this.Text = this.Text.Substring(0, idx).Trim();
+							Text = Text.Substring(0, idx).Trim();
 						}
 					}
 				}
 
-				if (IsRw && this.Text.EndsWith("))"))
+				if (IsRw && Text.EndsWith("))"))
 				{
 					int openingBrackets = Text.Count(x => x == '(');
 					int closingBrackets = Text.Count(x => x == ')');
 					//Remove obviously wrong double-ending brackets
-					if (closingBrackets == openingBrackets + 1 && this.Text.EndsWith("))"))
+					if (closingBrackets == openingBrackets + 1 && Text.EndsWith("))"))
 					{
-						this.Text = this.Text.Substring(0, this.Text.Length - 1);
+						Text = Text.Substring(0, Text.Length - 1);
 					}
 				}
 
@@ -157,25 +163,33 @@ namespace CsvRwRouteParser
 
 						if (Text[i] == '(')
 						{
-							if (RaiseErrors & !openingerror)
+							if (RaiseErrors & !openingError)
 							{
 								switch (argumentIndex)
 								{
 									case 0:
-										if (Text.StartsWith("sta"))
+										if (Text.StartsWith("sta", StringComparison.InvariantCultureIgnoreCase))
 										{
 											Text = Text.Remove(i, 1).Insert(i, "[");
 											break;
 										}
-										if (Text.StartsWith("marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith("announce", StringComparison.InvariantCultureIgnoreCase))
+										if (Text.StartsWith(".marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith(".announce", StringComparison.InvariantCultureIgnoreCase) ||
+										    Text.IndexOf(".Load", StringComparison.InvariantCultureIgnoreCase) != -1)
 										{
-											// HACK: In filenames, temp replace with an invalid but known character
-											Text = Text.Remove(i, 1).Insert(i, "<");
+											/*
+											 * HACK: In filenames, temp replace with an invalid but known character
+											 *
+											 * Opening parenthesis are fortunately simpler than closing, see notes below.
+											 */
+											if (Text.Substring(i - 5, 5).ToLowerInvariant() != ".load")
+											{
+												Text = Text.Remove(i, 1).Insert(i, "<");
+											}
 											break;
 										}
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid opening parenthesis encountered at line " + Line.ToString(Culture) + ", column " +
 										                                                        Column.ToString(Culture) + " in file " + File);
-										openingerror = true;
+										openingError = true;
 										break;
 									case 5: //arrival sound
 									case 10: //departure sound
@@ -186,29 +200,55 @@ namespace CsvRwRouteParser
 										}
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid opening parenthesis encountered at line " + Line.ToString(Culture) + ", column " +
 										                                                        Column.ToString(Culture) + " in file " + File);
-										openingerror = true;
+										openingError = true;
 										break;
 									default:
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid opening parenthesis encountered at line " + Line.ToString(Culture) + ", column " +
 										                                                        Column.ToString(Culture) + " in file " + File);
-										openingerror = true;
+										openingError = true;
 										break;
 								}
 							}
 						}
 						else if (Text[i] == ')')
 						{
+							if (i == Text.Length - 1)
+							{
+								found = true;
+								firstClosingBracket = i;
+								break;
+							}
 							switch (argumentIndex)
 							{
 								case 0:
-									if (Text.StartsWith("sta") && i != Text.Length)
+									if (Text.StartsWith("sta", StringComparison.InvariantCultureIgnoreCase) && i != Text.Length)
 									{
 										Text = Text.Remove(i, 1).Insert(i, "]");
 										continue;
 									}
-									if ((Text.StartsWith("marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith("announce", StringComparison.InvariantCultureIgnoreCase)) && i != Text.Length)
+									if (Text.StartsWith(".timetable", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith(".marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith(".announce", StringComparison.InvariantCultureIgnoreCase) || Text.IndexOf(".Load", StringComparison.InvariantCultureIgnoreCase) != -1)
 									{
-										// HACK: In filenames, temp replace with an invalid but known character
+										if (Text.Substring(i + 1, 5).ToLowerInvariant() == ".load" || Text.Substring(i + 1, 9).ToLowerInvariant() == ".day.load" || Text.Substring(i + 1, 11).ToLowerInvariant() == ".night.load")
+										{
+											found = true;
+											firstClosingBracket = i;
+											goto breakout;
+										}
+
+										if (Text.IndexOf('<') == -1)
+										{
+											i++;
+											continue;
+										}
+										
+										/*
+										 * HACK: In filenames, temp replace with an invalid but known character
+										 *
+										 * Note that this is a PITA in object folder names when the creator has used the alternate .Load() format as this contains far more brackets
+										 * e.g.
+										 * .Rail(0).Load(kcrmosr(2009)\rail\c0.csv)
+										 * We must keep the first and last closing parenthesis intact here
+										 */
 										Text = Text.Remove(i, 1).Insert(i, ">");
 										continue;
 									}
@@ -226,16 +266,17 @@ namespace CsvRwRouteParser
 							firstClosingBracket = i;
 							break;
 						}
-
 						i++;
 					}
 
+					breakout:
+
 					if (!found)
 					{
-						if (RaiseErrors & !closingerror)
+						if (RaiseErrors & !closingError)
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
-							closingerror = true;
+							closingError = true;
 						}
 
 						Text += ")";
@@ -243,10 +284,10 @@ namespace CsvRwRouteParser
 				}
 				else if (Text[i] == ')')
 				{
-					if (RaiseErrors & !closingerror)
+					if (RaiseErrors & !closingError)
 					{
 						Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
-						closingerror = true;
+						closingError = true;
 					}
 				}
 				else if (char.IsWhiteSpace(Text[i]))
@@ -261,7 +302,7 @@ namespace CsvRwRouteParser
 
 			if (firstClosingBracket != 0 && firstClosingBracket < Text.Length - 1)
 			{
-				if (!Char.IsWhiteSpace(Text[firstClosingBracket + 1]) && Text[firstClosingBracket + 1] != '.' && Text[firstClosingBracket + 1] != ';')
+				if (!char.IsWhiteSpace(Text[firstClosingBracket + 1]) && Text[firstClosingBracket + 1] != '.' && Text[firstClosingBracket + 1] != ';')
 				{
 					Text = Text.Insert(firstClosingBracket + 1, " ");
 					i = firstClosingBracket;
@@ -285,7 +326,7 @@ namespace CsvRwRouteParser
 					else if (ArgumentSequence.StartsWith("("))
 					{
 						// only opening parenthesis found
-						if (RaiseErrors & !closingerror)
+						if (RaiseErrors & !closingError)
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 						}
@@ -336,10 +377,10 @@ namespace CsvRwRouteParser
 
 								if (!found)
 								{
-									if (RaiseErrors & !openingerror & !closingerror)
+									if (RaiseErrors & !openingError & !closingError)
 									{
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid syntax encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
-										closingerror = true;
+										closingError = true;
 									}
 
 									Command = Text;
@@ -354,7 +395,7 @@ namespace CsvRwRouteParser
 								else if (ArgumentSequence.StartsWith("("))
 								{
 									// only opening parenthesis found
-									if (RaiseErrors & !closingerror)
+									if (RaiseErrors & !closingError)
 									{
 										Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 									}
@@ -366,7 +407,7 @@ namespace CsvRwRouteParser
 						else
 						{
 							// no closing parenthesis found
-							if (RaiseErrors & !closingerror)
+							if (RaiseErrors & !closingError)
 							{
 								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 							}
@@ -388,7 +429,7 @@ namespace CsvRwRouteParser
 						else if (ArgumentSequence.StartsWith("("))
 						{
 							// only opening parenthesis found
-							if (RaiseErrors & !closingerror)
+							if (RaiseErrors & !closingError)
 							{
 								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 							}
@@ -408,7 +449,7 @@ namespace CsvRwRouteParser
 					{
 						Command = Text.Substring(0, i).TrimEnd();
 						ArgumentSequence = Text.Substring(i + 1, Text.Length - i - 2).Trim();
-						if (Text.StartsWith("sta", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith("marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith("announce", StringComparison.InvariantCultureIgnoreCase))
+						if (Text.StartsWith("sta", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith(".marker", StringComparison.InvariantCultureIgnoreCase) || Text.StartsWith(".announce", StringComparison.InvariantCultureIgnoreCase) || Text.IndexOf(".Load", StringComparison.InvariantCultureIgnoreCase) != -1)
 						{
 							// put back any temp removed brackets
 							ArgumentSequence = ArgumentSequence.Replace('<', '(');
@@ -430,7 +471,7 @@ namespace CsvRwRouteParser
 					i = Text.IndexOf('(');
 					if (i >= 0)
 					{
-						if (RaiseErrors & !closingerror)
+						if (RaiseErrors & !closingError)
 						{
 							Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Missing closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 						}
@@ -443,7 +484,7 @@ namespace CsvRwRouteParser
 						if (RaiseErrors)
 						{
 							i = Text.IndexOf(')');
-							if (i >= 0 & !closingerror)
+							if (i >= 0 & !closingError)
 							{
 								Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid closing parenthesis encountered at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 							}
@@ -462,11 +503,7 @@ namespace CsvRwRouteParser
 				{
 					Plugin.CurrentHost.AddMessage(MessageType.Error, false, "Invalid trailing semicolon encountered in " + Command + " at line " + Line.ToString(Culture) + ", column " + Column.ToString(Culture) + " in file " + File);
 				}
-
-				while (Command.EndsWith(";"))
-				{
-					Command = Command.Substring(0, Command.Length - 1);
-				}
+				Command = Command.TrimEnd(';');
 			}
 		}
 	}

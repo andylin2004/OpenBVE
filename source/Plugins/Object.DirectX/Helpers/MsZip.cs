@@ -25,9 +25,11 @@
 using System;
 using System.IO;
 using Ionic.Zlib;
+// ReSharper disable UnusedVariable
 
 namespace Plugin
 {
+	// ReSharper disable once InconsistentNaming
 	public static class MSZip
     {
 		/// <summary>Decompresses a byte array compressed with MSZip compression</summary>
@@ -55,12 +57,13 @@ namespace Plugin
             MemoryStream outputStream = new MemoryStream();
 			int currentBlock = 0;
 			byte[] previousBlockBytes = new byte[(int) MSZIP_BLOCK];
-			byte[] blockBytes;
 			while (p + 3 < end)
 			{
 
 				// Read compressed block size after decompression
+#pragma warning disable CS0219
 				ushort uncompressedBlockSize = BitConverter.ToUInt16(Data, p);
+#pragma warning restore CS0219
 				p += 2;
 
 				// Read compressed block size
@@ -85,24 +88,24 @@ namespace Plugin
 				inputStream.Position = p + 2;
 
 				// Decompress the compressed block
-				blockBytes = new byte[compressedBlockSize];
-				inputStream.Read(blockBytes, 0, compressedBlockSize);
-				byte[] decompressedBytes;
+				byte[] blockBytes = new byte[compressedBlockSize];
+				int numBytesRead = inputStream.Read(blockBytes, 0, compressedBlockSize);
 
-				if (currentBlock == 0)
+				// NOTE: Some MSZip objects have a truncated final block
+				//		 To decode these correctly, the block byte array must be zero-padded to compressedBlockSize
+				//		 The compiler warning is incorrect in this case (YUCK)- Don't message except in debug builds
+				//		 https://github.com/leezer3/OpenBVE/issues/1150
+#if DEBUG
+				if (numBytesRead != compressedBlockSize)
 				{
-					decompressedBytes = ZlibDecompressWithDictionary(blockBytes, null);
-					//Works OK
+					Plugin.CurrentHost.AddMessage(OpenBveApi.Interface.MessageType.Warning, false, "MSZip: Potentially truncated final block. ");
 				}
-				else
-				{
+#endif
 
-					decompressedBytes = ZlibDecompressWithDictionary(blockBytes, previousBlockBytes);
-				}
-				
+				byte[] decompressedBytes = ZlibDecompressWithDictionary(blockBytes, currentBlock == 0 ? null : previousBlockBytes);
+
 				outputStream.Write(decompressedBytes, 0, decompressedBytes.Length);
 				previousBlockBytes = decompressedBytes;
-				
 				
 				// Preparing to move to the next data block
 				p += compressedBlockSize;
@@ -162,10 +165,10 @@ namespace Plugin
             }
         }
 
-        internal static void AssertOk(this ZlibCodec codec, string Message, int errorCode)
+        internal static void AssertOk(this ZlibCodec codec, string errorLocation, int errorCode)
         {
             if (errorCode != 0) {
-                throw new InvalidOperationException("Failed with " + errorCode + "; " + Message + "; " + codec.Message);
+                throw new InvalidOperationException("Failed with " + errorCode + "; " + errorLocation + "; " + codec.Message);
             }
         }
     }

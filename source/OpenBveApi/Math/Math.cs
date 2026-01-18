@@ -31,8 +31,7 @@ namespace OpenBveApi.Math {
 			CultureInfo Culture = CultureInfo.InvariantCulture;
 			for (int n = Expression.Length; n > 0; n--)
 			{
-				double a;
-				if (double.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out a))
+				if (double.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out double a))
 				{
 					Value = a;
 					return true;
@@ -52,8 +51,7 @@ namespace OpenBveApi.Math {
 			CultureInfo Culture = CultureInfo.InvariantCulture;
 			for (int n = Expression.Length; n > 0; n--)
 			{
-				float a;
-				if (float.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out a))
+				if (float.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out float a))
 				{
 					Value = a;
 					return true;
@@ -73,8 +71,7 @@ namespace OpenBveApi.Math {
 			CultureInfo Culture = CultureInfo.InvariantCulture;
 			for (int n = Expression.Length; n > 0; n--)
 			{
-				double a;
-				if (double.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out a))
+				if (double.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out double a))
 				{
 					if (a >= -2147483648.0 & a <= 2147483647.0)
 					{
@@ -88,14 +85,43 @@ namespace OpenBveApi.Math {
 			return false;
 		}
 
+		/// <summary>Parses a byte bounded number formatted as a Visual Basic 6 string</summary>
+		/// <param name="Expression">The expression to parse</param>
+		/// <param name="Value">The value to return (Default 0.0)</param>
+		/// <returns>True if parsing succeds, false otherwise</returns>
+		public static bool TryParseByteVb6(string Expression, out int Value)
+		{
+			if (Expression.IndexOf(',') != -1)
+			{
+				Value = 0;
+				return false;
+			}
+			Expression = TrimInside(Expression);
+			CultureInfo Culture = CultureInfo.InvariantCulture;
+			for (int n = Expression.Length; n > 0; n--)
+			{
+				if (double.TryParse(Expression.Substring(0, n), NumberStyles.Float, Culture, out double a))
+				{
+					Value = (int)System.Math.Round(a);
+					if (a >= 0 & a <= 255)
+					{
+						return true;
+					}
+					Value = Value < 0 ? 0 : 255;
+					return false;
+				}
+			}
+			Value = 0;
+			return false;
+		}
+
 		/// <summary>Returns whether a string contains a valid double, using the supplied unit conversion factor(s)</summary>
 		/// <param name="Expression">The expression to parse</param>
 		/// <param name="UnitFactors">An array of unit conversion factors</param>
 		/// <returns>True if parsing succeds, false otherwise</returns>
 		public static bool IsValidDouble(string Expression, double[] UnitFactors)
 		{
-			double n;
-			return TryParseDouble(Expression, UnitFactors, out n);
+			return TryParseDouble(Expression, UnitFactors, out _);
 		}
 
 		/// <summary>Parses a double from a string, using the supplied unit conversion factor(s)</summary>
@@ -105,8 +131,7 @@ namespace OpenBveApi.Math {
 		/// <returns>True if parsing succeds, false otherwise</returns>
 		public static bool TryParseDouble(string Expression, double[] UnitFactors, out double Value)
 		{
-			double a;
-			if (double.TryParse(Expression, NumberStyles.Number, CultureInfo.InvariantCulture, out a))
+			if (double.TryParse(Expression, NumberStyles.Number, CultureInfo.InvariantCulture, out double a))
 			{
 				Value = a * UnitFactors[UnitFactors.Length - 1];
 				return true;
@@ -146,8 +171,7 @@ namespace OpenBveApi.Math {
 		/// <returns>True if parsing succeds, false otherwise</returns>
 		public static bool TryParseDoubleVb6(string Expression, double[] UnitFactors, out double Value)
 		{
-			double a;
-			if (double.TryParse(Expression, NumberStyles.Number, CultureInfo.InvariantCulture, out a))
+			if (double.TryParse(Expression, NumberStyles.Number, CultureInfo.InvariantCulture, out double a))
 			{
 				Value = a * UnitFactors[UnitFactors.Length - 1];
 				return true;
@@ -160,7 +184,7 @@ namespace OpenBveApi.Math {
 				{
 					for (int i = 0; i < parameters.Length; i++)
 					{
-						if (TryParseDoubleVb6(parameters[i].Trim(new char[] { }), out a))
+						if (TryParseDoubleVb6(parameters[i].Trim(), out a))
 						{
 							int j = i + UnitFactors.Length - parameters.Length;
 							Value += a * UnitFactors[j];
@@ -185,13 +209,6 @@ namespace OpenBveApi.Math {
 			return degrees * 0.0174532925199433;
 		}
 
-		/// <summary>Gets the modulous of two numbers</summary>
-		/// <returns>The modulous</returns>
-		public static double Mod(double a, double b)
-		{
-			return a - b * System.Math.Floor(a / b);
-		}
-
 		private static string TrimInside(string Expression)
 		{
 			System.Text.StringBuilder Builder = new System.Text.StringBuilder(Expression.Length);
@@ -200,6 +217,8 @@ namespace OpenBveApi.Math {
 				Builder.Append(c);
 			} return Builder.ToString();
 		}
+
+		
 	}
 	
 }

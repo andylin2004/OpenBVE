@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Text;
 using System.IO;
@@ -275,6 +275,15 @@ namespace TrainEditor2.Views
 
 			app.SelectedItem
 				.BindTo(
+					tabPageParticleSource,
+					x => x.Enabled,
+					BindingMode.OneWay,
+					x => app.SelectedItem?.Value?.Model?.Tag is ParticleSource
+				)
+				.AddTo(disposable);
+
+			app.SelectedItem
+				.BindTo(
 					tabPageCar,
 					x => x.Enabled,
 					BindingMode.OneWay,
@@ -334,18 +343,7 @@ namespace TrainEditor2.Views
 					BindingMode.OneWay,
 					_ =>
 					{
-						TabPage tabPage;
-
-						if (tabControlEditor.SelectedTab.Enabled)
-						{
-							tabPage = tabControlEditor.SelectedTab;
-						}
-						else
-						{
-							tabPage = tabControlEditor.TabPages.OfType<TabPage>().FirstOrDefault(x => x.Enabled);
-						}
-
-						return tabPage;
+						return tabControlEditor.SelectedTab.Enabled ? tabControlEditor.SelectedTab : tabControlEditor.TabPages.OfType<TabPage>().FirstOrDefault(x => x.Enabled);
 					}
 				)
 				.AddTo(disposable);
@@ -441,9 +439,11 @@ namespace TrainEditor2.Views
 
 			new[] { app.UpCar, app.UpCoupler }.BindToButton(buttonCarsUp).AddTo(disposable);
 			new[] { app.DownCar, app.DownCoupler }.BindToButton(buttonCarsDown).AddTo(disposable);
-			app.AddCar.BindToButton(buttonCarsAdd).AddTo(disposable);
+			new[] { app.AddParticleSource, app.AddCar }.BindToButton(buttonCarsAdd).AddTo(disposable);
+			new[] { app.RemoveParticleSource, app.RemoveCar }.BindToButton(buttonCarsRemove).AddTo(disposable);
+
 			app.CopyCar.BindToButton(buttonCarsCopy).AddTo(disposable);
-			app.RemoveCar.BindToButton(buttonCarsRemove).AddTo(disposable);
+			
 
 			app.ChangeCarClass.BindToCheckBox(checkBoxIsMotorCar).AddTo(disposable);
 
@@ -522,11 +522,7 @@ namespace TrainEditor2.Views
 			string folder = Program.FileSystem.GetDataFolder("Languages");
 			Translations.LoadLanguageFiles(folder);
 			Translations.ListLanguages(toolStripComboBoxLanguage.ComboBox);
-
-			if (app.CurrentLanguageCode.Value == "en-US")
-			{
-				app.CurrentLanguageCode.ForceNotify();
-			}
+			app.CurrentLanguageCode.ForceNotify();
 		}
 
 		[UIPermission(SecurityAction.Demand, Window = UIPermissionWindow.AllWindows)]
@@ -585,13 +581,12 @@ namespace TrainEditor2.Views
 			ModifierKeysDownUp(e);
 		}
 
-		private void FormEditor_FormClosing(object sender, FormClosingEventArgs e)
+		private bool ShowSaveDialog()
 		{
 			switch (MessageBox.Show(Utilities.GetInterfaceString("menu", "message", "exit"), Application.ProductName, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question))
 			{
 				case DialogResult.Cancel:
-					e.Cancel = true;
-					return;
+					return false;
 				case DialogResult.Yes:
 					if (app.SaveFile.CanExecute())
 					{
@@ -601,12 +596,11 @@ namespace TrainEditor2.Views
 					{
 						app.SaveAsFile.Execute();
 					}
-
 					glControlMotor.MakeCurrent();
-					break;
+					return true;
+				default:
+					return true;
 			}
-
-			Interface.CurrentOptions.LanguageCode = app.CurrentLanguageCode.Value;
 		}
 
 		private void ToolStripMenuItemImport_Click(object sender, EventArgs e)
@@ -640,6 +634,7 @@ namespace TrainEditor2.Views
 			}
 
 			app.CurrentLanguageCode.Value = currentLanguageCode;
+			Interface.CurrentOptions.LanguageCode = currentLanguageCode;
 		}
 
 		private void ButtonDelayPowerSet_Click(object sender, EventArgs e)
@@ -802,11 +797,9 @@ namespace TrainEditor2.Views
 
 		private void GlControlMotor_Paint(object sender, PaintEventArgs e)
 		{
-			MotorCarViewModel car = app.Train.Value.SelectedCar.Value as MotorCarViewModel;
-
 			glControlMotor.MakeCurrent();
 
-			if (car != null)
+			if (app.Train.Value.SelectedCar.Value is MotorCarViewModel car)
 			{
 				car.Motor.Value.DrawGlControl.Execute();
 			}
@@ -966,5 +959,19 @@ namespace TrainEditor2.Views
 		{
 			OpenFileDialog(textBoxSoundFileName);
 		}
+
+		protected override void OnFormClosing(FormClosingEventArgs e)
+		{
+			if (ShowSaveDialog())
+			{
+				Program.Renderer.DeInitialize();
+				Interface.CurrentOptions.Save(OpenBveApi.Path.CombineFile(Program.FileSystem.SettingsFolder, "1.5.0/options_te2.cfg"));
+			}
+			else
+			{
+				e.Cancel = true;
+			}
+		}
+		
 	}
 }

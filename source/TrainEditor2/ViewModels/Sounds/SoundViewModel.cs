@@ -6,7 +6,6 @@ using System.Reactive.Linq;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Models.Sounds;
-using TrainEditor2.Simulation.TrainManager;
 using TrainEditor2.ViewModels.Others;
 
 namespace TrainEditor2.ViewModels.Sounds
@@ -380,15 +379,12 @@ namespace TrainEditor2.ViewModels.Sounds
 				.ObserveAddChanged()
 				.Subscribe(x =>
 				{
-					RunElement run = x as RunElement;
-					MotorElement motor = x as MotorElement;
-
-					if (run != null)
+					if (x is RunElement run)
 					{
 						Simulation.TrainManager.TrainManager.RunSounds.Add(run);
 					}
 
-					if (motor != null)
+					if (x is MotorElement motor)
 					{
 						Simulation.TrainManager.TrainManager.MotorSounds.Add(motor);
 					}
@@ -399,15 +395,12 @@ namespace TrainEditor2.ViewModels.Sounds
 				.ObserveRemoveChanged()
 				.Subscribe(x =>
 				{
-					RunElement run = x as RunElement;
-					MotorElement motor = x as MotorElement;
-
-					if (run != null)
+					if (x is RunElement run)
 					{
 						Simulation.TrainManager.TrainManager.RunSounds.Remove(run);
 					}
 
-					if (motor != null)
+					if (x is MotorElement motor)
 					{
 						Simulation.TrainManager.TrainManager.MotorSounds.Remove(motor);
 					}

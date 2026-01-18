@@ -29,6 +29,9 @@
 		Section,
 		/// <summary>Adds a signalling section</summary>
 		SectionS,
+		/// <summary>Adds a permissive signalling section</summary>
+		/// <remarks>Must be value based</remarks>
+		SectionP,
 		/// <summary>Adds a signal object</summary>
 		SigF,
 		/// <summary>Adds a signal object</summary>
@@ -63,7 +66,7 @@
 		Station,
 		/// <summary>Adds a station defined in an external XML file</summary>
 		StationXML,
-		/// <summary>Adds a buffer stop</summary>
+		/// <summary>Adds a buffer stop to Rail 0</summary>
 		Buffer,
 		/// <summary>Adds a platform</summary>
 		Form,
@@ -128,7 +131,28 @@
 		LightDirection,
 		/// <summary>Changes the dynamic lighting set in use</summary>
 		DynamicLight,
-
+		/// <summary>Creates a facing switch</summary>
+		Switch,
+		/// <summary>Creates a trailing switch</summary>
+		SwitchT,
+		/// <summary>Sets the speed limit for a rail</summary>
+		RailLimit,
+		/// <summary>Adds a buffer stop</summary>
+		RailBuffer,
+		/// <summary>Sets the accuracy value for a rail</summary>
+		RailAccuracy,
+		/// <summary>Sets the adhesion value for a rail</summary>
+		RailAdhesion,
+		/// <summary>Adds an announcement played in the cab on a non-zero rail</summary>
+		RailAnnounce,
+		/// <summary>Adds an announcement played in all cars on a non-zero rail</summary>
+		RailAnnounceAll,
+		/// <summary>Changes the player path</summary>
+		PlayerPath,
+		/// <summary>Adds or changes the properties of a power supply</summary>
+		PowerSupply,
+		/// <summary>Ends a power supply</summary>
+		PowerSupplyEnd,
 		/*
 		 * HMMSIM
 		 */

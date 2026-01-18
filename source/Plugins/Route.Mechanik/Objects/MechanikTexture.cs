@@ -37,10 +37,10 @@ namespace MechanikRouteParser
 		internal double Width;
 		/// <summary>The calculated, unscaled world height of the texture (1px == 0.5cm)</summary>
 		internal double Height;
-		internal MechanikTexture(string p, string s)
+		internal MechanikTexture(string p)
 		{
 			Path = p;
-			Plugin.CurrentHost.LoadTexture(p, new TextureParameters(null, null), out Texture);
+			Plugin.CurrentHost.LoadTexture(p, TextureParameters.NoChange, out Texture);
 			this.Width = Texture.Width / 200.0;
 			this.Height = Texture.Height / 200.0;
 		}

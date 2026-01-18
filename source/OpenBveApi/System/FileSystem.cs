@@ -56,6 +56,9 @@ namespace OpenBveApi.FileSystem {
 		/// <summary>The Loksim3D data directory</summary>
 		public string LoksimDataDirectory;
 
+		/// <summary>The MSTS trainset directory</summary>
+		public string MSTSDirectory;
+
 		/// <summary>Any lines loaded from the filesystem.cfg which were not understood</summary>
 		internal string[] NotUnderstoodLines;
 
@@ -74,7 +77,7 @@ namespace OpenBveApi.FileSystem {
 		{
 			currentHost = Host;
 			string assemblyFile = Assembly.GetEntryAssembly().Location;
-			string assemblyFolder = System.IO.Path.GetDirectoryName(assemblyFile);
+			string assemblyFolder = Path.GetDirectoryName(assemblyFile);
 			//This copy of openBVE is a special string, and should not be localised
 			string userDataFolder = Path.CombineDirectory(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpenBve");
 			if (currentHost != null && currentHost.Platform != HostPlatform.MicrosoftWindows)
@@ -111,7 +114,7 @@ namespace OpenBveApi.FileSystem {
 				try
 				{
 					RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Loksim-Group\\Install");
-					LoksimDataDirectory = key.GetValue("InstallDataDirPath").ToString();
+					LoksimDataDirectory = key != null ? key.GetValue("InstallDataDirPath").ToString() : LoksimPackageInstallationDirectory;
 				}
 				catch
 				{
@@ -139,7 +142,7 @@ namespace OpenBveApi.FileSystem {
 					return FromConfigurationFile(arg.Substring(12), Host);
 				}
 			}
-			string assemblyFolder = System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+			string assemblyFolder = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 			string configFile = Path.CombineFile(Path.CombineDirectory(Path.CombineDirectory(assemblyFolder, "UserData"), "Settings"), "filesystem.cfg");
 			if (File.Exists(configFile)) {
 				return FromConfigurationFile(configFile, Host);
@@ -158,7 +161,7 @@ namespace OpenBveApi.FileSystem {
 		{
 			string file = Path.CombineFile(SettingsFolder, "FileSystem.cfg");
 			StringBuilder newLines = new StringBuilder();
-			newLines.AppendLine("Version=1");
+			newLines.AppendLine("Version=2");
 			try
 			{
 				if (File.Exists(file))
@@ -219,6 +222,11 @@ namespace OpenBveApi.FileSystem {
 				{
 					newLines.AppendLine("LoksimPackageInstall=" + ReplacePath(LoksimPackageInstallationDirectory));
 				}
+				if (MSTSDirectory != null &&
+				    Directory.Exists(OtherInstallationDirectory))
+				{
+					newLines.AppendLine("MSTSTrainset=" + ReplacePath(MSTSDirectory));
+				}
 				if (NotUnderstoodLines != null && NotUnderstoodLines.Length != 0)
 				{
 					for (int i = 0; i < NotUnderstoodLines.Length; i++)
@@ -240,7 +248,7 @@ namespace OpenBveApi.FileSystem {
 			try
 			{
 				line = line.Replace(Assembly.GetEntryAssembly().Location, "$[AssemblyFile]");
-				line = line.Replace(System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "$[AssemblyFolder]");
+				line = line.Replace(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "$[AssemblyFolder]");
 				line = line.Replace(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "$[ApplicationData]");
 				line = line.Replace(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
 					"$[CommonApplicationData]");
@@ -313,7 +321,7 @@ namespace OpenBveApi.FileSystem {
 		/// <returns>The file system.</returns>
 		private static FileSystem FromConfigurationFile(string file, HostInterface Host) {
 			string assemblyFile = Assembly.GetEntryAssembly().Location;
-			string assemblyFolder = System.IO.Path.GetDirectoryName(assemblyFile);
+			string assemblyFolder = Path.GetDirectoryName(assemblyFile);
 			FileSystem system = new FileSystem(Host);
 			try
 			{
@@ -345,20 +353,19 @@ namespace OpenBveApi.FileSystem {
 
 								break;
 							case "version":
-								int v;
-								if (!int.TryParse(value, out v))
+								if (!int.TryParse(value, out int v))
 								{
 									system.AppendToLogFile("WARNING: Invalid filesystem.cfg version detected.");
 								}
 
-								if (v <= 1)
+								if (v <= 2)
 								{
 									//Silently upgrade to the current config version
-									system.Version = 1;
+									system.Version = 2;
 									break;
 								}
 
-								system.AppendToLogFile("WARNING: A newer filesystem.cfg version " + v + " was detected. The current version is 1.");
+								system.AppendToLogFile("WARNING: A newer filesystem.cfg version " + v + " was detected. The current version is 2.");
 								system.Version = v;
 
 								break;
@@ -418,6 +425,9 @@ namespace OpenBveApi.FileSystem {
 							case "loksimpackageinstall":
 								system.LoksimPackageInstallationDirectory = GetAbsolutePath(value, true);
 								break;
+							case "mststrainset":
+								system.MSTSDirectory = GetAbsolutePath(value, true);
+								break;
 							default:
 								if (system.NotUnderstoodLines == null)
 								{
@@ -451,11 +461,11 @@ namespace OpenBveApi.FileSystem {
 				folder = folder.Replace('\\', System.IO.Path.DirectorySeparatorChar);
 			}
 			folder = folder.Replace("$[AssemblyFile]", Assembly.GetEntryAssembly().Location);
-			folder = folder.Replace("$[AssemblyFolder]", System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location));
+			folder = folder.Replace("$[AssemblyFolder]", Path.GetDirectoryName(Assembly.GetEntryAssembly().Location));
 			folder = folder.Replace("$[ApplicationData]", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 			folder = folder.Replace("$[CommonApplicationData]", Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData));
 			folder = folder.Replace("$[Personal]", Environment.GetFolderPath(Environment.SpecialFolder.Personal));
-			if (checkIfRooted && !System.IO.Path.IsPathRooted(folder)) {
+			if (checkIfRooted && !Path.IsPathRooted(folder)) {
 				throw new InvalidDataException("The folder " + originalFolder + " does not produce an absolute path.");
 			}
 			return folder;
@@ -466,7 +476,7 @@ namespace OpenBveApi.FileSystem {
 			try
 			{
 				string file = System.IO.Path.Combine(SettingsFolder, "log.txt");
-				File.WriteAllText(file, @"OpenBVE Log: " + DateTime.Now + Environment.NewLine + @"Program Version: " + version + Environment.NewLine + Environment.NewLine, new UTF8Encoding(true));
+				File.WriteAllText(file, @"OpenBVE Log: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine + @"Program Version: " + version + Environment.NewLine + Environment.NewLine, new UTF8Encoding(true));
 			}
 			catch
 			{
@@ -476,11 +486,20 @@ namespace OpenBveApi.FileSystem {
 
 		/// <summary>Appends the specified text to the log file.</summary>
 		/// <param name="text">The text.</param>
-		public void AppendToLogFile(string text) {
+		/// <param name="addTimestamp">Whether a timestamp should be added to the log file</param>
+		public void AppendToLogFile(string text, bool addTimestamp = true) {
 			try
 			{
 				string file = System.IO.Path.Combine(SettingsFolder, "log.txt");
-				File.AppendAllText(file, DateTime.Now.ToString("HH:mm:ss") + @"  " + text + Environment.NewLine, new UTF8Encoding(false));
+				if (addTimestamp)
+				{
+					File.AppendAllText(file, DateTime.Now.ToString("HH:mm:ss") + @"  " + text + Environment.NewLine, new UTF8Encoding(false));
+				}
+				else
+				{
+					File.AppendAllText(file, text + Environment.NewLine, new UTF8Encoding(false));	
+				}
+				
 			}
 			catch
 			{

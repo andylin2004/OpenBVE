@@ -2,6 +2,7 @@
 using System.Drawing;
 using System.Globalization;
 using System.Reactive.Linq;
+using Formats.OpenBve;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -47,16 +48,12 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.A0,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.SetValidateNotifyError(x =>
 					{
-						double result;
-						string message;
-
-						Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+						Utilities.TryValidate(x, NumberRange.Positive, out string message);
 						return message;
 					})
 					.AddTo(disposable);
@@ -65,16 +62,12 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.A1,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.SetValidateNotifyError(x =>
 					{
-						double result;
-						string message;
-
-						Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+						Utilities.TryValidate(x, NumberRange.Positive, out string message);
 						return message;
 					})
 					.AddTo(disposable);
@@ -83,16 +76,12 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.V1,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.SetValidateNotifyError(x =>
 					{
-						double result;
-						string message;
-
-						Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+						Utilities.TryValidate(x, NumberRange.Positive, out string message);
 						return message;
 					})
 					.AddTo(disposable);
@@ -101,16 +90,12 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.V2,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.SetValidateNotifyError(x =>
 					{
-						double result;
-						string message;
-
-						Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+						Utilities.TryValidate(x, NumberRange.Positive, out string message);
 						return message;
 					})
 					.AddTo(disposable);
@@ -119,16 +104,12 @@ namespace TrainEditor2.ViewModels.Trains
 					.ToReactivePropertyAsSynchronized(
 						x => x.E,
 						x => x.ToString(culture),
-						x => double.Parse(x, NumberStyles.Float, culture),
+						x => x.Parse(),
 						ignoreValidationErrorValue: true
 					)
 					.SetValidateNotifyError(x =>
 					{
-						double result;
-						string message;
-
-						Utilities.TryParse(x, NumberRange.Positive, out result, out message);
-
+						Utilities.TryValidate(x, NumberRange.Positive, out string message);
 						return message;
 					})
 					.AddTo(disposable);
@@ -265,7 +246,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.MinVelocity,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -274,7 +255,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.MaxVelocity,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -283,7 +264,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.MinAcceleration,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -292,7 +273,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.MaxAcceleration,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -377,14 +358,9 @@ namespace TrainEditor2.ViewModels.Trains
 			MinVelocity
 				.SetValidateNotifyError(x =>
 				{
-					double min;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.NonNegative, out min, out message))
+					if (Utilities.TryParse(x, NumberRange.NonNegative, out double min, out string message))
 					{
-						double max;
-
-						if (Utilities.TryParse(MaxVelocity.Value, NumberRange.NonNegative, out max) && min >= max)
+						if (Utilities.TryParse(MaxVelocity.Value, NumberRange.NonNegative, out double max) && min >= max)
 						{
 							message = "MinはMax未満でなければなりません。";
 						}
@@ -404,14 +380,9 @@ namespace TrainEditor2.ViewModels.Trains
 			MaxVelocity
 				.SetValidateNotifyError(x =>
 				{
-					double max;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.NonNegative, out max, out message))
+					if (Utilities.TryParse(x, NumberRange.NonNegative, out double max, out string message))
 					{
-						double min;
-
-						if (Utilities.TryParse(MinVelocity.Value, NumberRange.NonNegative, out min) && max <= min)
+						if (Utilities.TryParse(MinVelocity.Value, NumberRange.NonNegative, out double min) && max <= min)
 						{
 							message = "MinはMax未満でなければなりません。";
 						}
@@ -431,14 +402,9 @@ namespace TrainEditor2.ViewModels.Trains
 			MinAcceleration
 				.SetValidateNotifyError(x =>
 				{
-					double min;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.NonNegative, out min, out message))
+					if (Utilities.TryParse(x, NumberRange.NonNegative, out double min, out string message))
 					{
-						double max;
-
-						if (Utilities.TryParse(MaxAcceleration.Value, NumberRange.NonNegative, out max) && min >= max)
+						if (Utilities.TryParse(MaxAcceleration.Value, NumberRange.NonNegative, out double max) && min >= max)
 						{
 							message = "MinはMax未満でなければなりません。";
 						}
@@ -458,14 +424,9 @@ namespace TrainEditor2.ViewModels.Trains
 			MaxAcceleration
 				.SetValidateNotifyError(x =>
 				{
-					double max;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.NonNegative, out max, out message))
+					if (Utilities.TryParse(x, NumberRange.NonNegative, out double max, out string message))
 					{
-						double min;
-
-						if (Utilities.TryParse(MinAcceleration.Value, NumberRange.NonNegative, out min) && max <= min)
+						if (Utilities.TryParse(MinAcceleration.Value, NumberRange.NonNegative, out double min) && max <= min)
 						{
 							message = "MinはMax未満でなければなりません。";
 						}

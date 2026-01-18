@@ -1,10 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using OpenBveApi.Trains;
 using TrainManager;
 using TrainManager.BrakeSystems;
 using TrainManager.Car;
 using TrainManager.Handles;
-using TrainManager.Power;
+using TrainManager.Motor;
 using TrainManager.Trains;
 
 namespace ObjectViewer.Trains
@@ -44,20 +45,17 @@ namespace ObjectViewer.Trains
 		/// <returns>A dummy train</returns>
 		private static TrainBase CreateDummyTrain()
 		{
-			TrainBase train = new TrainBase(TrainState.Available);
-
-			train.Handles.Reverser = new ReverserHandle(train);
-			train.Handles.Power = new PowerHandle(Specs.PowerNotches, Specs.PowerNotches, new double[] { }, new double[] { }, train);
+			TrainBase train = new TrainBase(TrainState.Available, TrainType.LocalPlayerTrain);
+			train.Handles.Power = new PowerHandle(Specs.PowerNotches, train);
 			if (Specs.IsAirBrake)
 			{
 				train.Handles.Brake = new AirBrakeHandle(train);
 			}
 			else
 			{
-				train.Handles.Brake = new BrakeHandle(Specs.BrakeNotches, Specs.BrakeNotches, null, new double[] { }, new double[] { }, train);
+				train.Handles.Brake = new BrakeHandle(Specs.BrakeNotches, null, train);
 				train.Handles.HasHoldBrake = Specs.HasHoldBrake;
 			}
-			train.Handles.EmergencyBrake = new EmergencyHandle(train);
 			train.Handles.HoldBrake = new HoldBrakeHandle(train);
 			train.Specs.HasConstSpeed = Specs.HasConstSpeed;
 
@@ -65,29 +63,41 @@ namespace ObjectViewer.Trains
 			for (int i = 0; i < train.Cars.Length; i++)
 			{
 				train.Cars[i] = new CarBase(train, i);
-				train.Cars[i].Specs = new CarPhysics();
 
 				if (Specs.IsAirBrake)
 				{
-					train.Cars[i].CarBrake = new AutomaticAirBrake(EletropneumaticBrakeType.None, train.Handles.EmergencyBrake, train.Handles.Reverser, true, 0.0, 0.0, new AccelerationCurve[] { });
+					train.Cars[i].CarBrake = new AutomaticAirBrake(EletropneumaticBrakeType.None, train.Cars[i]);
 				}
 				else
 				{
-					train.Cars[i].CarBrake = new ElectromagneticStraightAirBrake(EletropneumaticBrakeType.None, train.Handles.EmergencyBrake, train.Handles.Reverser, true, 0.0, 0.0, 0.0, 0.0, new AccelerationCurve[] { });
+					train.Cars[i].CarBrake = new ElectromagneticStraightAirBrake(EletropneumaticBrakeType.None, train.Cars[i]);
 				}
-				//At the minute, Object Viewer uses dummy brake systems
-				train.Cars[i].CarBrake.mainReservoir = new MainReservoir(Status.MainReservoirPressure * 1000.0);
-				train.Cars[i].CarBrake.equalizingReservoir = new EqualizingReservoir(Status.EqualizingReservoirPressure * 1000.0);
-				train.Cars[i].CarBrake.brakePipe = new BrakePipe(Status.BrakePipePressure * 1000.0);
-				train.Cars[i].CarBrake.brakeCylinder = new BrakeCylinder(Status.BrakeCylinderPressure * 1000.0);
-				train.Cars[i].CarBrake.straightAirPipe = new StraightAirPipe(Status.StraightAirPipePressure * 1000.0);
 
-				train.Cars[i].Coupler = new Coupler(0.9 * 0.3, 1.1 * 0.3, train.Cars[i], i < train.Cars.Length - 1 ? train.Cars[i + 1] : null, train);
+				train.Cars[i].TractionModel = new BVEMotorCar(train.Cars[i], null);
+				//At the minute, Object Viewer uses dummy brake systems
+				train.Cars[i].CarBrake.MainReservoir = new MainReservoir(Status.MainReservoirPressure * 1000.0);
+				train.Cars[i].CarBrake.EqualizingReservoir = new EqualizingReservoir(Status.EqualizingReservoirPressure * 1000.0);
+				train.Cars[i].CarBrake.BrakePipe = new BrakePipe(Status.BrakePipePressure * 1000.0);
+				train.Cars[i].CarBrake.BrakeCylinder = new BrakeCylinder(Status.BrakeCylinderPressure * 1000.0);
+				AirBrake airBrake = train.Cars[i].CarBrake as AirBrake;
+				airBrake.StraightAirPipe = new StraightAirPipe(Status.StraightAirPipePressure * 1000.0);
+
+				train.Cars[i].Coupler = new Coupler(0.9 * 0.3, 1.1 * 0.3, train.Cars[i], i < train.Cars.Length - 1 ? train.Cars[i + 1] : null);
 
 				train.Cars[i].Doors[0] = new Door(-1, 1000.0, 0.0);
 				train.Cars[i].Doors[1] = new Door(1, 1000.0, 0.0);
 			}
 
+			if (Specs.HasLocoBrake)
+			{
+				train.Handles.HasLocoBrake = true;
+				train.Handles.LocoBrake = new LocoBrakeHandle(Specs.LocoBrakeNotches, train.Handles.EmergencyBrake, new double[] { }, new double[] { }, train);
+			}
+			else
+			{
+				train.Handles.HasLocoBrake = false;
+				train.Handles.LocoBrake = null;
+			}
 			return train;
 		}
 
@@ -99,7 +109,7 @@ namespace ObjectViewer.Trains
 		{
 			lock (LockObj)
 			{
-				IsExtensionsCfg = Program.TrainManager.Trains.Length != 0;
+				IsExtensionsCfg = Program.TrainManager.Trains.Count != 0;
 
 				if (IsExtensionsCfg)
 				{
@@ -111,19 +121,21 @@ namespace ObjectViewer.Trains
 						IsAirBrake = train.Handles.Brake is AirBrakeHandle,
 						BrakeNotches = train.Handles.Brake.MaximumNotch,
 						HasHoldBrake = train.Handles.HasHoldBrake,
-						HasConstSpeed = train.Handles.HasHoldBrake
+						HasConstSpeed = train.Handles.HasHoldBrake,
 					};
+
+					if (train.Handles.HasLocoBrake)
+					{
+						Specs.HasLocoBrake = true;
+						Specs.LocoBrakeNotches = train.Handles.LocoBrake.MaximumNotch;
+					}
 				}
 
-				if (Status.PowerNotch > Specs.PowerNotches)
-				{
-					Status.PowerNotch = Specs.PowerNotches;
-				}
 
-				if (Status.BrakeNotch > Specs.BrakeNotches)
-				{
-					Status.BrakeNotch = Specs.BrakeNotches;
-				}
+				Status.PowerNotch = Math.Min(Status.PowerNotch, Specs.PowerNotches);
+				Status.BrakeNotch = Math.Min(Status.BrakeNotch, Specs.BrakeNotches);
+				Status.LocoBrakeNotch = Math.Min(Status.LocoBrakeNotch, Specs.LocoBrakeNotches);
+				
 
 				if (Specs.IsAirBrake || !Specs.HasHoldBrake)
 				{
@@ -165,11 +177,10 @@ namespace ObjectViewer.Trains
 					else
 					{
 						train = CreateDummyTrain();
-						Array.Resize(ref Program.TrainManager.Trains, 1);
-						Program.TrainManager.Trains[0] = train;
+						Program.TrainManager.Trains.Clear();
+						Program.TrainManager.Trains.Add(train);
 						TrainManagerBase.PlayerTrain = train;
 					}
-
 					Status.Apply(train);
 				}
 				else
@@ -181,7 +192,7 @@ namespace ObjectViewer.Trains
 					}
 					else
 					{
-						Program.TrainManager.Trains = new TrainBase[0];
+						Program.TrainManager.Trains = new List<TrainBase>();
 						TrainManagerBase.PlayerTrain = null;
 					}
 

@@ -75,7 +75,7 @@ namespace DefaultDisplayPlugin
 			Controls[0].Command = Translations.Command.MiscClock;
 			Controls[1].Command = Translations.Command.MiscSpeed;
 			Controls[2].Command = Translations.Command.MiscGradient;
-			Controls[3].Command = Translations.Command.MiscDistanceToNextStation;
+			Controls[3].Command = Translations.Command.MiscDistNextStation;
 			Controls[4].Command = Translations.Command.MiscFps;
 			LoadConfig();
 			return true;
@@ -186,17 +186,12 @@ namespace DefaultDisplayPlugin
 
 		protected virtual void OnKeyDown(InputEventArgs e)
 		{
-			if (KeyDown != null) {
-				KeyDown(this, e);
-			}
+			KeyDown?.Invoke(this, e);
 		}
 
 		protected virtual void OnKeyUp(InputEventArgs e)
 		{
-			if (KeyUp != null)
-			{
-				KeyUp(this, e);
-			}
+			KeyUp?.Invoke(this, e);
 		}
 
 		private void LoadConfig()
@@ -219,7 +214,7 @@ namespace DefaultDisplayPlugin
 					{
 						if (Lines[i].StartsWith("[", StringComparison.Ordinal) &
 							Lines[i].EndsWith("]", StringComparison.Ordinal)) {
-							Section = Lines[i].Substring(1, Lines[i].Length - 2).Trim(new char[] { }).ToLowerInvariant();
+							Section = Lines[i].Substring(1, Lines[i].Length - 2).Trim().ToLowerInvariant();
 						}
 						else
 						{
@@ -228,7 +223,7 @@ namespace DefaultDisplayPlugin
 							if (j >= 0)
 							{
 								Key = Lines[i].Substring(0, j).TrimEnd().ToLowerInvariant();
-								Value = Lines[i].Substring(j + 1).TrimStart(new char[] { });
+								Value = Lines[i].Substring(j + 1).TrimStart();
 							}
 							else
 							{

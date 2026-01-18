@@ -1,3 +1,4 @@
+#pragma warning disable IDE0060
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -18,7 +19,7 @@ namespace OpenBveApi.Interface
 		/// <param name="control">Control's information</param>
 		public InputEventArgs(InputControl control)
 		{
-				this.Control = control;
+			this.Control = control;
 		}
 
 		/// <summary>
@@ -92,7 +93,7 @@ namespace OpenBveApi.Interface
 		/// The function what notify to the plugin that the train existing status
 		/// </summary>
 		/// <param name="data">Data</param>
-		void SetElapseData(Runtime.ElapseData data);
+		void SetElapseData(ElapseData data);
 
 		/// <summary>
 		/// A function that calls each frame

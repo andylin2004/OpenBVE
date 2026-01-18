@@ -26,7 +26,7 @@ namespace OpenBve.Graphics.Renderers
 				MessageManager.TextualMessages[j].Width = size.X;
 				MessageManager.TextualMessages[j].Height = size.Y;
 				//Run through the list of current messages
-				double a = MessageManager.TextualMessages[j].Width - j * (double)Element.Value1;
+				double a = MessageManager.TextualMessages[j].Width - j * Element.Value1;
 				//If our width is wider than the old, use this as the NEW viewing plane width
 				if (a > totalwidth)
 				{
@@ -36,9 +36,8 @@ namespace OpenBve.Graphics.Renderers
 			//Calculate the X-width of the viewing plane
 			MessagesRendererSize.X += 16.0 * TimeElapsed * (totalwidth -MessagesRendererSize.X);
 			totalwidth = (float)MessagesRendererSize.X;
-			double lcrh, lw, rw;
 			//Calculate final viewing plane size to pass to openGL
-			CalculateViewingPlaneSize(Element, out lw, out rw, out lcrh);
+			Element.CalculateViewingPlaneSize(out double lw, out double rw, out double lcrh);
 
 			// start
 			double w = totalwidth + lw + rw;
@@ -58,7 +57,7 @@ namespace OpenBve.Graphics.Renderers
 				bool preserve = false;
 				if ((Element.Transition & HUD.Transition.Move) != 0)
 				{
-					if (Program.CurrentRoute.SecondsSinceMidnight < mm.Timeout)
+					if (mm.Timeout > 0)
 					{
 						if (mm.RendererAlpha == 0.0)
 						{
@@ -119,7 +118,7 @@ namespace OpenBve.Graphics.Renderers
 				}
 				if ((Element.Transition & HUD.Transition.Fade) != 0)
 				{
-					if (Program.CurrentRoute.SecondsSinceMidnight >= mm.Timeout)
+					if (mm.Timeout <= 0)
 					{
 						mm.RendererAlpha -= TimeElapsed;
 						if (mm.RendererAlpha < 0.0)
@@ -138,7 +137,7 @@ namespace OpenBve.Graphics.Renderers
 						preserve = true;
 					}
 				}
-				else if (Program.CurrentRoute.SecondsSinceMidnight > mm.Timeout)
+				else if (mm.Timeout < 0)
 				{
 					if (Math.Abs(mm.RendererPosition.X - tx) < 0.1 & Math.Abs(mm.RendererPosition.Y - ty) < 0.1)
 					{
@@ -150,7 +149,7 @@ namespace OpenBve.Graphics.Renderers
 					m++;
 				}
 
-				double px = mm.RendererPosition.X + j * (double)Element.Value1;
+				double px = mm.RendererPosition.X + j * Element.Value1;
 				double py = mm.RendererPosition.Y;
 				float alpha = (float)(mm.RendererAlpha * mm.RendererAlpha);
 				// graphics

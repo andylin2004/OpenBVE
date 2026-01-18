@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
+using LibRender2.Screens;
 using OpenBveApi;
 using OpenBveApi.Hosts;
 using OpenBveApi.Textures;
 using OpenTK.Graphics.OpenGL;
 using InterpolationMode = OpenBveApi.Graphics.InterpolationMode;
+using PixelFormat = OpenBveApi.Textures.PixelFormat;
 
 namespace LibRender2.Textures
 {
@@ -57,6 +58,12 @@ namespace LibRender2.Textures
 		/// <returns>Whether registering the texture was successful.</returns>
 		public bool RegisterTexture(string path, TextureParameters parameters, out Texture handle)
 		{
+			if (!File.Exists(path))
+			{
+				// shouldn't happen, but handle gracefully
+				handle = null;
+				return false;
+			}
 			/* BUG:
 			 * Attempt to delete null texture handles from the end of the array
 			 * These sometimes seem to end up there
@@ -79,7 +86,7 @@ namespace LibRender2.Textures
 			{
 				try
 				{
-					for (int i = RegisteredTexturesCount - 1; i > 0; i--)
+					for (int i = RegisteredTexturesCount - 1; i >= 0; i--)
 					{
 						if (RegisteredTextures[i] != null)
 						{
@@ -177,22 +184,6 @@ namespace LibRender2.Textures
 			return RegisteredTextures[idx];
 		}
 
-		/// <summary>Registers a texture and returns a handle to the texture.</summary>
-		/// <param name="bitmap">The bitmap that contains the texture.</param>
-		/// <param name="alpha">A second bitmap containing the alpha channel for this texture</param>
-		/// <returns>The handle to the texture.</returns>
-		/// <remarks>Be sure not to dispose of the bitmap after calling this function.</remarks>
-		public Texture RegisterTexture(Bitmap bitmap, Bitmap alpha)
-		{
-			/*
-			 * Register the texture and return the newly created handle.
-			 * */
-			int idx = GetNextFreeTexture();
-			RegisteredTextures[idx] = new Texture(bitmap);
-			RegisteredTexturesCount++;
-			return RegisteredTextures[idx];
-		}
-
 
 		// --- load texture ---
 
@@ -266,7 +257,7 @@ namespace LibRender2.Textures
 				{
 					handle.MultipleFrames = true;
 				}
-				if (texture.BitsPerPixel == 32)
+				//if (texture.BitsPerPixel == 32)
 				{
 					int[] names = new int[1];
 					GL.GenTextures(1, names);
@@ -345,50 +336,96 @@ namespace LibRender2.Textures
 
 					if (handle.Transparency == TextureTransparencyType.Opaque)
 					{
-						/*
-						 * If the texture is fully opaque, the alpha channel is not used.
-						 * If the graphics driver and card support 24-bits per channel,
-						 * it is best to convert the bitmap data to that format in order
-						 * to save memory on the card. If the card does not support the
-						 * format, it will likely be upconverted to 32-bits per channel
-						 * again, and this is wasted effort.
-						 * */
-						int stride = (3 * (texture.Width + 1) >> 2) << 2;
-						byte[] oldBytes = texture.Bytes;
-						byte[] newBytes = new byte[stride * texture.Height];
-						int i = 0, j = 0;
-
-						for (int y = 0; y < texture.Height; y++)
+						switch (texture.PixelFormat)
 						{
-							for (int x = 0; x < texture.Width; x++)
-							{
-								newBytes[j + 0] = oldBytes[i + 0];
-								newBytes[j + 1] = oldBytes[i + 1];
-								newBytes[j + 2] = oldBytes[i + 2];
-								i += 4;
-								j += 3;
-							}
+							case PixelFormat.Grayscale:
+								// send as is to the luminance channel [NOTE: deprecated in GL4]
+								// n.b. Make sure to set the unpack alignment as otherwise we corrupt textures where stride > width
+								GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+								GL.TexImage2D(TextureTarget.Texture2D, 0,
+									PixelInternalFormat.Luminance,
+									texture.Width, texture.Height, 0,
+									OpenTK.Graphics.OpenGL.PixelFormat.Luminance,
+									PixelType.UnsignedByte, texture.Bytes);
 
-							j += stride - 3 * texture.Width;
+								break;
+							case PixelFormat.RGB:
+								// send as is
+								// n.b. Make sure to set the unpack alignment as otherwise we corrupt textures where stride > width
+								GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+								GL.TexImage2D(TextureTarget.Texture2D, 0,
+									PixelInternalFormat.Rgb8,
+									texture.Width, texture.Height, 0,
+									OpenTK.Graphics.OpenGL.PixelFormat.Rgb,
+									PixelType.UnsignedByte, texture.Bytes);
+								break;
+							case PixelFormat.RGBAlpha:
+								/*
+								* If the texture is fully opaque, the alpha channel is not used.
+								* If the graphics driver and card support 24-bits per channel,
+								* it is best to convert the bitmap data to that format in order
+								* to save memory on the card. If the card does not support the
+								* format, it will likely be upconverted to 32-bits per channel
+								* again, and this is wasted effort.
+								* */
+								int stride = (3 * (texture.Width + 1) >> 2) << 2;
+								byte[] oldBytes = texture.Bytes;
+								byte[] newBytes = new byte[stride * texture.Height];
+								int i = 0, j = 0;
+
+								for (int y = 0; y < texture.Height; y++)
+								{
+									for (int x = 0; x < texture.Width; x++)
+									{
+										newBytes[j + 0] = oldBytes[i + 0];
+										newBytes[j + 1] = oldBytes[i + 1];
+										newBytes[j + 2] = oldBytes[i + 2];
+										i += 4;
+										j += 3;
+									}
+
+									j += stride - 3 * texture.Width;
+								}
+								// send as is
+								// n.b. Must reset the unpack alignment in case of changes
+								GL.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
+								GL.TexImage2D(TextureTarget.Texture2D, 0,
+									PixelInternalFormat.Rgb8,
+									texture.Width, texture.Height, 0,
+									OpenTK.Graphics.OpenGL.PixelFormat.Rgb,
+									PixelType.UnsignedByte, newBytes);
+								break;
 						}
-
-						GL.TexImage2D(TextureTarget.Texture2D, 0,
-							PixelInternalFormat.Rgb8,
-							texture.Width, texture.Height, 0,
-							OpenTK.Graphics.OpenGL.PixelFormat.Rgb,
-							PixelType.UnsignedByte, newBytes);
+						
 					}
 					else
 					{
-						/*
+						switch (texture.PixelFormat)
+						{
+							case PixelFormat.GrayscaleAlpha:
+								// NOTE: luminance is deprecated in GL4
+								GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+								GL.TexImage2D(TextureTarget.Texture2D, 0,
+									PixelInternalFormat.LuminanceAlpha,
+									texture.Width, texture.Height, 0,
+									OpenTK.Graphics.OpenGL.PixelFormat.LuminanceAlpha,
+									PixelType.UnsignedByte, texture.Bytes);
+								break;
+							case PixelFormat.RGBAlpha:
+								/*
 						 * The texture uses its alpha channel, so send the bitmap data
 						 * in 32-bits per channel as-is.
 						 * */
-						GL.TexImage2D(TextureTarget.Texture2D, 0,
-							PixelInternalFormat.Rgba8,
-							texture.Width, texture.Height, 0,
-							OpenTK.Graphics.OpenGL.PixelFormat.Rgba,
-							PixelType.UnsignedByte, texture.Bytes);
+								// n.b. Must reset the unpack alignment in case of changes
+								GL.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
+								GL.TexImage2D(TextureTarget.Texture2D, 0,
+									PixelInternalFormat.Rgba8,
+									texture.Width, texture.Height, 0,
+									OpenTK.Graphics.OpenGL.PixelFormat.Rgba,
+									PixelType.UnsignedByte, texture.Bytes);
+								break;
+						}
+						
 					}
 					if (renderer.ForceLegacyOpenGL == false)
 					{
@@ -406,145 +443,6 @@ namespace LibRender2.Textures
 			handle.Ignore = true;
 			return false;
 		}
-
-		// --- save texture ---
-
-		/// <summary>Saves a texture to a file.</summary>
-		/// <param name="file">The file.</param>
-		/// <param name="texture">The texture.</param>
-		/// <remarks>The texture is always saved in PNG format.</remarks>
-		public void SaveTexture(string file, Texture texture)
-		{
-			Bitmap bitmap = new Bitmap(texture.Width, texture.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-			BitmapData data = bitmap.LockBits(new Rectangle(0, 0, texture.Width, texture.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-			byte[] bytes = new byte[texture.Bytes.Length];
-
-			for (int i = 0; i < bytes.Length; i += 4)
-			{
-				bytes[i] = texture.Bytes[i + 2];
-				bytes[i + 1] = texture.Bytes[i + 1];
-				bytes[i + 2] = texture.Bytes[i];
-				bytes[i + 3] = texture.Bytes[i + 3];
-			}
-
-			Marshal.Copy(bytes, 0, data.Scan0, texture.Bytes.Length);
-			bitmap.UnlockBits(data);
-			bitmap.Save(file, ImageFormat.Png);
-			bitmap.Dispose();
-		}
-
-
-		// --- upsize texture ---
-
-		/// <summary>Resizes the specified texture to a power of two size and returns the result.</summary>
-		/// <param name="texture">The texture.</param>
-		/// <returns>The upsized texture, or the original if already a power of two size.</returns>
-		/// <exception cref="System.NotSupportedException">The bits per pixel in the texture is not supported.</exception>
-		public Texture ResizeToPowerOfTwo(Texture texture)
-		{
-			int width = RoundUpToPowerOfTwo(texture.Width);
-			int height = RoundUpToPowerOfTwo(texture.Height);
-
-			//HACK: Some routes use non-power of two textures which upscale to stupid numbers
-			//At least round down if we're over 1024 px....
-			if (width != texture.Width && width > 1024)
-			{
-				width /= 2;
-			}
-
-			if (height != texture.Height && height > 1024)
-			{
-				height /= 2;
-			}
-
-			return Resize(texture, width, height);
-		}
-
-		/// <summary>Resizes the specified texture to the specified width and height and returns the result.</summary>
-		/// <param name="texture">The texture.</param>
-		/// <param name="width">The new width.</param>
-		/// <param name="height">The new height.</param>
-		/// <returns>The resize texture, or the original if already of the specified size.</returns>
-		/// <exception cref="System.NotSupportedException">The bits per pixel in the source texture is not supported.</exception>
-		/// <exception cref="System.OverflowException">The resized texture would exceed the maximum possible size.</exception>
-		public static Texture Resize(Texture texture, int width, int height)
-		{
-			if (width == texture.Width && height == texture.Height)
-			{
-				return texture;
-			}
-
-			if (texture.BitsPerPixel != 32)
-			{
-				throw new NotSupportedException("The number of bits per pixel is not supported.");
-			}
-
-			TextureTransparencyType type = texture.GetTransparencyType();
-
-			/*
-			 * Convert the texture into a bitmap.
-			 * */
-			Bitmap bitmap = new Bitmap(texture.Width, texture.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-			BitmapData data = bitmap.LockBits(new Rectangle(0, 0, texture.Width, texture.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-			Marshal.Copy(texture.Bytes, 0, data.Scan0, texture.Bytes.Length);
-			bitmap.UnlockBits(data);
-
-			/*
-			 * Scale the bitmap.
-			 * */
-			Bitmap scaledBitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-			Graphics graphics = Graphics.FromImage(scaledBitmap);
-			graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
-			graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-			graphics.DrawImage(bitmap, new Rectangle(0, 0, width, height), new Rectangle(0, 0, texture.Width, texture.Height), GraphicsUnit.Pixel);
-			graphics.Dispose();
-			bitmap.Dispose();
-
-			/*
-			 * Convert the bitmap into a texture.
-			 * */
-			data = scaledBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, scaledBitmap.PixelFormat);
-			int newSize;
-
-			try
-			{
-				newSize = checked(4 * width * height);
-			}
-			catch (OverflowException)
-			{
-				throw new OverflowException("The resized texture would exceed the maximum possible size.");
-			}
-
-			byte[] bytes = new byte[newSize];
-			Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
-			scaledBitmap.UnlockBits(data);
-			scaledBitmap.Dispose();
-
-			/*
-			 * Ensure opaque and partially transparent
-			 * textures have valid alpha components.
-			 * */
-			if (type == TextureTransparencyType.Opaque)
-			{
-				for (int i = 3; i < bytes.Length; i += 4)
-				{
-					bytes[i] = 255;
-				}
-			}
-			else if (type == TextureTransparencyType.Partial)
-			{
-				for (int i = 3; i < bytes.Length; i += 4)
-				{
-					bytes[i] = bytes[i] < 128 ? (byte)0 : (byte)255;
-				}
-			}
-
-			Texture result = new Texture(width, height, 32, bytes, texture.Palette);
-			return result;
-		}
-
-
-		// --- unload texture ---
 
 		/// <summary>Unloads the specified texture from OpenGL if loaded.</summary>
 		/// <param name="handle">The handle to the registered texture.</param>
@@ -590,21 +488,98 @@ namespace LibRender2.Textures
 				}
 			}
 			handle.Ignore = false;
-			if (handle.Origin != null && textureCache.ContainsKey(handle.Origin))
+			if (handle.Origin != null)
 			{
 				textureCache.Remove(handle.Origin);
 			}
 		}
 
+		/// <summary>Loads all registered textures.</summary>
+		public void LoadAllTextures()
+		{
+			for (int i = 0; i < RegisteredTexturesCount; i++)
+			{
+				for (int j = 0; j < 4; j++)
+				{
+					if (RegisteredTextures[i] != null && RegisteredTextures[i].OpenGlTextures[j].Used)
+					{
+						LoadTexture(ref RegisteredTextures[i], (OpenGlTextureWrapMode)j, CPreciseTimer.GetClockTicks(), renderer.currentOptions.Interpolation, renderer.currentOptions.AnisotropicFilteringLevel);
+					}
+
+				}
+
+			}
+		}
+
 		/// <summary>Unloads all registered textures.</summary>
-		public void UnloadAllTextures()
+		public void UnloadAllTextures(bool currentlyReloading)
 		{
 			for (int i = 0; i < RegisteredTexturesCount; i++)
 			{
 				UnloadTexture(ref RegisteredTextures[i]);
 			}
+			if (currentlyReloading)
+			{
+				foreach(TextureOrigin origin in textureCache.Keys.ToList())
+				{
+					if (origin is PathOrigin pathOrigin)
+					{
+						if (!File.Exists(pathOrigin.Path) || pathOrigin.FileSize != new FileInfo(pathOrigin.Path).Length || pathOrigin.LastModificationTime != File.GetLastWriteTime(pathOrigin.Path))
+						{
+							textureCache.Remove(origin);
+						}
+					}
+				}
+			}
+			else
+			{
+				textureCache.Clear();
+			}
+			
 			GC.Collect(); //Speculative- https://bveworldwide.forumotion.com/t1873-object-routeviewer-out-of-memory#19423
-			textureCache.Clear();
+			
+		}
+
+		/// <summary>Unloads any textures which have not been accessed</summary>
+		/// <param name="TimeElapsed">The time elapsed since the last call to this function</param>
+		public void UnloadUnusedTextures(double TimeElapsed)
+		{
+#if DEBUG
+			//HACK: If when running in debug mode the frame time exceeds 1s, we can assume VS has hit a breakpoint
+			//Don't unload textures in this case, as it just causes texture bugs
+			if (TimeElapsed > 1000)
+			{
+				foreach (var Texture in RegisteredTextures)
+				{
+					if (Texture != null)
+					{
+						Texture.LastAccess = CPreciseTimer.GetClockTicks();
+					}
+				}
+			}
+#endif
+			if (renderer.CurrentInterface == InterfaceType.Normal)
+			{
+				for (int i = 0; i < RegisteredTextures.Length; i++)
+				{
+					if (RegisteredTextures[i] != null && RegisteredTextures[i].AvailableToUnload && (CPreciseTimer.GetClockTicks() - RegisteredTextures[i].LastAccess) > 20000)
+					{
+						UnloadTexture(ref RegisteredTextures[i]);
+					}
+				}
+			}
+			else
+			{
+				//Don't unload textures if we are in a menu/ paused, as they may be required immediately after unpause
+				foreach (var Texture in TextureManager.RegisteredTextures)
+				{
+					//Texture can be null in certain cases....
+					if (Texture != null)
+					{
+						Texture.LastAccess = CPreciseTimer.GetClockTicks();
+					}
+				}
+			}
 		}
 
 

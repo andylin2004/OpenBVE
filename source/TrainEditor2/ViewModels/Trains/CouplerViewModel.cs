@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using System.Reactive.Linq;
+using Formats.OpenBve;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -40,7 +41,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Min,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -49,7 +50,7 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.Max,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.AddTo(disposable);
@@ -60,16 +61,11 @@ namespace TrainEditor2.ViewModels.Trains
 
 			Min.SetValidateNotifyError(x =>
 				{
-					double min;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.Any, out min, out message))
+					if (Utilities.TryParse(x, NumberRange.Any, out double min, out string message))
 					{
-						double max;
-
-						if (Utilities.TryParse(Max.Value, NumberRange.Any, out max) && min > max)
+						if (Utilities.TryParse(Max.Value, NumberRange.Any, out double max) && min > max)
 						{
-							message = "MaxはMin以上でなければなりません。";
+							message = Utilities.GetInterfaceString("message", "mustbe_greater_than");
 						}
 					}
 
@@ -86,16 +82,11 @@ namespace TrainEditor2.ViewModels.Trains
 
 			Max.SetValidateNotifyError(x =>
 				{
-					double max;
-					string message;
-
-					if (Utilities.TryParse(x, NumberRange.Any, out max, out message))
+					if (Utilities.TryParse(x, NumberRange.Any, out double max, out string message))
 					{
-						double min;
-
-						if (Utilities.TryParse(Min.Value, NumberRange.Any, out min) && max < min)
+						if (Utilities.TryParse(Min.Value, NumberRange.Any, out double min) && max < min)
 						{
-							message = "MaxはMin以上でなければなりません。";
+							message = Utilities.GetInterfaceString("message", "mustbe_greater_than");
 						}
 					}
 

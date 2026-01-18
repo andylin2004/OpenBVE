@@ -1,9 +1,11 @@
-﻿using System;
-using System.ComponentModel;
+﻿using LibRender2.Viewports;
 using ObjectViewer.Trains;
 using OpenBveApi;
 using OpenTK;
 using OpenTK.Graphics;
+using System;
+using System.ComponentModel;
+using System.Threading;
 using Vector3 = OpenBveApi.Math.Vector3;
 
 namespace ObjectViewer
@@ -37,6 +39,19 @@ namespace ObjectViewer
 
         protected override void OnRenderFrame(FrameEventArgs e)
         {
+	        if (Program.Renderer.RenderThreadJobWaiting)
+	        {
+		        while (!Program.Renderer.RenderThreadJobs.IsEmpty)
+		        {
+			        Program.Renderer.RenderThreadJobs.TryDequeue(out ThreadStart currentJob);
+			        currentJob();
+			        lock (currentJob)
+			        {
+				        Monitor.Pulse(currentJob);
+			        }
+		        }
+		        Program.Renderer.RenderThreadJobWaiting = false;
+	        }
 			double timeElapsed = RenderRealTimeElapsed;
 
 			// Use the OpenTK frame rate as this is much more accurate
@@ -51,7 +66,7 @@ namespace ObjectViewer
 
 			ObjectManager.UpdateAnimatedWorldObjects(timeElapsed, false);
 
-			if (Program.TrainManager.Trains.Length != 0)
+			if (Program.TrainManager.Trains.Count != 0)
 			{
 				Program.TrainManager.Trains[0].UpdateObjects(timeElapsed, false);
 			}
@@ -67,14 +82,14 @@ namespace ObjectViewer
                 }
                 else
                 {
-                    RotateXSpeed -= (double)Math.Sign(RotateXSpeed) * d;
+                    RotateXSpeed -= Math.Sign(RotateXSpeed) * d;
                 }
             }
             else
             {
                 double d = (1.0 + 1.0 - 1.0 / (1.0 + RotateXSpeed * RotateXSpeed)) * timeElapsed;
                 double m = 1.0;
-                RotateXSpeed += (double)Program.RotateX * d;
+                RotateXSpeed += Program.RotateX * d;
                 if (RotateXSpeed < -m)
                 {
                     RotateXSpeed = -m;
@@ -100,14 +115,14 @@ namespace ObjectViewer
                 }
                 else
                 {
-                    RotateYSpeed -= (double)Math.Sign(RotateYSpeed) * d;
+                    RotateYSpeed -= Math.Sign(RotateYSpeed) * d;
                 }
             }
             else
             {
                 double d = (1.0 + 1.0 - 1.0 / (1.0 + RotateYSpeed * RotateYSpeed)) * timeElapsed;
                 double m = 1.0;
-                RotateYSpeed += (double)Program.RotateY * d;
+                RotateYSpeed += Program.RotateY * d;
                 if (RotateYSpeed < -m)
                 {
                     RotateYSpeed = -m;
@@ -132,14 +147,14 @@ namespace ObjectViewer
                 }
                 else
                 {
-                    MoveXSpeed -= (double)Math.Sign(MoveXSpeed) * d;
+                    MoveXSpeed -= Math.Sign(MoveXSpeed) * d;
                 }
             }
             else
             {
                 double d = (5.0 + 10.0 - 10.0 / (1.0 + MoveXSpeed * MoveXSpeed)) * timeElapsed;
                 double m = 25.0;
-                MoveXSpeed += (double)Program.MoveX * d;
+                MoveXSpeed += Program.MoveX * d;
                 if (MoveXSpeed < -m)
                 {
                     MoveXSpeed = -m;
@@ -163,14 +178,14 @@ namespace ObjectViewer
                 }
                 else
                 {
-                    MoveYSpeed -= (double)Math.Sign(MoveYSpeed) * d;
+                    MoveYSpeed -= Math.Sign(MoveYSpeed) * d;
                 }
             }
             else
             {
                 double d = (5.0 + 10.0 - 10.0 / (1.0 + MoveYSpeed * MoveYSpeed)) * timeElapsed;
                 double m = 25.0;
-                MoveYSpeed += (double)Program.MoveY * d;
+                MoveYSpeed += Program.MoveY * d;
                 if (MoveYSpeed < -m)
                 {
                     MoveYSpeed = -m;
@@ -194,14 +209,14 @@ namespace ObjectViewer
                 }
                 else
                 {
-                    MoveZSpeed -= (double)Math.Sign(MoveZSpeed) * d;
+                    MoveZSpeed -= Math.Sign(MoveZSpeed) * d;
                 }
             }
             else
             {
                 double d = (5.0 + 10.0 - 10.0 / (1.0 + MoveZSpeed * MoveZSpeed)) * timeElapsed;
                 double m = 25.0;
-                MoveZSpeed += (double)Program.MoveZ * d;
+                MoveZSpeed += Program.MoveZ * d;
                 if (MoveZSpeed < -m)
                 {
                     MoveZSpeed = -m;
@@ -218,7 +233,7 @@ namespace ObjectViewer
             // lighting
             if (Program.LightingRelative == -1)
             {
-                Program.LightingRelative = (double)Program.LightingTarget;
+                Program.LightingRelative = Program.LightingTarget;
                 updatelight = true;
             }
             if (Program.LightingTarget == 0)
@@ -251,7 +266,7 @@ namespace ObjectViewer
 				
             }
             Program.Renderer.Lighting.Initialize();
-            Program.Renderer.RenderScene();
+            Program.Renderer.RenderScene(timeElapsed);
             SwapBuffers();
 
 			RenderRealTimeElapsed = 0.0;
@@ -267,8 +282,7 @@ namespace ObjectViewer
 
 			if (NearestTrain.IsExtensionsCfg)
 			{
-				double[] decelerationDueToBrake, decelerationDueToMotor;
-				Program.TrainManager.Trains[0].UpdateBrakeSystem(RealTimeElapsed, out decelerationDueToBrake, out decelerationDueToMotor);
+				Program.TrainManager.Trains[0].UpdateBrakeSystem(RealTimeElapsed, out _, out _); // dummy simulation
 			}
 
 			TotalTimeElapsedForInfo += RealTimeElapsed;
@@ -279,7 +293,7 @@ namespace ObjectViewer
         {
 	        Program.Renderer.Screen.Width = Width;
 	        Program.Renderer.Screen.Height = Height;
-            Program.Renderer.UpdateViewport();
+            Program.Renderer.UpdateViewport(ViewportChangeMode.NoChange);
         }
 
         protected override void OnLoad(EventArgs e)
@@ -289,20 +303,30 @@ namespace ObjectViewer
             MouseDown += Program.MouseEvent;
             MouseUp += Program.MouseEvent;
 			MouseWheel += Program.MouseWheelEvent;
+			MouseMove += Program.MouseMoveEvent;
 	        FileDrop += Program.DragFile;
 	        Program.Renderer.Camera.Reset(new Vector3(-5.0, 2.5, -25.0));
             Program.Renderer.Initialize();
             Program.Renderer.Lighting.Initialize();
-            Program.Renderer.UpdateViewport();
+            Program.Renderer.UpdateViewport(ViewportChangeMode.NoChange);
 			Program.Renderer.InitializeVisibility();
 			Program.Renderer.UpdateVisibility(true);
             ObjectManager.UpdateAnimatedWorldObjects(0.01, true);
 			Program.RefreshObjects();
-        }
+			if (Width == DisplayDevice.Default.Width && Height == DisplayDevice.Default.Height)
+			{
+				WindowState = WindowState.Maximized;
+			}
+		}
 
         protected override void OnClosing(CancelEventArgs e)
         {
-	        Program.Renderer.visibilityThread = false;
+	        Interface.CurrentOptions.Save(Path.CombineFile(Program.FileSystem.SettingsFolder, "1.5.0/options_ov.cfg"));
+			Program.Renderer.VisibilityThreadShouldRun = false;
+			if (Program.CurrentHost.MonoRuntime)
+			{
+				Environment.Exit(0);
+			}
         }
 
         protected override void OnUnload(EventArgs e)

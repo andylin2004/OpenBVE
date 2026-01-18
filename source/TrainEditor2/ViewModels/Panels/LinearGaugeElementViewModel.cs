@@ -1,6 +1,8 @@
 ﻿using System.Globalization;
 using System.Reactive.Linq;
+using Formats.OpenBve;
 using OpenBveApi.Colors;
+using OpenBveApi.Math;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -83,10 +85,7 @@ namespace TrainEditor2.ViewModels.Panels
 				)
 				.SetValidateNotifyError(x =>
 				{
-					Color24 result;
-					string message;
-
-					Utilities.TryParse(x, out result, out message);
+					Utilities.TryParse(x, out Color24 result, out string message);
 
 					return message;
 				})
@@ -96,16 +95,12 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.Minimum,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -114,26 +109,28 @@ namespace TrainEditor2.ViewModels.Panels
 				.ToReactivePropertyAsSynchronized(
 					x => x.Maximum,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.Any, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.Any, out string message);
 					return message;
 				})
 				.AddTo(disposable);
 
 			DirectionX = linearGauge
-				.ToReactivePropertyAsSynchronized(x => x.DirectionX)
+				.ToReactivePropertyAsSynchronized(
+					x => x.Direction,
+					x => (int)x.X,
+					x => new Vector2(x, linearGauge.Direction.Y))
 				.AddTo(disposable);
 
 			DirectionY = linearGauge
-				.ToReactivePropertyAsSynchronized(x => x.DirectionY)
+				.ToReactivePropertyAsSynchronized(
+					x => x.Direction,
+					x => (int)x.Y,
+					x => new Vector2(linearGauge.Direction.X, x))
 				.AddTo(disposable);
 
 			Width = linearGauge

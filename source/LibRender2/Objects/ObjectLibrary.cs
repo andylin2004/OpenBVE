@@ -50,7 +50,7 @@ namespace LibRender2.Objects
 
 		private bool AddObject(ObjectState state)
 		{
-			if (!myObjects.Contains(state))
+			if (state.Prototype != null &&!myObjects.Contains(state))
 			{
 				myObjects.Add(state);
 				return true;
@@ -84,6 +84,8 @@ namespace LibRender2.Objects
 				myAlphaFaces.Clear();
 				myOverlayOpaqueFaces.Clear();
 				myOverlayAlphaFaces.Clear();
+				renderer.StaticObjectStates.Clear();
+				renderer.DynamicObjectStates.Clear();
 			}
 		}
 
@@ -104,20 +106,29 @@ namespace LibRender2.Objects
 				{
 					if (State.Prototype.Mesh.Materials[face.Material].WrapMode == null)
 					{
-						if (State.Prototype.Mesh.Vertices.Length < 5000)
+						/*
+						 * If the object does not have a stored wrapping mode determine it now. However:
+						 * https://github.com/leezer3/OpenBVE/issues/971
+						 *
+						 * Unfortunately, there appear to be X objects in the wild which expect a non-default wrapping mode
+						 * which means the best fast exit we can do is to check for RepeatRepeat....
+						 *
+						 */ 
+						foreach (VertexTemplate vertex in State.Prototype.Mesh.Vertices)
 						{
-							// If the object does not have a stored wrapping mode and has a sensible number of verticies to check, determine it now
-							foreach (VertexTemplate vertex in State.Prototype.Mesh.Vertices)
+							if (vertex.TextureCoordinates.X < 0.0f || vertex.TextureCoordinates.X > 1.0f)
 							{
-								if (vertex.TextureCoordinates.X < 0.0f || vertex.TextureCoordinates.X > 1.0f)
-								{
-									wrap |= OpenGlTextureWrapMode.RepeatClamp;
-								}
+								wrap |= OpenGlTextureWrapMode.RepeatClamp;
+							}
 
-								if (vertex.TextureCoordinates.Y < 0.0f || vertex.TextureCoordinates.Y > 1.0f)
-								{
-									wrap |= OpenGlTextureWrapMode.ClampRepeat;
-								}
+							if (vertex.TextureCoordinates.Y < 0.0f || vertex.TextureCoordinates.Y > 1.0f)
+							{
+								wrap |= OpenGlTextureWrapMode.ClampRepeat;
+							}
+
+							if (wrap == OpenGlTextureWrapMode.RepeatRepeat)
+							{
+								break;
 							}
 						}
 						State.Prototype.Mesh.Materials[face.Material].WrapMode = wrap;
@@ -162,7 +173,13 @@ namespace LibRender2.Objects
 							
 						}
 
-						TextureTransparencyType transparencyType = daytimeTexture.GetTransparencyType();
+						TextureTransparencyType transparencyType = TextureTransparencyType.Opaque;
+						if (daytimeTexture != null)
+						{
+							// as loading the cached texture may have failed, e.g. corrupt file etc
+							transparencyType = daytimeTexture.GetTransparencyType();
+						}
+						
 						if (transparencyType == TextureTransparencyType.Alpha)
 						{
 							alpha = true;
@@ -176,16 +193,21 @@ namespace LibRender2.Objects
 					if (State.Prototype.Mesh.Materials[face.Material].NighttimeTexture != null)
 					{
 						Texture nighttimeTexture; 
-						if (TextureManager.textureCache.ContainsKey(State.Prototype.Mesh.Materials[face.Material].DaytimeTexture.Origin))
+						if (TextureManager.textureCache.ContainsKey(State.Prototype.Mesh.Materials[face.Material].NighttimeTexture.Origin))
 						{
-							nighttimeTexture = TextureManager.textureCache[State.Prototype.Mesh.Materials[face.Material].DaytimeTexture.Origin];
+							nighttimeTexture = TextureManager.textureCache[State.Prototype.Mesh.Materials[face.Material].NighttimeTexture.Origin];
 						}
 						else
 						{
-							State.Prototype.Mesh.Materials[face.Material].DaytimeTexture.Origin.GetTexture(out nighttimeTexture);
-							TextureManager.textureCache.Add(State.Prototype.Mesh.Materials[face.Material].DaytimeTexture.Origin, nighttimeTexture);
+							State.Prototype.Mesh.Materials[face.Material].NighttimeTexture.Origin.GetTexture(out nighttimeTexture);
+							TextureManager.textureCache.Add(State.Prototype.Mesh.Materials[face.Material].NighttimeTexture.Origin, nighttimeTexture);
 						}
-						TextureTransparencyType transparencyType = nighttimeTexture.GetTransparencyType();
+						TextureTransparencyType transparencyType = TextureTransparencyType.Opaque;
+						if (nighttimeTexture != null)
+						{
+							// as loading the cached texture may have failed, e.g. corrupt file etc
+							transparencyType = nighttimeTexture.GetTransparencyType();
+						}
 						if (transparencyType == TextureTransparencyType.Alpha)
 						{
 							alpha = true;

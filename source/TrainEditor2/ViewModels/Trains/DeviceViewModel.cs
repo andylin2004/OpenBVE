@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using Formats.OpenBve;
 using Reactive.Bindings;
 using Reactive.Bindings.Extensions;
 using TrainEditor2.Extensions;
@@ -91,7 +92,7 @@ namespace TrainEditor2.ViewModels.Trains
 				{
 					if (x && handle.BrakeNotches == 0)
 					{
-						return "BrakeNotches must be at least 1 if HoldBrake is set.";
+						return Utilities.GetInterfaceString("general_settings", "handle", "brake_notches_error_message");
 					}
 
 					return null;
@@ -118,16 +119,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.DoorWidth,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);
@@ -136,16 +133,12 @@ namespace TrainEditor2.ViewModels.Trains
 				.ToReactivePropertyAsSynchronized(
 					x => x.DoorMaxTolerance,
 					x => x.ToString(culture),
-					x => double.Parse(x, NumberStyles.Float, culture),
+					x => x.Parse(),
 					ignoreValidationErrorValue: true
 				)
 				.SetValidateNotifyError(x =>
 				{
-					double result;
-					string message;
-
-					Utilities.TryParse(x, NumberRange.NonNegative, out result, out message);
-
+					Utilities.TryValidate(x, NumberRange.NonNegative, out string message);
 					return message;
 				})
 				.AddTo(disposable);

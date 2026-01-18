@@ -18,14 +18,14 @@ namespace OpenBveApi.Objects
 		public Vector3 WorldPosition;
 		/// <summary>A value between 0 (daytime) and 255 (nighttime).</summary>
 		public byte DaytimeNighttimeBlend = 0;
-		
+		/// <summary>The matricies within the object</summary>
+		public Matrix4D[] Matricies;
+		/// <summary>The index of the storage buffer for the matricies</summary>
+		public int MatrixBufferIndex;
 		/// <summary>The translation matrix to be applied</summary>
 		public Matrix4D Translation
 		{
-			get
-			{
-				return _translation;
-			}
+			get => _translation;
 			set
 			{
 				_translation = value;
@@ -35,10 +35,7 @@ namespace OpenBveApi.Objects
 		/// <summary>The scale matrix to be applied</summary>
 		public Matrix4D Scale
 		{
-			get
-			{
-				return _scale;
-			}
+			get => _scale;
 			set
 			{
 				_scale = value;
@@ -48,10 +45,7 @@ namespace OpenBveApi.Objects
 		/// <summary>The rotation matrix to be applied</summary>
 		public Matrix4D Rotate
 		{
-			get
-			{
-				return _rotate;
-			}
+			get => _rotate;
 			set
 			{
 				_rotate = value;
@@ -81,9 +75,6 @@ namespace OpenBveApi.Objects
 		private bool updateModelMatrix;
 		/// <summary>The texture translation matrix to be applied</summary>
 		public Matrix4D TextureTranslation;
-		/// <summary>The brightness value at this object's track position</summary>
-		public double Brightness;
-
 		/// <summary>The starting track position, for static objects only.</summary>
 		public float StartingDistance;
 		/// <summary>The ending track position, for static objects only.</summary>
@@ -97,7 +88,6 @@ namespace OpenBveApi.Objects
 			_scale = Matrix4D.Identity;
 			_rotate = Matrix4D.Identity;
 			TextureTranslation = Matrix4D.Identity;
-			Brightness = 0.0;
 			StartingDistance = 0.0f;
 			EndingDistance = 0.0f;
 			updateModelMatrix = false;

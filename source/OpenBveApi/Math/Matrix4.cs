@@ -20,8 +20,10 @@ SOFTWARE.
 */
 
 using System;
+using System.Diagnostics.Contracts;
 using System.IO;
 using System.Runtime.InteropServices;
+// ReSharper disable MergeCastWithTypeCheck
 
 namespace OpenBveApi.Math
 {
@@ -44,10 +46,7 @@ namespace OpenBveApi.Math
 		/// <summary>The first column of the matrix</summary>
 		public Vector4 Column0
 		{
-			get
-			{
-				return new Vector4(Row0.X, Row1.X, Row2.X, Row3.X);
-			}
+			get => new Vector4(Row0.X, Row1.X, Row2.X, Row3.X);
 			set
 			{
 				Row0.X = value.X;
@@ -60,10 +59,7 @@ namespace OpenBveApi.Math
 		/// <summary>The second column of the matrix</summary>
 		public Vector4 Column1
 		{
-			get
-			{
-				return new Vector4(Row0.Y, Row1.Y, Row2.Y, Row3.Y);
-			}
+			get => new Vector4(Row0.Y, Row1.Y, Row2.Y, Row3.Y);
 			set
 			{
 				Row0.Y = value.X;
@@ -76,10 +72,7 @@ namespace OpenBveApi.Math
 		/// <summary>The third column of the matrix</summary>
 		public Vector4 Column2
 		{
-			get
-			{
-				return new Vector4(Row0.Z, Row1.Z, Row2.Z, Row3.Z);
-			}
+			get => new Vector4(Row0.Z, Row1.Z, Row2.Z, Row3.Z);
 			set
 			{
 				Row0.Z = value.X;
@@ -92,10 +85,7 @@ namespace OpenBveApi.Math
 		/// <summary>The fourth column of the matrix</summary>
 		public Vector4 Column3
 		{
-			get
-			{
-				return new Vector4(Row0.W, Row1.W, Row2.W, Row3.W);
-			}
+			get => new Vector4(Row0.W, Row1.W, Row2.W, Row3.W);
 			set
 			{
 				Row0.W = value.X;
@@ -288,22 +278,22 @@ namespace OpenBveApi.Math
 			//https://www.cs.rit.edu/usr/local/pub/wrc/graphics/doc/opengl/books/blue/gluPerspective.html
 			if (fieldOfViewY <= 0 || fieldOfViewY > System.Math.PI)
 			{
-				throw new ArgumentOutOfRangeException("fieldOfViewY", @"fieldOfViewY must be positive and less than Pi");
+				throw new ArgumentOutOfRangeException(nameof(fieldOfViewY), @"fieldOfViewY must be positive and less than Pi");
 			}
 
 			if (aspectRatio <= 0)
 			{
-				throw new ArgumentOutOfRangeException("aspectRatio", @"aspectRatio must be positive");
+				throw new ArgumentOutOfRangeException(nameof(aspectRatio), @"aspectRatio must be positive");
 			}
 
 			if (zNear <= 0)
 			{
-				throw new ArgumentOutOfRangeException("zNear", @"zNear must be positive");
+				throw new ArgumentOutOfRangeException(nameof(zNear), @"zNear must be positive");
 			}
 
 			if (zFar <= 0)
 			{
-				throw new ArgumentOutOfRangeException("zFar", @"zFar must be positive");
+				throw new ArgumentOutOfRangeException(nameof(zFar), @"zFar must be positive");
 			}
 
 			double yMax = zNear * System.Math.Tan(fieldOfViewY * System.Math.PI / 6.28319); //360 degrees in radians
@@ -327,17 +317,17 @@ namespace OpenBveApi.Math
 			//https://www.cs.rit.edu/usr/local/pub/wrc/graphics/doc/opengl/books/blue/glFrustum.html
 			if (zNear <= 0)
 			{
-				throw new ArgumentOutOfRangeException("zNear", @"zNear must be positive");
+				throw new ArgumentOutOfRangeException(nameof(zNear), @"zNear must be positive");
 			}
 
 			if (zFar <= 0)
 			{
-				throw new ArgumentOutOfRangeException("zFar", @"zFar must be positive");
+				throw new ArgumentOutOfRangeException(nameof(zFar), @"zFar must be positive");
 			}
 
 			if (zNear >= zFar)
 			{
-				throw new ArgumentOutOfRangeException("zNear", @"zNear must be less than or equal to zFar");
+				throw new ArgumentOutOfRangeException(nameof(zNear), @"zNear must be less than or equal to zFar");
 			}
 
 			double x = (2.0 * zNear) / (right - left);
@@ -435,8 +425,7 @@ namespace OpenBveApi.Math
 		/// <returns>The resulting Matrix4.</returns>
 		public static Matrix4D CreateTranslation(double x, double y, double z)
 		{
-			Matrix4D result;
-			CreateTranslation(x, y, z, out result);
+			CreateTranslation(x, y, z, out Matrix4D result);
 			return result;
 		}
 
@@ -445,12 +434,12 @@ namespace OpenBveApi.Math
 		/// <returns>The resulting Matrix4.</returns>
 		public static Matrix4D CreateTranslation(Vector3 vector)
 		{
-			Matrix4D result;
-			CreateTranslation(vector.X, vector.Y, vector.Z, out result);
+			CreateTranslation(vector.X, vector.Y, vector.Z, out Matrix4D result);
 			return result;
 		}
 
 		/// <summary>Returns the translation component of this Matrix4.</summary>
+		[Pure]
 		public Vector3 ExtractTranslation()
 		{
 			return new Vector3(Row3.X, Row3.Y, Row3.Z);
@@ -499,8 +488,7 @@ namespace OpenBveApi.Math
 		/// <returns>A matrix instance.</returns>
 		public static Matrix4D CreateFromAxisAngle(Vector3 axis, double angle)
 		{
-			Matrix4D result;
-			CreateFromAxisAngle(axis, angle, out result);
+			CreateFromAxisAngle(axis, angle, out Matrix4D result);
 			return result;
 		}
 
@@ -511,10 +499,41 @@ namespace OpenBveApi.Math
 		/// <param name="result">Matrix result.</param>
 		public static void CreateFromQuaternion(ref Quaternion q, out Matrix4D result)
 		{
-			Vector3 axis;
-			double angle;
-			q.ToAxisAngle(out axis, out angle);
-			CreateFromAxisAngle(axis, angle, out result);
+			// Adapted from https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Quaternion-derived_rotation_matrix
+			// with the caviat that opentk uses row-major matrices so the matrix we create is transposed
+			double sqx = q.X * q.X;
+			double sqy = q.Y * q.Y;
+			double sqz = q.Z * q.Z;
+			double sqw = q.W * q.W;
+
+			double xy = q.X * q.Y;
+			double xz = q.X * q.Z;
+			double xw = q.X * q.W;
+
+			double yz = q.Y * q.Z;
+			double yw = q.Y * q.W;
+
+			double zw = q.Z * q.W;
+
+			double s2 = 2f / (sqx + sqy + sqz + sqw);
+
+			result.Row0.X = 1f - (s2 * (sqy + sqz));
+			result.Row1.Y = 1f - (s2 * (sqx + sqz));
+			result.Row2.Z = 1f - (s2 * (sqx + sqy));
+
+			result.Row0.Y = s2 * (xy + zw);
+			result.Row1.X = s2 * (xy - zw);
+
+			result.Row2.X = s2 * (xz + yw);
+			result.Row0.Z = s2 * (xz - yw);
+
+			result.Row2.Y = s2 * (yz - xw);
+			result.Row1.Z = s2 * (yz + xw);
+
+			result.Row0.W = 0;
+			result.Row1.W = 0;
+			result.Row2.W = 0;
+			result.Row3 = new Vector4(0, 0, 0, 1);
 		}
 
 		/// <summary>
@@ -524,8 +543,7 @@ namespace OpenBveApi.Math
 		/// <returns>A matrix instance.</returns>
 		public static Matrix4D CreateFromQuaternion(Quaternion q)
 		{
-			Matrix4D result;
-			CreateFromQuaternion(ref q, out result);
+			CreateFromQuaternion(ref q, out Matrix4D result);
 			return result;
 		}
 
@@ -557,21 +575,15 @@ namespace OpenBveApi.Math
 		/// <summary>
 		/// The determinant of this matrix
 		/// </summary>
-		public double Determinant
-		{
-			get
-			{
-				return
-					Row0.X * Row1.Y * Row2.Z * Row3.W - Row0.X * Row1.Y * Row2.W * Row3.Z + Row0.X * Row1.Z * Row2.W * Row3.Y - Row0.X * Row1.Z * Row2.Y * Row3.W
-					+ Row0.X * Row1.W * Row2.Y * Row3.Z - Row0.X * Row1.W * Row2.Z * Row3.Y - Row0.Y * Row1.Z * Row2.W * Row3.X + Row0.Y * Row1.Z * Row2.X * Row3.W
-					- Row0.Y * Row1.W * Row2.X * Row3.Z + Row0.Y * Row1.W * Row2.Z * Row3.X - Row0.Y * Row1.X * Row2.Z * Row3.W + Row0.Y * Row1.X * Row2.W * Row3.Z
-					                                                                                                            + Row0.Z * Row1.W * Row2.X * Row3.Y - Row0.Z * Row1.W * Row2.Y * Row3.X + Row0.Z * Row1.X * Row2.Y * Row3.W - Row0.Z * Row1.X * Row2.W * Row3.Y
-					+ Row0.Z * Row1.Y * Row2.W * Row3.X - Row0.Z * Row1.Y * Row2.X * Row3.W - Row0.W * Row1.X * Row2.Y * Row3.Z + Row0.W * Row1.X * Row2.Z * Row3.Y
-					- Row0.W * Row1.Y * Row2.Z * Row3.X + Row0.W * Row1.Y * Row2.X * Row3.Z - Row0.W * Row1.Z * Row2.X * Row3.Y + Row0.W * Row1.Z * Row2.Y * Row3.X;
-			}
-		}
-		
-        /// <summary>
+		public double Determinant =>
+			Row0.X * Row1.Y * Row2.Z * Row3.W - Row0.X * Row1.Y * Row2.W * Row3.Z + Row0.X * Row1.Z * Row2.W * Row3.Y - Row0.X * Row1.Z * Row2.Y * Row3.W
+			+ Row0.X * Row1.W * Row2.Y * Row3.Z - Row0.X * Row1.W * Row2.Z * Row3.Y - Row0.Y * Row1.Z * Row2.W * Row3.X + Row0.Y * Row1.Z * Row2.X * Row3.W
+			- Row0.Y * Row1.W * Row2.X * Row3.Z + Row0.Y * Row1.W * Row2.Z * Row3.X - Row0.Y * Row1.X * Row2.Z * Row3.W + Row0.Y * Row1.X * Row2.W * Row3.Z
+			                                                                                                            + Row0.Z * Row1.W * Row2.X * Row3.Y - Row0.Z * Row1.W * Row2.Y * Row3.X + Row0.Z * Row1.X * Row2.Y * Row3.W - Row0.Z * Row1.X * Row2.W * Row3.Y
+			+ Row0.Z * Row1.Y * Row2.W * Row3.X - Row0.Z * Row1.Y * Row2.X * Row3.W - Row0.W * Row1.X * Row2.Y * Row3.Z + Row0.W * Row1.X * Row2.Z * Row3.Y
+			- Row0.W * Row1.Y * Row2.Z * Row3.X + Row0.W * Row1.Y * Row2.X * Row3.Z - Row0.W * Row1.Z * Row2.X * Row3.Y + Row0.W * Row1.Z * Row2.Y * Row3.X;
+
+		/// <summary>
         /// Calculate the inverse of the given matrix
         /// </summary>
         /// <param name="mat">The matrix to invert</param>
@@ -776,6 +788,6 @@ namespace OpenBveApi.Math
 		public static readonly Matrix4D NoTransformation = new Matrix4D(Vector4.UnitX, Vector4.UnitY, Vector4.UnitZ, Vector4.UnitW);
 
 		/// <summary>Represents an identity matrix</summary>
-		public static Matrix4D Identity = new Matrix4D(Vector4.UnitX, Vector4.UnitY, Vector4.UnitZ, Vector4.UnitW);
+		public static readonly Matrix4D Identity = new Matrix4D(Vector4.UnitX, Vector4.UnitY, Vector4.UnitZ, Vector4.UnitW);
 	}
 }

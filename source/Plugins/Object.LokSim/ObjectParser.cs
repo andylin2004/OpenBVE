@@ -47,7 +47,7 @@ namespace Plugin
 		/// <returns>The object loaded.</returns>
 		internal static StaticObject ReadObject(string FileName, Vector3 Rotation)
 		{
-			string BaseDir = System.IO.Path.GetDirectoryName(FileName);
+			string BaseDir = Path.GetDirectoryName(FileName);
 			XmlDocument currentXML = new XmlDocument();
 			//Initialise the object
 			StaticObject Object = new StaticObject(Plugin.currentHost);
@@ -72,7 +72,7 @@ namespace Plugin
 			{
 				try
 				{
-					currentXML.Load(FileName);
+					currentXML.SanitizeAndLoadXml(FileName);
 				}
 				catch
 				{
@@ -161,7 +161,7 @@ namespace Plugin
 													transtex = OpenBveApi.Path.Loksim3D.CombineFile(BaseDir, attribute.Value, Plugin.LoksimPackageFolder);
 													if (!File.Exists(transtex))
 													{
-														Plugin.currentHost.AddMessage(MessageType.Error, true, "AlphaTexture " + transtex + " could not be found in file " + FileName);
+														Plugin.currentHost.AddMessage(MessageType.Error, true, "AlphaTexture " + attribute.Value + " could not be found in file " + FileName);
 														transtex = null;
 													}												
 													break;
@@ -295,8 +295,7 @@ namespace Plugin
 												for (int j = 0; j < Verticies.Length; j++)
 												{
 													//This is the position of the vertex in the temp array
-													int currentVertex;
-													if (!int.TryParse(Verticies[j], out currentVertex))
+													if (!int.TryParse(Verticies[j], out int currentVertex))
 													{
 														Plugin.currentHost.AddMessage(MessageType.Error, false, Verticies[j] + " does not parse to a valid Vertex in " + node.Name + " in Loksim3D object file " + FileName);
 														continue;
@@ -314,15 +313,13 @@ namespace Plugin
 													{
 														string[] TextureCoords = childNode.Attributes["Texture"].Value.Split(';');
 														Vector2 currentCoords;
-														float OpenBVEWidth;
-														float OpenBVEHeight;
 														string[] splitCoords = TextureCoords[j].Split(',');
-														if (!float.TryParse(splitCoords[0], out OpenBVEWidth))
+														if (!float.TryParse(splitCoords[0], out float OpenBVEWidth))
 														{
 															Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid texture width specified in " + node.Name + " in Loksim3D object file " + FileName);
 															continue;
 														}
-														if (!float.TryParse(splitCoords[1], out OpenBVEHeight))
+														if (!float.TryParse(splitCoords[1], out float OpenBVEHeight))
 														{
 															Plugin.currentHost.AddMessage(MessageType.Error, false, "Invalid texture height specified in " + node.Name + " in Loksim3D object file " + FileName);
 															continue;

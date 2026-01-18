@@ -4,6 +4,7 @@
 	public class AIData
 	{
 		/// <summary>The driver handles.</summary>
+		// ReSharper disable once FieldCanBeMadeReadOnly.Local - Modifiable by plugins
 		private Handles MyHandles;
 
 		/// <summary>The AI response.</summary>
@@ -32,29 +33,13 @@
 		}
 
 		/// <summary>Gets or sets the driver handles.</summary>
-		public Handles Handles
-		{
-			get
-			{
-				return this.MyHandles;
-			}
-			set
-			{
-				this.MyHandles = value;
-			}
-		}
+		public Handles Handles => MyHandles;
 
 		/// <summary>Gets or sets the AI response.</summary>
 		public AIResponse Response
 		{
-			get
-			{
-				return this.MyResponse;
-			}
-			set
-			{
-				this.MyResponse = value;
-			}
+			get => MyResponse;
+			set => MyResponse = value;
 		}
 	}
 }

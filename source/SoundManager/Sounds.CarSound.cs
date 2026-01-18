@@ -3,8 +3,9 @@ using OpenBveApi;
 using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
-using OpenBveApi.Sounds;
+using OpenBveApi.Runtime;
 using OpenBveApi.Trains;
+using SoundHandle = OpenBveApi.Sounds.SoundHandle;
 
 namespace SoundManager
 {
@@ -20,6 +21,8 @@ namespace SoundManager
 		/// <summary>The target volume of the sound</summary>
 		/// <remarks>Used when crossfading between multiple sounds of the same type</remarks>
 		public double TargetVolume;
+
+		public CameraViewMode ViewModes;
 
 		public CarSound(HostInterface currentHost, string trainFolder, string soundFile, double radius, Vector3 position) : this(currentHost, trainFolder, string.Empty, -1, soundFile, radius, position)
 		{
@@ -45,16 +48,18 @@ namespace SoundManager
 				}
 				return;
 			}
-			SoundHandle handle;
-			currentHost.RegisterSound(absolutePathTosoundFile, radius, out handle);
+			currentHost.RegisterSound(absolutePathTosoundFile, radius, out SoundHandle handle);
 			Buffer = handle as SoundBuffer;
 			this.Position = position;
 		}
 
 		public CarSound(HostInterface currentHost, string soundFile, double radius, Vector3 position)
 		{
-			SoundHandle handle;
-			currentHost.RegisterSound(soundFile, radius, out handle);
+			if (string.IsNullOrEmpty(soundFile))
+			{
+				return;
+			}
+			currentHost.RegisterSound(soundFile, radius, out SoundHandle handle);
 			Buffer = handle as SoundBuffer;
 			this.Position = position;
 		}
@@ -109,9 +114,15 @@ namespace SoundManager
 		/// <param name="looped">Whether the sound is to be played looped</param>
 		public void Play(double pitch, double volume, AbstractCar Car, bool looped)
 		{
+			if (looped && IsPaused)
+			{
+				Source.Resume();
+				Source.Volume = volume;
+				Source.Pitch = pitch;
+				return;
+			}
 			if (looped && IsPlaying)
 			{
-				// If looped and already playing, update the pitch / volume values
 				Source.Volume = volume;
 				Source.Pitch = pitch;
 				return;
@@ -132,11 +143,12 @@ namespace SoundManager
 		/// <summary>Unconditionally stops the playing sound</summary>
 		public void Stop()
 		{
-			if (Source == null)
-			{
-				return;
-			}
-			Source.Stop();
+			Source?.Stop();
+		}
+
+		public void Pause()
+		{
+			Source?.Pause();
 		}
 
 		/// <summary>Whether the sound is currently playing</summary>
@@ -147,6 +159,19 @@ namespace SoundManager
 				if (Source != null)
 				{
 					return Source.IsPlaying();
+				}
+				return false;
+			}
+		}
+
+		/// <summary>Whether the sound is currently paused</summary>
+		public bool IsPaused
+		{
+			get
+			{
+				if (Source != null)
+				{
+					return Source.IsPaused();
 				}
 				return false;
 			}

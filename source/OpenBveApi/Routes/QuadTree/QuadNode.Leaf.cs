@@ -145,9 +145,9 @@ namespace OpenBveApi.Routes
 							CreateVisibilityList(intern.Children[i], nodes, viewingDistance);
 						}
 					}
-					else if (node is QuadTreePopulatedLeafNode)
+					else if (node is QuadTreePopulatedLeafNode leafNode)
 					{
-						nodes.Add((QuadTreePopulatedLeafNode)node);
+						nodes.Add(leafNode);
 					}
 				}
 			}
@@ -249,10 +249,7 @@ namespace OpenBveApi.Routes
 				}
 			}
 
-			if (Parent != null)
-			{
-				Parent.UpdateBoundingRectangle();
-			}
+			Parent?.UpdateBoundingRectangle();
 		}
 
 		/// <summary>Ensures that all textures that are used by the static objects in this leaf node have been loaded.</summary>
@@ -262,7 +259,6 @@ namespace OpenBveApi.Routes
 			{
 				for (int j = 0; j < Objects[i].Prototype.Mesh.Faces.Length; j++)
 				{
-					int material = Objects[i].Prototype.Mesh.Faces[j].Material;
 					Texture texture = Objects[i].Prototype.Mesh.Materials[i].DaytimeTexture;
 					if (texture != null)
 					{

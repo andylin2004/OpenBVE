@@ -38,12 +38,10 @@ namespace CsvRwRouteParser
 				{
 					Expressions[j].ConvertRwToCsv(Section, SectionAlwaysPrefix);
 					// separate command and arguments
-					string Command, ArgumentSequence;
-					Expressions[j].SeparateCommandsAndArguments(out Command, out ArgumentSequence, Culture, true, IsRW, Section);
+					Expressions[j].SeparateCommandsAndArguments(out string Command, out string ArgumentSequence, Culture, true, IsRW, Section);
 					// process command
-					double Number;
 					bool NumberCheck = !IsRW || string.Compare(Section, "track", StringComparison.OrdinalIgnoreCase) == 0;
-					if (!NumberCheck || !NumberFormats.TryParseDoubleVb6(Command, UnitOfLength, out Number))
+					if (!NumberCheck || !NumberFormats.TryParseDoubleVb6(Command, UnitOfLength, out _))
 					{
 						// split arguments
 						string[] Arguments;
@@ -51,11 +49,7 @@ namespace CsvRwRouteParser
 							int n = 0;
 							for (int k = 0; k < ArgumentSequence.Length; k++)
 							{
-								if (IsRW && ArgumentSequence[k] == ',')
-								{
-									n++;
-								}
-								else if (ArgumentSequence[k] == ';')
+								if ((IsRW && ArgumentSequence[k] == ',') || ArgumentSequence[k] == ';')
 								{
 									n++;
 								}
@@ -64,12 +58,7 @@ namespace CsvRwRouteParser
 							int a = 0, h = 0;
 							for (int k = 0; k < ArgumentSequence.Length; k++)
 							{
-								if (IsRW && ArgumentSequence[k] == ',')
-								{
-									Arguments[h] = ArgumentSequence.Substring(a, k - a).Trim();
-									a = k + 1; h++;
-								}
-								else if (ArgumentSequence[k] == ';')
+								if ((IsRW && ArgumentSequence[k] == ',') || ArgumentSequence[k] == ';')
 								{
 									Arguments[h] = ArgumentSequence.Substring(a, k - a).Trim();
 									a = k + 1; h++;
@@ -85,16 +74,8 @@ namespace CsvRwRouteParser
 						// preprocess command
 						if (Command.ToLowerInvariant() == "with")
 						{
-							if (Arguments.Length >= 1)
-							{
-								Section = Arguments[0];
-								SectionAlwaysPrefix = false;
-							}
-							else
-							{
-								Section = "";
-								SectionAlwaysPrefix = false;
-							}
+							SectionAlwaysPrefix = false;
+							Section = Arguments.Length >= 1 ? Arguments[0] : string.Empty;
 							Command = null;
 						}
 						else
@@ -119,24 +100,22 @@ namespace CsvRwRouteParser
 									string Indices = Command.Substring(k + 1, Command.Length - k - 2).TrimStart();
 									Command = Command.Substring(0, k).TrimEnd();
 									int h = Indices.IndexOf(";", StringComparison.Ordinal);
-									int CommandIndex1;
 									if (h >= 0)
 									{
 										string a = Indices.Substring(0, h).TrimEnd();
 										string b = Indices.Substring(h + 1).TrimStart();
-										if (a.Length > 0 && !NumberFormats.TryParseIntVb6(a, out CommandIndex1))
+										if (a.Length > 0 && !NumberFormats.TryParseIntVb6(a, out _))
 										{
 											Command = null; break;
 										}
-										int CommandIndex2;
-										if (b.Length > 0 && !NumberFormats.TryParseIntVb6(b, out CommandIndex2))
+										if (b.Length > 0 && !NumberFormats.TryParseIntVb6(b, out _))
 										{
 											Command = null;
 										}
 									}
 									else
 									{
-										if (Indices.Length > 0 && !NumberFormats.TryParseIntVb6(Indices, out CommandIndex1))
+										if (Indices.Length > 0 && !NumberFormats.TryParseIntVb6(Indices, out _))
 										{
 											Command = null;
 										}

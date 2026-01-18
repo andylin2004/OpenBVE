@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -19,14 +19,6 @@ namespace OpenBve
 {
 	internal static partial class MainLoop
 	{
-		internal enum QuitMode
-		{
-			ContinueGame = 0,
-			QuitProgram = 1,
-			ExitToMenu = 2
-		}
-		// declarations
-		internal static bool LimitFramerate = false;
 		internal static QuitMode Quit = QuitMode.ContinueGame;
 		/// <summary>BlockKeyRepeat should be set to 'true' whilst processing a KeyUp or KeyDown event.</summary>
 		internal static bool BlockKeyRepeat;
@@ -42,6 +34,20 @@ namespace OpenBve
 		internal static void StartLoopEx(LaunchParameters result)
 		{
 			Program.Sounds.Initialize(Interface.CurrentOptions.SoundRange);
+
+			Program.FileSystem.AppendToLogFile(@"Attached Joysticks:", false);
+			Program.FileSystem.AppendToLogFile(@"--------------------", false);
+			for (int i = 0; i < Program.Joysticks.AttachedJoysticks.Count; i++)
+			{
+				Guid key = Program.Joysticks.AttachedJoysticks.ElementAt(i).Key;
+				Program.FileSystem.AppendToLogFile(Program.Joysticks.AttachedJoysticks[key].ToString(), false);
+			}
+			Program.FileSystem.AppendToLogFile(@"--------------------", false);
+
+			Program.FileSystem.AppendToLogFile("Detected Platform: " + Program.CurrentHost.Platform);
+			Program.FileSystem.AppendToLogFile("Backend: " + (Interface.CurrentOptions.PreferNativeBackend ? "Native" : "SDL2"));
+			Program.FileSystem.AppendToLogFile("User Interface Size: " + Interface.CurrentOptions.UserInterfaceFolder);
+			Program.FileSystem.AppendToLogFile("User Interface Scale Factor: " + Interface.CurrentOptions.UserInterfaceScaleFactor);
 			if (Program.CurrentHost.Platform == HostPlatform.MicrosoftWindows)
 			{
 				Tolk.Load();
@@ -63,7 +69,7 @@ namespace OpenBve
 				//We have supplied a station name or index to the loader
 				Program.CurrentRoute.InitialStationName = result.InitialStation;
 			}
-			if (result.StartTime != default(double))
+			if (result.StartTime != 0)
 			{
 				Program.CurrentRoute.InitialStationTime = result.StartTime;
 			}
@@ -74,7 +80,7 @@ namespace OpenBve
 			{
 				Interface.CurrentOptions.FullscreenMode = true;
 			}
-			if (result.Width != default(double) && result.Height != default(double))
+			if (result.Width != 0 && result.Height != 0)
 			{
 				if (Interface.CurrentOptions.FullscreenMode)
 				{
@@ -89,7 +95,7 @@ namespace OpenBve
 				}
 			}
 
-			Program.FileSystem.AppendToLogFile(Interface.CurrentOptions.IsUseNewRenderer ? "Using openGL 3.0 (new) renderer" : "Using openGL 1.2 (old) renderer");
+			Program.FileSystem.AppendToLogFile(Interface.CurrentOptions.IsUseNewRenderer ? "Using openGL 4 (new) renderer" : "Using openGL 1.2 (old) renderer");
 			if (Interface.CurrentOptions.FullscreenMode)
 			{
 				Program.FileSystem.AppendToLogFile("Initialising full-screen game window of size " + Interface.CurrentOptions.FullscreenWidth + " x " + Interface.CurrentOptions.FullscreenHeight);
@@ -100,20 +106,9 @@ namespace OpenBve
 			}
 			Screen.Initialize();
 			currentResult = result;
-			Program.currentGameWindow.Closing += OpenTKQuit;
-			Program.currentGameWindow.Run();
+			Program.Renderer.GameWindow.Closing += OpenTKQuit;
+			Program.Renderer.GameWindow.Run();
 		}
-
-		// --------------------------------
-
-		// repeats
-
-
-		//		private static void ThreadProc()
-		//		{
-		//			RouteInformationForm = new formRouteInformation();
-		//			Application.Run(RouteInformationForm);
-		//		}
 
 		private static void OpenTKQuit(object sender, CancelEventArgs e)
 		{
@@ -139,6 +134,11 @@ namespace OpenBve
 		/// <param name="e">The button arguments</param>
 		internal static void mouseDownEvent(object sender, MouseButtonEventArgs e)
 		{
+			if (Program.Renderer.CurrentInterface == InterfaceType.LoadScreen)
+			{
+				// as otherwise right-click can unexpectedly operate camera spin
+				return;
+			}
 			timeSinceLastMouseEvent = 0;
 			if (e.Button == MouseButton.Right)
 			{
@@ -147,20 +147,30 @@ namespace OpenBve
 			}
 			if (e.Button == MouseButton.Left)
 			{
-				// if currently in a menu, forward the click to the menu system
-				if (Program.Renderer.CurrentInterface == InterfaceType.Menu)
+				switch (Program.Renderer.CurrentInterface)
 				{
-					Game.Menu.ProcessMouseDown(e.X, e.Y);
-				}
-				else if (Program.Renderer.CurrentInterface == InterfaceType.Normal)
-				{
-					Program.Renderer.Touch.TouchCheck(new Vector2(e.X, e.Y));
+					case InterfaceType.Normal:
+						Program.Renderer.Touch.TouchCheck(new Vector2(e.X, e.Y));
+						break;
+					case InterfaceType.Menu:
+					case InterfaceType.GLMainMenu:
+						// if currently in a menu, forward the click to the menu system
+						Game.Menu.ProcessMouseDown(e.X, e.Y);
+						break;
+					case InterfaceType.SwitchChangeMap:
+						Game.SwitchChangeDialog.ProcessMouseDown(e.X, e.Y);
+						break;
 				}
 			}
 		}
 
 		internal static void mouseUpEvent(object sender, MouseButtonEventArgs e)
 		{
+			if (Program.Renderer.CurrentInterface == InterfaceType.LoadScreen)
+			{
+				// as otherwise right-click can unexpectedly operate camera spin
+				return;
+			}
 			timeSinceLastMouseEvent = 0;
 			if (e.Button == MouseButton.Left)
 			{
@@ -171,16 +181,22 @@ namespace OpenBve
 			}
 		}
 
-		/// <summary>Called when a mouse button is released</summary>
+		/// <summary>Called when the mouse is moved</summary>
 		/// <param name="sender">The sender</param>
-		/// <param name="e">The button arguments</param>
+		/// <param name="e">The move arguments</param>
 		internal static void mouseMoveEvent(object sender, MouseMoveEventArgs e)
 		{
 			timeSinceLastMouseEvent = 0;
-			// if currently in a menu, forward the click to the menu system
-			if (Program.Renderer.CurrentInterface == InterfaceType.Menu)
+			// Forward movement appropriately
+			switch (Program.Renderer.CurrentInterface)
 			{
-				Game.Menu.ProcessMouseMove(e.X, e.Y);
+				case InterfaceType.Menu:
+				case InterfaceType.GLMainMenu:
+					Game.Menu.ProcessMouseMove(e.X, e.Y);
+					break;
+				case InterfaceType.SwitchChangeMap:
+					Game.SwitchChangeDialog.ProcessMouseMove(e.X, e.Y);
+					break;
 			}
 		}
 
@@ -190,7 +206,7 @@ namespace OpenBve
 		internal static void mouseWheelEvent(object sender, MouseWheelEventArgs e)
 		{
 			timeSinceLastMouseEvent = 0;
-			if (Program.Renderer.CurrentInterface == InterfaceType.Menu)
+			if (Program.Renderer.CurrentInterface >= InterfaceType.Menu)
 			{
 				Game.Menu.ProcessMouseScroll(e.Delta);
 			}
@@ -198,7 +214,7 @@ namespace OpenBve
 
 		internal static void UpdateMouse(double TimeElapsed)
 		{
-			if (Program.Renderer.CurrentInterface != InterfaceType.Menu)
+			if (Program.Renderer.CurrentInterface < InterfaceType.Menu)
 			{
 				timeSinceLastMouseEvent += TimeElapsed;
 			}
@@ -209,11 +225,11 @@ namespace OpenBve
 
 			if (Interface.CurrentOptions.CursorHideDelay > 0 && timeSinceLastMouseEvent > Interface.CurrentOptions.CursorHideDelay)
 			{
-				Program.currentGameWindow.CursorVisible = false;
+				Program.Renderer.GameWindow.CursorVisible = false;
 			}
 			else
 			{
-				Program.currentGameWindow.CursorVisible = true;
+				Program.Renderer.GameWindow.CursorVisible = true;
 			}
 
 			if (MainLoop.MouseGrabEnabled)
@@ -249,7 +265,7 @@ namespace OpenBve
 					Program.Joysticks.AttachedJoysticks[guid].Poll();
 				}
 			}
-			if (Program.Renderer.CurrentInterface == InterfaceType.Menu && Game.Menu.IsCustomizingControl())
+			if (Program.Renderer.CurrentInterface >= InterfaceType.Menu && Game.Menu.IsCustomizingControl())
 			{
 				if (Interface.CurrentOptions.UseJoysticks)
 				{
@@ -319,7 +335,7 @@ namespace OpenBve
 				switch (Interface.CurrentControls[i].Method)
 				{
 					case ControlMethod.Joystick:
-						if (Program.Joysticks.AttachedJoysticks.Count == 0 || !Program.Joysticks.AttachedJoysticks[Interface.CurrentControls[i].Device].IsConnected())
+						if (Program.Joysticks.AttachedJoysticks.Count == 0 || !Program.Joysticks.AttachedJoysticks.ContainsKey(Interface.CurrentControls[i].Device) || !Program.Joysticks.AttachedJoysticks[Interface.CurrentControls[i].Device].IsConnected())
 						{
 							//Not currently connected
 							continue;
@@ -343,84 +359,87 @@ namespace OpenBve
 				{
 					case JoystickComponent.Axis:
 						// Assume that a joystick axis fulfills the criteria for the handle to be 'held' in place
-						TrainManager.PlayerTrain.Handles.Power.ResetSpring();
-						TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+						if (TrainManager.PlayerTrain != null)
+						{
+							TrainManager.PlayerTrain.Handles.Power.ResetSpring();
+							TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+						}
 						var axisState = Program.Joysticks.GetAxis(currentDevice, Interface.CurrentControls[i].Element);
 						if (axisState.ToString(CultureInfo.InvariantCulture) != Interface.CurrentControls[i].LastState)
 						{
 							Interface.CurrentControls[i].LastState = axisState.ToString(CultureInfo.InvariantCulture);
-							if (Interface.CurrentControls[i].InheritedType == Translations.CommandType.AnalogHalf)
+							switch (Interface.CurrentControls[i].InheritedType)
 							{
-								if (Math.Sign(axisState) == Math.Sign(Interface.CurrentControls[i].Direction))
-								{
-									axisState = Math.Abs(axisState);
-									if (axisState < Interface.CurrentOptions.JoystickAxisThreshold)
+								case Translations.CommandType.AnalogHalf:
+									if (Math.Sign(axisState) == Math.Sign(Interface.CurrentControls[i].Direction))
+									{
+										axisState = Math.Abs(axisState);
+										if (axisState < Interface.CurrentOptions.JoystickAxisThreshold)
+										{
+											Interface.CurrentControls[i].AnalogState = 0.0;
+										}
+										else if (Interface.CurrentOptions.JoystickAxisThreshold != 1.0)
+										{
+											Interface.CurrentControls[i].AnalogState = (axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
+										}
+										else
+										{
+											Interface.CurrentControls[i].AnalogState = 1.0;
+										}
+									}
+									break;
+								case Translations.CommandType.AnalogFull:
+									axisState *= (float)Interface.CurrentControls[i].Direction;
+									if (axisState > -Interface.CurrentOptions.JoystickAxisThreshold & axisState < Interface.CurrentOptions.JoystickAxisThreshold)
 									{
 										Interface.CurrentControls[i].AnalogState = 0.0;
 									}
 									else if (Interface.CurrentOptions.JoystickAxisThreshold != 1.0)
 									{
-										Interface.CurrentControls[i].AnalogState = (axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
+										if (axisState < 0.0)
+										{
+											Interface.CurrentControls[i].AnalogState = (axisState + Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
+										}
+										else if (axisState > 0.0)
+										{
+											Interface.CurrentControls[i].AnalogState = (axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
+										}
+										else
+										{
+											Interface.CurrentControls[i].AnalogState = 0.0;
+										}
 									}
 									else
 									{
-										Interface.CurrentControls[i].AnalogState = 1.0;
+										Interface.CurrentControls[i].AnalogState = Math.Sign(axisState);
 									}
-								}
-							}
-							else if (Interface.CurrentControls[i].InheritedType == Translations.CommandType.AnalogFull)
-							{
-								axisState *= (float)Interface.CurrentControls[i].Direction;
-								if (axisState > -Interface.CurrentOptions.JoystickAxisThreshold & axisState < Interface.CurrentOptions.JoystickAxisThreshold)
-								{
-									Interface.CurrentControls[i].AnalogState = 0.0;
-								}
-								else if (Interface.CurrentOptions.JoystickAxisThreshold != 1.0)
-								{
-									if (axisState < 0.0)
+									break;
+								default:
+									if (Math.Sign(axisState) == Math.Sign(Interface.CurrentControls[i].Direction))
 									{
-										Interface.CurrentControls[i].AnalogState = (axisState + Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
+										axisState = Math.Abs(axisState);
+										if (axisState < Interface.CurrentOptions.JoystickAxisThreshold)
+										{
+											axisState = 0.0f;
+										}
+										else if (Interface.CurrentOptions.JoystickAxisThreshold != 1.0)
+										{
+											axisState = (float)((axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold));
+										}
+										else
+										{
+											axisState = 1.0f;
+										}
+										if (Interface.CurrentControls[i].DigitalState == DigitalControlState.Released | Interface.CurrentControls[i].DigitalState == DigitalControlState.ReleasedAcknowledged)
+										{
+											if (axisState > 0.67) Interface.CurrentControls[i].DigitalState = DigitalControlState.Pressed;
+										}
+										else
+										{
+											if (axisState < 0.33) Interface.CurrentControls[i].DigitalState = DigitalControlState.Released;
+										}
 									}
-									else if (axisState > 0.0)
-									{
-										Interface.CurrentControls[i].AnalogState = (axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold);
-									}
-									else
-									{
-										Interface.CurrentControls[i].AnalogState = 0.0;
-									}
-								}
-								else
-								{
-									Interface.CurrentControls[i].AnalogState = Math.Sign(axisState);
-								}
-							}
-							else
-							{
-								if (Math.Sign(axisState) == Math.Sign(Interface.CurrentControls[i].Direction))
-								{
-									axisState = Math.Abs(axisState);
-									if (axisState < Interface.CurrentOptions.JoystickAxisThreshold)
-									{
-										axisState = 0.0f;
-									}
-									else if (Interface.CurrentOptions.JoystickAxisThreshold != 1.0)
-									{
-										axisState = (float)((axisState - Interface.CurrentOptions.JoystickAxisThreshold) / (1.0 - Interface.CurrentOptions.JoystickAxisThreshold));
-									}
-									else
-									{
-										axisState = 1.0f;
-									}
-									if (Interface.CurrentControls[i].DigitalState == DigitalControlState.Released | Interface.CurrentControls[i].DigitalState == DigitalControlState.ReleasedAcknowledged)
-									{
-										if (axisState > 0.67) Interface.CurrentControls[i].DigitalState = DigitalControlState.Pressed;
-									}
-									else
-									{
-										if (axisState < 0.33) Interface.CurrentControls[i].DigitalState = DigitalControlState.Released;
-									}
-								}
+									break;
 							}
 						}
 						break;
@@ -431,8 +450,11 @@ namespace OpenBve
 						if (buttonState.ToString() != Interface.CurrentControls[i].LastState)
 						{
 							// Attempt to reset handle spring
-							TrainManager.PlayerTrain.Handles.Power.ResetSpring();
-							TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+							if (TrainManager.PlayerTrain != null)
+							{
+								TrainManager.PlayerTrain.Handles.Power.ResetSpring();
+								TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+							}
 							if (buttonState == ButtonState.Pressed)
 							{
 								Interface.CurrentControls[i].AnalogState = 1.0;
@@ -456,8 +478,11 @@ namespace OpenBve
 						if (hatState.ToString() != Interface.CurrentControls[i].LastState)
 						{
 							// Attempt to reset handle spring
-							TrainManager.PlayerTrain.Handles.Power.ResetSpring();
-							TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+							if (TrainManager.PlayerTrain != null)
+							{
+								TrainManager.PlayerTrain.Handles.Power.ResetSpring();
+								TrainManager.PlayerTrain.Handles.Brake.ResetSpring();
+							}
 							if ((int)hatState == Interface.CurrentControls[i].Direction)
 							{
 								Interface.CurrentControls[i].AnalogState = 1.0;
@@ -489,6 +514,7 @@ namespace OpenBve
 					break;
 				case CameraViewMode.Exterior:
 					Program.Renderer.Camera.SavedExterior = Program.Renderer.Camera.Alignment;
+					Program.Renderer.Camera.SavedExterior.CameraCar = TrainManagerBase.PlayerTrain.CameraCar;
 					break;
 				case CameraViewMode.Track:
 				case CameraViewMode.FlyBy:
@@ -509,6 +535,7 @@ namespace OpenBve
 					break;
 				case CameraViewMode.Exterior:
 					Program.Renderer.Camera.Alignment = Program.Renderer.Camera.SavedExterior;
+					TrainManagerBase.PlayerTrain.CameraCar = Program.Renderer.Camera.SavedExterior.CameraCar;
 					break;
 				case CameraViewMode.Track:
 				case CameraViewMode.FlyBy:
@@ -552,6 +579,17 @@ namespace OpenBve
 						message += "GL_STACK_UNDERFLOW";
 						break;
 					case ErrorCode.OutOfMemory:
+						if (IntPtr.Size == 4)
+						{
+							/*
+							 * Exceeded the 32-bit memory limit (~1.2gb due to CLR overhead)
+							 * Can't try anything fancy with strings etc. here as things
+							 * are most likely falling down. This also means the error logger etc.
+							 * are unlikely to work (or be useful)
+							 */
+							message = @"Total memory usage exceeded the 32-bit memory limit. \r\nPlease use the 64-bit version of OpenBVE to run this content.";
+							Environment.Exit(0);
+						}
 						message += "GL_OUT_OF_MEMORY";
 						break;
 					case ErrorCode.TableTooLargeExt:

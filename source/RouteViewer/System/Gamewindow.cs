@@ -1,14 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Threading;
+﻿using LibRender2.Viewports;
 using OpenBveApi;
+using OpenBveApi.Hosts;
 using OpenBveApi.Math;
-using OpenBveApi.Routes;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using SoundManager;
+using System;
+using System.ComponentModel;
+using System.Threading;
 using Vector3 = OpenBveApi.Math.Vector3;
 
 namespace RouteViewer
@@ -27,6 +27,13 @@ namespace RouteViewer
             {
 				// Ignored- Just an icon
             }
+
+            if (Program.CurrentHost.Platform == HostPlatform.AppleOSX && IntPtr.Size != 4)
+            {
+	            // attempted workaround for massive CPU usage when idle
+	            TargetRenderFrequency = 5.0;
+			}
+			
         }
 
         //Default Properties
@@ -54,13 +61,26 @@ namespace RouteViewer
             {
                 return;
             }
-            ProcessEvents();
+            if (Program.Renderer.RenderThreadJobWaiting)
+            {
+	            while (!Program.Renderer.RenderThreadJobs.IsEmpty)
+	            {
+		            Program.Renderer.RenderThreadJobs.TryDequeue(out ThreadStart currentJob);
+		            currentJob();
+		            lock (currentJob)
+		            {
+			            Monitor.Pulse(currentJob);
+		            }
+	            }
+	            Program.Renderer.RenderThreadJobWaiting = false;
+            }
+			ProcessEvents();
             double TimeElapsed = CPreciseTimer.GetElapsedTime();
 
             if (Program.CurrentRouteFile != null)
             {
 	            DateTime d = DateTime.Now;
-	            Game.SecondsSinceMidnight = (double)(3600 * d.Hour + 60 * d.Minute + d.Second) + 0.001 * (double)d.Millisecond;
+	            Game.SecondsSinceMidnight = 3600 * d.Hour + 60 * d.Minute + d.Second + 0.001 * d.Millisecond;
 	            ObjectManager.UpdateAnimatedWorldObjects(TimeElapsed, false);
 	            World.UpdateAbsoluteCamera(TimeElapsed);
 	            Program.Renderer.UpdateVisibility(true);
@@ -68,7 +88,7 @@ namespace RouteViewer
             }
             Program.Renderer.Lighting.UpdateLighting(Program.CurrentRoute.SecondsSinceMidnight, Program.CurrentRoute.LightDefinitions);
             Program.Renderer.RenderScene(TimeElapsed);
-            MessageManager.UpdateMessages();
+            MessageManager.UpdateMessages(TimeElapsed);
             SwapBuffers();
             
         }
@@ -77,17 +97,19 @@ namespace RouteViewer
         {
 	        Program.Renderer.Screen.Width = Width;
 	        Program.Renderer.Screen.Height = Height;
-	        Program.Renderer.UpdateViewport();
+	        Program.Renderer.UpdateViewport(ViewportChangeMode.NoChange);
         }
 
         protected override void OnLoad(EventArgs e)
         {
-            KeyDown += Program.keyDownEvent;
-            KeyUp += Program.keyUpEvent;
+            KeyDown += Program.KeyDownEvent;
+            KeyUp += Program.KeyUpEvent;
 			MouseDown += Program.MouseEvent;
 			MouseUp += Program.MouseEvent;
 	        FileDrop += Program.FileDrop;
-            Program.Renderer.Camera.Reset(new Vector3(0.0, 2.5, -5.0));
+	        MouseMove += Program.MouseMoveEvent;
+	        MouseWheel += Program.MouseWheelEvent;
+			Program.Renderer.Camera.Reset(new Vector3(0.0, 2.5, -5.0));
             Program.CurrentRoute.CurrentBackground.BackgroundImageDistance = 600.0;
             Program.Renderer.Camera.ForwardViewingDistance = 600.0;
             Program.Renderer.Camera.BackwardViewingDistance = 0.0;
@@ -96,17 +118,24 @@ namespace RouteViewer
             Program.Renderer.Initialize();
             Program.Renderer.Lighting.Initialize();
 			Program.Sounds.Initialize(SoundRange.Low);
-			Program.Renderer.UpdateViewport();
+			Program.Renderer.UpdateViewport(ViewportChangeMode.NoChange);
             if (Program.processCommandLineArgs)
             {
                 Program.processCommandLineArgs = false;
-                Program.LoadRoute();
                 Program.UpdateCaption();
+				Program.LoadRoute();
+                Program.UpdateCaption();
+            }
+
+            if (Width == DisplayDevice.Default.Width && Height == DisplayDevice.Default.Height)
+            {
+	            WindowState = WindowState.Maximized;
             }
         }
 
 	    protected override void OnClosing(CancelEventArgs e)
 	    {
+			Interface.CurrentOptions.Save(Path.CombineFile(Program.FileSystem.SettingsFolder, "1.5.0/options_rv.cfg"));
 			// Minor hack:
 			// If we are currently loading, catch the first close event, and terminate the loader threads
 			// before actually closing the game-window.
@@ -114,13 +143,21 @@ namespace RouteViewer
 			{
 				return;
 			}
-			Program.Renderer.visibilityThread = false;
+			Program.Renderer.VisibilityThreadShouldRun = false;
 			if (!Loading.Complete && Program.CurrentRouteFile != null)
 			{
 				e.Cancel = true;
 				Loading.Cancel = true;
 			}
-	    }
+			if (Program.CurrentHost.MonoRuntime)
+			{
+				// Mono often fails to close the main window properly
+				// give it a brief pause (to the visibility thread terminate cleanly)
+				// then issue forceful closeure
+				Thread.Sleep(100);
+				Environment.Exit(0);
+			}
+		}
 
 		public static void LoadingScreenLoop()
 		{
@@ -134,8 +171,8 @@ namespace RouteViewer
 			while (!Loading.Complete && !Loading.Cancel)
 			{
 				CPreciseTimer.GetElapsedTime();
-				Program.currentGameWindow.ProcessEvents();
-				if (Program.currentGameWindow.IsExiting)
+				Program.Renderer.GameWindow.ProcessEvents();
+				if (Program.Renderer.GameWindow.IsExiting)
 					Loading.Cancel = true;
 				double routeProgress = 1.0;
 				for (int i = 0; i < Program.CurrentHost.Plugins.Length; i++)
@@ -146,24 +183,21 @@ namespace RouteViewer
 					}
 				}
 				Program.Renderer.Loading.DrawLoadingScreen(Program.Renderer.Fonts.SmallFont, routeProgress);
-				Program.currentGameWindow.SwapBuffers();
+				Program.Renderer.GameWindow.SwapBuffers();
 
-				if (Loading.JobAvailable)
+				if (Program.Renderer.RenderThreadJobWaiting)
 				{
-					while (jobs.Count > 0)
+					while (!Program.Renderer.RenderThreadJobs.IsEmpty)
 					{
-						lock (jobLock)
+						Program.Renderer.RenderThreadJobs.TryDequeue(out ThreadStart currentJob);
+						currentJob();
+						lock (currentJob)
 						{
-							var currentJob = jobs.Dequeue();
-							var locker = locks.Dequeue();
-							currentJob();
-							lock (locker)
-							{
-								Monitor.Pulse(locker);
-							}
+							Monitor.Pulse(currentJob);
 						}
+
 					}
-					Loading.JobAvailable = false;
+					Program.Renderer.RenderThreadJobWaiting = false;
 				}
 				double time = CPreciseTimer.GetElapsedTime();
 				double wait = 1000.0 / 60.0 - time * 1000 - 50;
@@ -183,30 +217,5 @@ namespace RouteViewer
 				Program.CurrentRouteFile = null;
 			}
 		}
-
-		internal static readonly object LoadingLock = new object();
-
-		private static readonly object jobLock = new object();
-#pragma warning disable 0649
-		private static Queue<ThreadStart> jobs;
-		private static Queue<object> locks;
-#pragma warning restore 0649
-
-		/// <summary>This method is used during loading to run commands requiring an OpenGL context in the main render loop</summary>
-		/// <param name="job">The OpenGL command</param>
-		internal static void RunInRenderThread(ThreadStart job)
-		{
-			object locker = new object();
-			lock (jobLock)
-			{
-				Loading.JobAvailable = true;
-				jobs.Enqueue(job);
-				locks.Enqueue(locker);
-			}
-			lock (locker)
-			{
-				Monitor.Wait(locker);
-			}
-		}
-    }
+	}
 }

@@ -5,6 +5,7 @@ using LibRender2.Screens;
 using OpenBveApi;
 using OpenBveApi.Colors;
 using OpenBveApi.Graphics;
+using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 using OpenBveApi.Math;
 using OpenBveApi.Runtime;
@@ -34,9 +35,13 @@ namespace OpenBve.Graphics.Renderers
 		}
 
 		/// <summary>Is called once by the main renderer loop, in order to render all overlays shown on the screen</summary>
-		/// <param name="TimeElapsed">The time elapsed since the last call to this function</param>
-		internal void Render(double TimeElapsed)
+		/// <param name="timeElapsed">The time elapsed since the last call to this function</param>
+		internal void Render(double timeElapsed)
 		{
+			if (Program.Renderer.CurrentInterface >= InterfaceType.Menu)
+			{
+				return;
+			}
 			//Initialize openGL
 			renderer.SetBlendFunc();
 			GL.Enable(EnableCap.Blend);
@@ -51,7 +56,7 @@ namespace OpenBve.Graphics.Renderers
 				case OutputMode.Default:
 
 					//Route info overlay (if selected)
-					Game.routeInfoOverlay.Show();
+					Game.RouteInfoOverlay.Show();
 
 					//HUD
 					foreach (HUD.Element element in HUD.CurrentHudElements)
@@ -59,16 +64,16 @@ namespace OpenBve.Graphics.Renderers
 						switch (element.Subject)
 						{
 							case HUDSubject.Messages:
-								RenderGameMessages(element, TimeElapsed);
+								RenderGameMessages(element, timeElapsed);
 								break;
 							case HUDSubject.ScoreMessages:
-								RenderScoreMessages(element, TimeElapsed);
+								RenderScoreMessages(element, timeElapsed);
 								break;
 							case HUDSubject.ATS:
-								RenderATSLamps(element, TimeElapsed);
+								RenderATSLamps(element);
 								break;
 							default:
-								RenderHUDElement(element, TimeElapsed);
+								RenderHUDElement(element, timeElapsed);
 								break;
 						}
 					}
@@ -76,17 +81,7 @@ namespace OpenBve.Graphics.Renderers
 					//Marker textures
 					if (Interface.CurrentOptions.GameMode != GameMode.Expert)
 					{
-						double y = 8.0;
-						for (int i = 0; i < renderer.Marker.MarkerTextures.Length; i++)
-						{
-							if (Program.CurrentHost.LoadTexture(ref renderer.Marker.MarkerTextures[i].Texture, OpenGlTextureWrapMode.ClampClamp))
-							{
-								double w = renderer.Marker.MarkerTextures[i].Size.X == 0 ? renderer.Marker.MarkerTextures[i].Texture.Width : renderer.Marker.MarkerTextures[i].Size.X;
-								double h = renderer.Marker.MarkerTextures[i].Size.Y == 0 ? renderer.Marker.MarkerTextures[i].Texture.Height : renderer.Marker.MarkerTextures[i].Size.Y;
-								renderer.Rectangle.Draw(renderer.Marker.MarkerTextures[i].Texture, new Vector2(renderer.Screen.Width - w - 8.0,y), new Vector2(w, h), Color128.White);
-								y += h + 8.0;
-							}
-						}
+						Program.Renderer.Marker.Draw(8);
 					}
 
 					//Timetable overlay
@@ -151,10 +146,10 @@ namespace OpenBve.Graphics.Renderers
 				{
 					//If paused, fade out the screen & write PAUSE
 					renderer.Rectangle.Draw(null, Vector2.Null, new Vector2(renderer.Screen.Width, renderer.Screen.Height), new Color128(0.0f, 0.0f, 0.0f, 0.5f));
-					renderer.OpenGlString.Draw(renderer.Fonts.VeryLargeFont, Translations.GetInterfaceString("menu_pause_title"), new Vector2(renderer.Screen.Width / 2.0, renderer.Screen.Height / 2.0), TextAlignment.CenterMiddle, Color128.White, true);
+					renderer.OpenGlString.Draw(renderer.Fonts.VeryLargeFont, Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"menu","pause_title"}), new Vector2(renderer.Screen.Width / 2.0, renderer.Screen.Height / 2.0), TextAlignment.CenterMiddle, Color128.White, true);
 					if (!PauseAnnounced && Interface.CurrentOptions.ScreenReaderAvailable)
 					{
-						if (!Tolk.Output(Translations.GetInterfaceString("menu_pause_title")))
+						if (!Tolk.Output(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"menu","pause_title"})))
 						{
 							Interface.CurrentOptions.ScreenReaderAvailable = false;
 						}
@@ -162,10 +157,6 @@ namespace OpenBve.Graphics.Renderers
 					}
 					break;
 				}
-				case InterfaceType.Menu:
-					Game.Menu.Draw(TimeElapsed);
-					PauseAnnounced = false;
-					break;
 				default:
 					PauseAnnounced = false;
 					break;
@@ -173,36 +164,33 @@ namespace OpenBve.Graphics.Renderers
 			}
 
 			//Fade to black on change ends
-			if (TrainManager.PlayerTrain != null)
+			if (TrainManager.PlayerTrain.Station >= 0 && Program.CurrentRoute.Stations[TrainManager.PlayerTrain.Station].Type == StationType.ChangeEnds && TrainManager.PlayerTrain.StationState == TrainStopState.Boarding)
 			{
-				if (TrainManager.PlayerTrain.Station >= 0 && Program.CurrentRoute.Stations[TrainManager.PlayerTrain.Station].Type == StationType.ChangeEnds && TrainManager.PlayerTrain.StationState == TrainStopState.Boarding)
+				double time = TrainManager.PlayerTrain.StationDepartureTime - Program.CurrentRoute.SecondsSinceMidnight;
+				if (time < 1.0)
 				{
-					double time = TrainManager.PlayerTrain.StationDepartureTime - Program.CurrentRoute.SecondsSinceMidnight;
-					if (time < 1.0)
-					{
-						FadeToBlackDueToChangeEnds = Math.Max(0.0, 1.0 - time);
-					}
-					else if (FadeToBlackDueToChangeEnds > 0.0)
-					{
-						FadeToBlackDueToChangeEnds -= TimeElapsed;
-						if (FadeToBlackDueToChangeEnds < 0.0)
-						{
-							FadeToBlackDueToChangeEnds = 0.0;
-						}
-					}
+					FadeToBlackDueToChangeEnds = Math.Max(0.0, 1.0 - time);
 				}
 				else if (FadeToBlackDueToChangeEnds > 0.0)
 				{
-					FadeToBlackDueToChangeEnds -= TimeElapsed;
+					FadeToBlackDueToChangeEnds -= timeElapsed;
 					if (FadeToBlackDueToChangeEnds < 0.0)
 					{
 						FadeToBlackDueToChangeEnds = 0.0;
 					}
 				}
-				if (FadeToBlackDueToChangeEnds > 0.0 & (renderer.Camera.CurrentMode == CameraViewMode.Interior | renderer.Camera.CurrentMode == CameraViewMode.InteriorLookAhead))
+			}
+			else if (FadeToBlackDueToChangeEnds > 0.0)
+			{
+				FadeToBlackDueToChangeEnds -= timeElapsed;
+				if (FadeToBlackDueToChangeEnds < 0.0)
 				{
-					renderer.Rectangle.Draw(null, Vector2.Null, new Vector2(renderer.Screen.Width, renderer.Screen.Height), new Color128(0.0f, 0.0f, 0.0f, (float)FadeToBlackDueToChangeEnds));
+					FadeToBlackDueToChangeEnds = 0.0;
 				}
+			}
+			if (FadeToBlackDueToChangeEnds > 0.0 & (renderer.Camera.CurrentMode == CameraViewMode.Interior | renderer.Camera.CurrentMode == CameraViewMode.InteriorLookAhead))
+			{
+				renderer.Rectangle.Draw(null, Vector2.Null, new Vector2(renderer.Screen.Width, renderer.Screen.Height), new Color128(0.0f, 0.0f, 0.0f, (float)FadeToBlackDueToChangeEnds));
 			}
 
 			// finalize

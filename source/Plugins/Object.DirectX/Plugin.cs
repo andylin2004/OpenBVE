@@ -32,7 +32,7 @@ namespace Plugin
 {
     public class Plugin : ObjectInterface
     {
-	    internal static HostInterface currentHost;
+	    internal static HostInterface CurrentHost;
 	    private static XParsers currentXParser = XParsers.Original;
 	    internal static CompatabilityHacks EnabledHacks;
 
@@ -40,7 +40,7 @@ namespace Plugin
 
 	    public override void Load(HostInterface host, FileSystem fileSystem) 
 	    {
-		    currentHost = host;
+		    CurrentHost = host;
 	    }
 
 	    public override void SetCompatibilityHacks(CompatabilityHacks enabledHacks)
@@ -55,7 +55,7 @@ namespace Plugin
 			    currentXParser = (XParsers) parserType;
 			    if (currentXParser == XParsers.Original)
 			    {
-				    currentHost.AddMessage(MessageType.Information, false, "The original X Parser has been deprecated- Using the NewXParser");
+				    CurrentHost.AddMessage(MessageType.Information, false, "The original X Parser has been deprecated- Using the NewXParser");
 			    }
 		    }
 	    }
@@ -73,7 +73,7 @@ namespace Plugin
 		    if (Data.Length < 16 || Data[0] != 120 | Data[1] != 111 | Data[2] != 102 | Data[3] != 32)
 		    {
 			    string potentialPath = System.Text.Encoding.ASCII.GetString(Data);
-			    if (!OpenBveApi.Path.ContainsInvalidChars(potentialPath))
+			    if (!OpenBveApi.Path.ContainsInvalidChars(potentialPath) && !string.IsNullOrEmpty(potentialPath))
 			    {
 				    pathRecursions++;
 				    return CanLoadObject(OpenBveApi.Path.CombineFile(Path.GetDirectoryName(path), potentialPath));
@@ -107,7 +107,7 @@ namespace Plugin
 		    return true;
 	    }
 
-	    public override bool LoadObject(string path, System.Text.Encoding Encoding, out UnifiedObject unifiedObject)
+	    public override bool LoadObject(string path, System.Text.Encoding textEncoding, out UnifiedObject unifiedObject)
 	    {
 		    switch (currentXParser)
 		    {
@@ -115,7 +115,7 @@ namespace Plugin
 			    case XParsers.NewXParser:
 				    try
 				    {
-					    unifiedObject = NewXParser.ReadObject(path, Encoding);
+					    unifiedObject = NewXParser.ReadObject(path, textEncoding);
 					    return true;
 				    }
 				    catch

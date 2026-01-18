@@ -152,9 +152,9 @@ namespace OpenBveAts {
 			for (int i = 0; i < lines.Length; i++) {
 				int semicolon = lines[i].IndexOf(';');
 				if (semicolon >= 0) {
-					lines[i] = lines[i].Substring(0, semicolon).Trim(new char[] { });
+					lines[i] = lines[i].Substring(0, semicolon).Trim();
 				} else {
-					lines[i] = lines[i].Trim(new char[] { });
+					lines[i] = lines[i].Trim();
 				}
 			}
 			for (int i = 0; i < lines.Length; i++) {
@@ -240,7 +240,7 @@ namespace OpenBveAts {
 					this.Panel[101] = 1;
 				}
 				// --- sound ---
-				this.Sounds.Elapse(data);
+				this.Sounds.Elapse();
 			}
 		}
 		
@@ -321,12 +321,6 @@ namespace OpenBveAts {
 			foreach (Device device in this.Devices) {
 				device.HornBlow(type);
 			}
-		}
-		
-		/// <summary>Is called when the state of the doors changes.</summary>
-		/// <param name="oldState">The old state of the doors.</param>
-		/// <param name="newState">The new state of the doors.</param>
-		public void DoorChange(DoorStates oldState, DoorStates newState) {
 		}
 		
 		/// <summary>Is called to inform about signals.</summary>

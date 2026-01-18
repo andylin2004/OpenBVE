@@ -4,18 +4,15 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using Formats.OpenBve;
 using OpenBveApi.Colors;
+using OpenBveApi.Hosts;
 using OpenBveApi.Interface;
 
 namespace TrainEditor2.Extensions
 {
-	internal enum NumberRange
-	{
-		Any,
-		Positive,
-		NonNegative,
-		NonZero
-	}
+	
 
 	internal static class Utilities
 	{
@@ -23,7 +20,7 @@ namespace TrainEditor2.Extensions
 
 		internal static string GetInterfaceString(params string[] ids)
 		{
-			return Translations.GetInterfaceString($"train_editor2_{string.Join("_", ids)}");
+			return Translations.GetInterfaceString(HostApplication.TrainEditor2, ids);
 		}
 
 		internal static bool TryParse(string text, NumberRange range, out double result)
@@ -54,6 +51,11 @@ namespace TrainEditor2.Extensions
 			}
 
 			return !error;
+		}
+
+		internal static bool TryValidate(string text, NumberRange range, out string message)
+		{
+			return TryParse(text, range, out _, out message);
 		}
 
 		internal static bool TryParse(string text, NumberRange range, out double result, out string message)
@@ -277,6 +279,36 @@ namespace TrainEditor2.Extensions
 			string relativePath = basePathUri.MakeRelativeUri(targetPathUri).ToString();
 
 			return Uri.UnescapeDataString(relativePath).Replace("%25", "%");
+		}
+
+		public static void WriteKey(StringBuilder builder, string key, params string[] values)
+		{
+			if (values.All(string.IsNullOrEmpty))
+			{
+				return;
+			}
+
+			builder.AppendLine($"{key} = {string.Join(", ", values)}");
+		}
+
+		public static void WriteKey(StringBuilder builder, string key, params int[] values)
+		{
+			WriteKey(builder, key, values.Select(v => v.ToString(CultureInfo.InvariantCulture)).ToArray());
+		}
+
+		public static void WriteKey(StringBuilder builder, string key, params double[] values)
+		{
+			WriteKey(builder, key, values.Select(v => v.ToString(CultureInfo.InvariantCulture)).ToArray());
+		}
+
+		internal static double Parse(this string x)
+		{
+			// helper method used to stop exceptions being thrown when editing numbers in textboxes
+			if (string.IsNullOrEmpty(x))
+			{
+				return 0;
+			}
+			return double.Parse(x, NumberStyles.Float, CultureInfo.InvariantCulture);
 		}
 	}
 }

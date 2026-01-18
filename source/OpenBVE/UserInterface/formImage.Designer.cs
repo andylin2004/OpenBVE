@@ -1,7 +1,8 @@
-﻿using OpenBveApi.Interface;
+﻿using OpenBveApi.Hosts;
+using OpenBveApi.Interface;
 
 namespace OpenBve {
-    partial class formImage {
+    partial class FormImage {
         /// <summary>
         /// Required designer variable.
         /// </summary>
@@ -35,12 +36,12 @@ namespace OpenBve {
             this.ClientSize = new System.Drawing.Size(960, 600);
             this.DoubleBuffered = true;
             this.MinimizeBox = false;
-            this.Name = "formImage";
+            this.Name = "FormImage";
             this.ShowIcon = false;
             this.ShowInTaskbar = false;
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = Translations.GetInterfaceString("program_title");
+            this.Text = Translations.GetInterfaceString(HostApplication.OpenBve, new string[] {"program","title"});
             this.Paint += new System.Windows.Forms.PaintEventHandler(this.formImage_Paint);
             this.Resize += new System.EventHandler(this.formImage_Resize);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.formImage_KeyDown);

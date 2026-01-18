@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
+using OpenBveApi.Hosts;
 using OpenTK.Input;
 using OpenBveApi.Interface;
 using Control = OpenBveApi.Interface.Control;
@@ -19,7 +20,6 @@ namespace OpenBve
 		/// <param name="FileOrNull">An absolute file path if we are exporting the controls, or a null reference to save to the default configuration location</param>
 		/// <param name="controlsToSave">The list of controls to save</param>
 		internal static void SaveControls(string FileOrNull, Control[] controlsToSave) {
-			CultureInfo Culture = CultureInfo.InvariantCulture;
 			System.Text.StringBuilder Builder = new System.Text.StringBuilder();
 			Builder.AppendLine("; Current control configuration");
 			Builder.AppendLine("; =============================");
@@ -27,49 +27,14 @@ namespace OpenBve
 			Builder.AppendLine("; This file is INCOMPATIBLE with versions older than 1.4.4.");
 			Builder.AppendLine();
 			for (int i = 0; i < controlsToSave.Length; i++) {
-				Translations.CommandInfo Info = Translations.CommandInfos.TryGetInfo(controlsToSave[i].Command);
-				Builder.Append(Info.Name + ", ");
-				switch (controlsToSave[i].Method) {
-					case ControlMethod.Keyboard:
-						Builder.Append("keyboard, " + controlsToSave[i].Key + ", " + ((int)controlsToSave[i].Modifier).ToString(Culture) + ", " + controlsToSave[i].Option.ToString(Culture));
-						break;
-					case ControlMethod.Joystick:
-						Builder.Append("joystick, " + controlsToSave[i].Device + ", ");
-						switch (controlsToSave[i].Component) {
-							case JoystickComponent.Axis:
-								Builder.Append("axis, " + controlsToSave[i].Element.ToString(Culture) + ", " + controlsToSave[i].Direction.ToString(Culture));
-								break;
-							case JoystickComponent.Ball:
-								Builder.Append("ball, " + controlsToSave[i].Element.ToString(Culture) + ", " + controlsToSave[i].Direction.ToString(Culture));
-								break;
-							case JoystickComponent.Hat:
-								Builder.Append("hat, " + controlsToSave[i].Element.ToString(Culture) + ", " + controlsToSave[i].Direction.ToString(Culture));
-								break;
-							case JoystickComponent.Button:
-								Builder.Append("button, " + controlsToSave[i].Element.ToString(Culture));
-								break;
-							default:
-								Builder.Append("invalid");
-								break;
-						}
-						Builder.Append(", " + controlsToSave[i].Option.ToString(Culture));
-						break;
-					case ControlMethod.RailDriver:
-						Builder.Append("raildriver, 0, ");
-						switch (controlsToSave[i].Component) {
-							case JoystickComponent.Axis:
-								Builder.Append("axis, " + controlsToSave[i].Element.ToString(Culture) + ", " + controlsToSave[i].Direction.ToString(Culture));
-								break;
-							case JoystickComponent.Button:
-								Builder.Append("button, " + controlsToSave[i].Element.ToString(Culture));
-								break;
-							default:
-								Builder.Append("invalid");
-								break;
-						}
-						Builder.Append(", " + controlsToSave[i].Option.ToString(Culture));
-						break;
+				if (controlsToSave[i].Command == Translations.Command.None)
+				{
+					// don't save a control with no command set, just stores up problems for later
+					continue;
 				}
+				Translations.CommandInfo Info = Translations.CommandInfos.TryGetInfo(controlsToSave[i].Command);
+				Builder.Append(Info.Name + ", " + controlsToSave[i]);
+				
 				Builder.Append("\n");
 			}
 			string File = FileOrNull ?? OpenBveApi.Path.CombineFile(Program.FileSystem.SettingsFolder, "1.5.0/controls.cfg");
@@ -123,8 +88,8 @@ namespace OpenBve
 					File = OpenBveApi.Path.CombineFile(Program.FileSystem.GetDataFolder("Controls"), "Default.controls");
 					if (!System.IO.File.Exists(File))
 					{
-						MessageBox.Show(Translations.GetInterfaceString("errors_warning") + Environment.NewLine + Translations.GetInterfaceString("errors_controls_missing"),
-							Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
+						Program.ShowMessageBox(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","warning"}) + Environment.NewLine + Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","controls_missing"}),
+							Application.ProductName);
 					}
 				}
 			}
@@ -159,18 +124,13 @@ namespace OpenBve
 							Array.Resize(ref Controls, Controls.Length << 1);
 						}
 
-						int j;
-						for (j = 0; j < Translations.CommandInfos.Length; j++)
-						{
-							if (string.Compare(Translations.CommandInfos[j].Name, Terms[0], StringComparison.OrdinalIgnoreCase) == 0) break;
-						}
-
-						if (j == Translations.CommandInfos.Length)
+						// note: to get rid of the underscore in the saved commmand file would require a format change, and this isn't a performance sensitive area hence don't bother....
+						if (!Enum.TryParse(Terms[0].Replace("_", string.Empty), true, out Translations.Command parsedCommand))
 						{
 							Controls[Length].Command = Translations.Command.None;
 							Controls[Length].InheritedType = Translations.CommandType.Digital;
 							Controls[Length].Method = ControlMethod.Invalid;
-							Controls[Length].Device = new Guid();
+							Controls[Length].Device = Guid.Empty;
 							Controls[Length].Component = JoystickComponent.Invalid;
 							Controls[Length].Element = -1;
 							Controls[Length].Direction = 0;
@@ -179,22 +139,18 @@ namespace OpenBve
 						}
 						else
 						{
-							Controls[Length].Command = Translations.CommandInfos[j].Command;
-							Controls[Length].InheritedType = Translations.CommandInfos[j].Type;
-							string Method = Terms[1].ToLowerInvariant();
+							Controls[Length].Command = parsedCommand;
+							Controls[Length].InheritedType = Translations.CommandInfos[parsedCommand].Type;
+							Enum.TryParse(Terms[1], true, out ControlMethod Method);
 							bool Valid = false;
-							if (Method == "keyboard" & Terms.Length >= 4)
+							if (Method == ControlMethod.Keyboard & Terms.Length >= 4)
 							{
-								Key CurrentKey;
-								// ReSharper disable once NotAccessedVariable
-								int SDLTest;
-								if (int.TryParse(Terms[2], out SDLTest))
+								if (int.TryParse(Terms[2], out _))
 								{
 									//We've discovered a SDL keybinding is present, so reset the loading process with the default keyconfig & show an appropriate error message
 									if (ControlsReset == false)
 									{
-										MessageBox.Show(Translations.GetInterfaceString("errors_controls_oldversion") + Environment.NewLine + Translations.GetInterfaceString("errors_controls_reset"), Application.ProductName,
-											MessageBoxButtons.OK, MessageBoxIcon.Hand);
+										Program.ShowMessageBox(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","controls_oldversion"}) + Environment.NewLine + Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","controls_reset"}), Application.ProductName);
 									}
 
 									var DefaultControls = OpenBveApi.Path.CombineFile(Program.FileSystem.GetDataFolder("Controls"), "Default keyboard assignment.controls");
@@ -207,8 +163,8 @@ namespace OpenBve
 										}
 										else
 										{
-											MessageBox.Show(Translations.GetInterfaceString("errors_warning") + Environment.NewLine + Translations.GetInterfaceString("errors_controls_default_oldversion"),
-												Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
+											Program.ShowMessageBox(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","warning"}) + Environment.NewLine + Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","controls_default_oldversion"}),
+												Application.ProductName);
 											i = 0;
 											Lines = GetLines(Assembly.GetExecutingAssembly().GetManifestResourceStream("OpenBve.Default.controls"));
 											continue;
@@ -217,27 +173,25 @@ namespace OpenBve
 									}
 									else
 									{
-										MessageBox.Show(Translations.GetInterfaceString("errors_warning") + Environment.NewLine + Translations.GetInterfaceString("errors_controls_default_missing"),
-											Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Hand);
+										Program.ShowMessageBox(Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","warning"}) + Environment.NewLine + Translations.GetInterfaceString(HostApplication.OpenBve, new[] {"errors","controls_default_missing"}),
+											Application.ProductName);
 										Controls = new Control[0];
 									}
 
 									return;
 								}
 
-								if (Enum.TryParse(Terms[2], true, out CurrentKey))
+								if (Enum.TryParse(Terms[2], true, out Key CurrentKey))
 								{
-									int Modifiers;
-									if (int.TryParse(Terms[3], NumberStyles.Integer, Culture, out Modifiers))
+									if (int.TryParse(Terms[3], NumberStyles.Integer, Culture, out int Modifiers))
 									{
-										Controls[Length].Method = ControlMethod.Keyboard;
-										Controls[Length].Device = new Guid(); //will create invalid all zero GUID
+										Controls[Length].Method = Method;
+										Controls[Length].Device = Guid.Empty;
 										Controls[Length].Component = JoystickComponent.Invalid;
 										Controls[Length].Key = (OpenBveApi.Input.Key)CurrentKey;
 										Controls[Length].Direction = 0;
 										Controls[Length].Modifier = (KeyboardModifier) Modifiers;
-										int Option;
-										if (Terms.Length >= 5 && int.TryParse(Terms[4], NumberStyles.Integer, Culture, out Option))
+										if (Terms.Length >= 5 && int.TryParse(Terms[4], NumberStyles.Integer, Culture, out int Option))
 										{
 											Controls[Length].Option = Option;
 										}
@@ -246,37 +200,33 @@ namespace OpenBve
 									}
 								}
 							}
-
-
-							else if (Method == "joystick" & Terms.Length >= 4)
+							else if (Method == ControlMethod.Joystick & Terms.Length >= 4)
 							{
-								int oldDevice;
-								Guid Device = new Guid();
-								if (int.TryParse(Terms[2], NumberStyles.Integer, Culture, out oldDevice))
+								Guid Device = Guid.Empty;
+								if (int.TryParse(Terms[2], NumberStyles.Integer, Culture, out int oldDevice))
 								{
 									Device = Joystick.GetGuid(oldDevice);
 								}
+
+								Enum.TryParse(Terms[3], true, out JoystickComponent Component);
 								
-								if (Device != new Guid() || Guid.TryParse(Terms[2], out Device))
+								if (Device != Guid.Empty || Guid.TryParse(Terms[2], out Device))
 								{
-									string Component = Terms[3].ToLowerInvariant();
-									if (Component == "axis" & Terms.Length >= 6)
+									
+									if (Component == JoystickComponent.Axis & Terms.Length >= 6)
 									{
-										int CurrentAxis;
-										if (Int32.TryParse(Terms[4], out CurrentAxis))
+										if (int.TryParse(Terms[4], out int CurrentAxis))
 										{
-											int Direction;
-											if (int.TryParse(Terms[5], NumberStyles.Integer, Culture, out Direction))
+											if (int.TryParse(Terms[5], NumberStyles.Integer, Culture, out int Direction))
 											{
 
-												Controls[Length].Method = ControlMethod.Joystick;
+												Controls[Length].Method = Method;
 												Controls[Length].Device = Device;
 												Controls[Length].Component = JoystickComponent.Axis;
 												Controls[Length].Element = CurrentAxis;
 												Controls[Length].Direction = Direction;
 												Controls[Length].Modifier = KeyboardModifier.None;
-												int Option;
-												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out Option))
+												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out int Option))
 												{
 													Controls[Length].Option = Option;
 												}
@@ -285,22 +235,19 @@ namespace OpenBve
 											}
 										}
 									}
-									else if (Component == "hat" & Terms.Length >= 6)
+									else if (Component == JoystickComponent.Hat & Terms.Length >= 6)
 									{
-										int CurrentHat;
-										if (Int32.TryParse(Terms[4], out CurrentHat))
+										if (int.TryParse(Terms[4], out int CurrentHat))
 										{
-											int HatDirection;
-											if (Int32.TryParse(Terms[5], out HatDirection))
+											if (int.TryParse(Terms[5], out int HatDirection))
 											{
-												Controls[Length].Method = ControlMethod.Joystick;
+												Controls[Length].Method = Method;
 												Controls[Length].Device = Device;
 												Controls[Length].Component = JoystickComponent.Hat;
 												Controls[Length].Element = CurrentHat;
 												Controls[Length].Direction = HatDirection;
 												Controls[Length].Modifier = KeyboardModifier.None;
-												int Option;
-												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out Option))
+												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out int Option))
 												{
 													Controls[Length].Option = Option;
 												}
@@ -310,19 +257,17 @@ namespace OpenBve
 
 										}
 									}
-									else if (Component == "button" & Terms.Length >= 5)
+									else if (Component == JoystickComponent.Button & Terms.Length >= 5)
 									{
-										int CurrentButton;
-										if (Int32.TryParse(Terms[4], out CurrentButton))
+										if (int.TryParse(Terms[4], out int CurrentButton))
 										{
-											Controls[Length].Method = ControlMethod.Joystick;
+											Controls[Length].Method = Method;
 											Controls[Length].Device = Device;
 											Controls[Length].Component = JoystickComponent.Button;
 											Controls[Length].Element = CurrentButton;
 											Controls[Length].Direction = 0;
 											Controls[Length].Modifier = KeyboardModifier.None;
-											int Option;
-											if (Terms.Length >= 6 && int.TryParse(Terms[5], NumberStyles.Integer, Culture, out Option))
+											if (Terms.Length >= 6 && int.TryParse(Terms[5], NumberStyles.Integer, Culture, out int Option))
 											{
 												Controls[Length].Option = Option;
 											}
@@ -333,35 +278,31 @@ namespace OpenBve
 
 								}
 							}
-							else if (Method == "raildriver" & Terms.Length >= 4)
+							else if (Method == ControlMethod.RailDriver & Terms.Length >= 4)
 							{
-								int oldDevice;
-								Guid Device = new Guid();
-								if (int.TryParse(Terms[2], NumberStyles.Integer, Culture, out oldDevice))
+								Guid Device = Guid.Empty;
+								if (int.TryParse(Terms[2], NumberStyles.Integer, Culture, out int oldDevice))
 								{
 									Device = Joystick.GetGuid(oldDevice);
 								}
 								
-								if (Device != new Guid() || Guid.TryParse(Terms[2], out Device))
+								if (Device != Guid.Empty || Guid.TryParse(Terms[2], out Device))
 								{
-									string Component = Terms[3].ToLowerInvariant();
-									if (Component == "axis" & Terms.Length >= 6)
+									Enum.TryParse(Terms[3], true, out JoystickComponent Component);
+									if (Component == JoystickComponent.Axis & Terms.Length >= 6)
 									{
-										int CurrentAxis;
-										if (Int32.TryParse(Terms[4], out CurrentAxis))
+										if (int.TryParse(Terms[4], out int CurrentAxis))
 										{
-											int Direction;
-											if (int.TryParse(Terms[5], NumberStyles.Integer, Culture, out Direction))
+											if (int.TryParse(Terms[5], NumberStyles.Integer, Culture, out int Direction))
 											{
 
-												Controls[Length].Method = ControlMethod.RailDriver;
+												Controls[Length].Method = Method;
 												Controls[Length].Device = Device;
 												Controls[Length].Component = JoystickComponent.Axis;
 												Controls[Length].Element = CurrentAxis;
 												Controls[Length].Direction = Direction;
 												Controls[Length].Modifier = KeyboardModifier.None;
-												int Option;
-												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out Option))
+												if (Terms.Length >= 7 && int.TryParse(Terms[6], NumberStyles.Integer, Culture, out int Option))
 												{
 													Controls[Length].Option = Option;
 												}
@@ -370,10 +311,9 @@ namespace OpenBve
 											}
 										}
 									}
-									else if (Component == "button" & Terms.Length >= 5)
+									else if (Component == JoystickComponent.Button & Terms.Length >= 5)
 									{
-										int CurrentButton;
-										if (Int32.TryParse(Terms[4], out CurrentButton))
+										if (int.TryParse(Terms[4], out int CurrentButton))
 										{
 											Controls[Length].Method = ControlMethod.RailDriver;
 											Controls[Length].Device = Device;
@@ -381,8 +321,7 @@ namespace OpenBve
 											Controls[Length].Element = CurrentButton;
 											Controls[Length].Direction = 0;
 											Controls[Length].Modifier = KeyboardModifier.None;
-											int Option;
-											if (Terms.Length >= 6 && int.TryParse(Terms[5], NumberStyles.Integer, Culture, out Option))
+											if (Terms.Length >= 6 && int.TryParse(Terms[5], NumberStyles.Integer, Culture, out int Option))
 											{
 												Controls[Length].Option = Option;
 											}
@@ -397,7 +336,7 @@ namespace OpenBve
 							if (!Valid)
 							{
 								Controls[Length].Method = ControlMethod.Invalid;
-								Controls[Length].Device = new Guid(); //Invalid all zero GUID
+								Controls[Length].Device = Guid.Empty;
 								Controls[Length].Component = JoystickComponent.Invalid;
 								Controls[Length].Element = -1;
 								Controls[Length].Direction = 0;

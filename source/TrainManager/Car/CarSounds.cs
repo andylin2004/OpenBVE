@@ -1,35 +1,25 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using SoundManager;
-using TrainManager.Motor;
+using TrainManager.MsTsSounds;
 
 namespace TrainManager.Car
 {
 	/// <summary>The set of sounds attached to a car</summary>
 	public class CarSounds
 	{
-		/// <summary>The motor sounds</summary>
-		public AbstractMotorSound Motor;
-		/// <summary>The flange squeal sounds</summary>
-		public Dictionary<int, CarSound> Flange = new Dictionary<int, CarSound>();
 		/// <summary>The loop sound</summary>
 		public CarSound Loop;
-		/// <summary>The railtype run sounds</summary>
-		public Dictionary<int, CarSound> Run = new Dictionary<int, CarSound>();
-		/// <summary>The next track position at which the run sounds will be faded</summary>
-		public double RunNextReasynchronizationPosition;
-		/// <summary>The left spring sound</summary>
-		public CarSound SpringL;
-		/// <summary>The right spring sound</summary>
-		public CarSound SpringR;
+
+		public List<SoundStream> ControlledSounds = new List<SoundStream>();
 		/// <summary>The sounds triggered by the train's plugin</summary>
 		public Dictionary<int, CarSound> Plugin = new Dictionary<int, CarSound>();
 		/// <summary>The sounds triggered by a request stop</summary>
 		public CarSound[] RequestStop;
-		/// <summary>The current pitch of the flange sounds</summary>
-		public double FlangePitch;
-		/// <summary>The angle used to determine whether the spring sounds are to be played</summary>
-		public double SpringPlayedAngle;
 		/// <summary>The sounds played when a touch sensitive panel control is pressed</summary>
-		public CarSound[] Touch;
+		public Dictionary<int, CarSound> Touch = new Dictionary<int, CarSound>();
+		/// <summary>The car sound played in the driver's cab when coupling occurs</summary>
+		public CarSound CoupleCab;
+		/// <summary>The car sound played in the driver's cab when uncoupling occurs</summary>
+		public CarSound UncoupleCab;
 	}
 }

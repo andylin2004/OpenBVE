@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using PIEHid32Net;
 
 namespace OpenBve.Input
@@ -7,7 +7,7 @@ namespace OpenBve.Input
 	/// <summary>A 32-bit RailDriver</summary>
 	internal class RailDriver32 : AbstractRailDriver, PIEDataHandler, PIEErrorHandler
 	{
-		internal readonly PIEDevice myDevice;
+		private readonly PIEDevice myDevice;
 
 		internal RailDriver32(PIEDevice device)
 		{
@@ -87,6 +87,11 @@ namespace OpenBve.Input
 		/// <param name="error">The error</param>
 		public void HandlePIEHidError(PIEDevice sourceDevices, int error)
 		{
+		}
+
+		public override string ToString()
+		{
+			return "GUID: " + Guid + ", Name: " + Name;
 		}
 	}
 

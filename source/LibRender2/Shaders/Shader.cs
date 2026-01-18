@@ -33,19 +33,18 @@ namespace LibRender2.Shaders
 		/// Constructor
 		/// </summary>
 		/// <param name="Renderer">A reference to the base renderer</param>
-		/// <param name="VertexShaderName">file path and name to vertex shader source</param>
-		/// <param name="FragmentShaderName">file path and name to fragment shader source</param>
-		/// <param name="IsFromStream"></param>
-		public Shader(BaseRenderer Renderer, string VertexShaderName, string FragmentShaderName, bool IsFromStream = false)
+		/// <param name="vertexShaderName">file path and name to vertex shader source</param>
+		/// <param name="fragmentShaderName">file path and name to fragment shader source</param>
+		/// <param name="isFromStream"></param>
+		public Shader(BaseRenderer Renderer, string vertexShaderName, string fragmentShaderName, bool isFromStream = false)
 		{
 			renderer = Renderer;
-			int status;
 			handle = GL.CreateProgram();
 
-			if (IsFromStream)
+			if (isFromStream)
 			{
 				Assembly thisAssembly = Assembly.GetExecutingAssembly();
-				using (Stream stream = thisAssembly.GetManifestResourceStream($"LibRender2.{VertexShaderName}.vert"))
+				using (Stream stream = thisAssembly.GetManifestResourceStream($"LibRender2.{vertexShaderName}.vert"))
 				{
 					if (stream != null)
 					{
@@ -55,7 +54,7 @@ namespace LibRender2.Shaders
 						}
 					}
 				}
-				using (Stream stream = thisAssembly.GetManifestResourceStream($"LibRender2.{FragmentShaderName}.frag"))
+				using (Stream stream = thisAssembly.GetManifestResourceStream($"LibRender2.{fragmentShaderName}.frag"))
 				{
 					if (stream != null)
 					{
@@ -68,8 +67,8 @@ namespace LibRender2.Shaders
 			}
 			else
 			{
-				LoadShader(File.ReadAllText(VertexShaderName, Encoding.UTF8), ShaderType.VertexShader);
-				LoadShader(File.ReadAllText(FragmentShaderName, Encoding.UTF8), ShaderType.FragmentShader);
+				LoadShader(File.ReadAllText(vertexShaderName, Encoding.UTF8), ShaderType.VertexShader);
+				LoadShader(File.ReadAllText(fragmentShaderName, Encoding.UTF8), ShaderType.FragmentShader);
 			}
 
 			GL.AttachShader(handle, vertexShader);
@@ -79,7 +78,7 @@ namespace LibRender2.Shaders
 			GL.DeleteShader(fragmentShader);
 			GL.BindFragDataLocation(handle, 0, "fragColor");
 			GL.LinkProgram(handle);
-			GL.GetProgram(handle, GetProgramParameterName.LinkStatus, out status);
+			GL.GetProgram(handle, GetProgramParameterName.LinkStatus, out int status);
 
 			if (status == 0)
 			{
@@ -152,14 +151,18 @@ namespace LibRender2.Shaders
 				Position = (short)GL.GetAttribLocation(handle, "iPosition"),
 				Normal = (short)GL.GetAttribLocation(handle, "iNormal"),
 				UV = (short)GL.GetAttribLocation(handle, "iUv"),
-				Color = (short)GL.GetAttribLocation(handle, "iColor")
+				Color = (short)GL.GetAttribLocation(handle, "iColor"),
+				MatrixChain = (short)GL.GetAttribLocation(handle, "iMatrixChain"),
 			};
+
+
 		}
 
 		public UniformLayout GetUniformLayout()
 		{
 			return new UniformLayout
 			{
+				CurrentAnimationMatricies = (short)GL.GetUniformBlockIndex(handle, "uAnimationMatricies"),
 				CurrentProjectionMatrix = (short)GL.GetUniformLocation(handle, "uCurrentProjectionMatrix"),
 				CurrentModelViewMatrix = (short)GL.GetUniformLocation(handle, "uCurrentModelViewMatrix"),
 				CurrentTextureMatrix = (short)GL.GetUniformLocation(handle, "uCurrentTextureMatrix"),
@@ -239,6 +242,32 @@ namespace LibRender2.Shaders
 			renderer.lastObjectState = null; // clear the cached object state, as otherwise it might be stale
 			Matrix4 matrix = ConvertToMatrix4(ProjectionMatrix);
 			GL.ProgramUniformMatrix4(handle, UniformLayout.CurrentProjectionMatrix, false, ref matrix);
+		}
+
+		/// <summary>
+		/// Set the animation matricies
+		/// </summary>
+		public void SetCurrentAnimationMatricies(ObjectState objectState)
+		{
+			renderer.lastObjectState = null; // clear the cached object state, as otherwise it might be stale
+			Matrix4[] matriciesToShader = new Matrix4[objectState.Matricies.Length];
+
+			for (int i = 0; i < objectState.Matricies.Length; i++)
+			{
+				matriciesToShader[i] = ConvertToMatrix4(objectState.Matricies[i]);
+			}
+
+			unsafe
+			{
+				if (objectState.MatrixBufferIndex == 0)
+				{
+					objectState.MatrixBufferIndex = GL.GenBuffer();
+				}
+
+				GL.BindBuffer(BufferTarget.UniformBuffer, objectState.MatrixBufferIndex);
+				GL.BufferData(BufferTarget.UniformBuffer, sizeof(Matrix4) * matriciesToShader.Length, matriciesToShader, BufferUsageHint.StaticDraw);
+			}
+
 		}
 
 		/// <summary>
@@ -335,9 +364,9 @@ namespace LibRender2.Shaders
 			GL.ProgramUniform3(handle, UniformLayout.MaterialEmission, MaterialEmission.R / 255.0f, MaterialEmission.G / 255.0f, MaterialEmission.B / 255.0f);
 		}
 
-		public void SetMaterialShininess(float MaterialShininess)
+		public void SetMaterialShininess(float materialShininess)
 		{
-			GL.ProgramUniform1(handle, UniformLayout.MaterialShininess, MaterialShininess);
+			GL.ProgramUniform1(handle, UniformLayout.MaterialShininess, materialShininess);
 		}
 
 		public void SetMaterialFlags(MaterialFlags Flags)
@@ -373,31 +402,31 @@ namespace LibRender2.Shaders
 			}
 		}
 
-		public void SetTexture(int TextureUnit)
+		public void SetTexture(int textureUnit)
 		{
-			GL.ProgramUniform1(handle, UniformLayout.Texture, TextureUnit);
+			GL.ProgramUniform1(handle, UniformLayout.Texture, textureUnit);
 		}
 
 		private float lastBrightness;
 
-		public void SetBrightness(float Brightness)
+		public void SetBrightness(float brightness)
 		{
-			if(Brightness == lastBrightness)
+			if(brightness == lastBrightness)
 			{
 				return;
 			}
-			lastBrightness = Brightness;
-			GL.ProgramUniform1(handle, UniformLayout.Brightness, Brightness);
+			lastBrightness = brightness;
+			GL.ProgramUniform1(handle, UniformLayout.Brightness, brightness);
 		}
 
-		public void SetOpacity(float Opacity)
+		public void SetOpacity(float opacity)
 		{
-			GL.ProgramUniform1(handle, UniformLayout.Opacity, Opacity);
+			GL.ProgramUniform1(handle, UniformLayout.Opacity, opacity);
 		}
 
-		public void SetObjectIndex(int ObjectIndex)
+		public void SetObjectIndex(int objectIndex)
 		{
-			GL.ProgramUniform1(handle, UniformLayout.ObjectIndex, ObjectIndex);
+			GL.ProgramUniform1(handle, UniformLayout.ObjectIndex, objectIndex);
 		}
 
 		public void SetPoint(Vector2 point)

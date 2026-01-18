@@ -2,15 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LibRender2;
+using OpenBveApi;
 using OpenBveApi.Colors;
 using OpenBveApi.Hosts;
 using OpenBveApi.Routes;
 using OpenBveApi.Runtime;
 using OpenBveApi.Trains;
 using RouteManager2.Climate;
+using RouteManager2.Events;
+using RouteManager2.MessageManager;
 using RouteManager2.SignalManager;
 using RouteManager2.SignalManager.PreTrain;
 using RouteManager2.Stations;
+using RouteManager2.Tracks;
 
 namespace RouteManager2
 {
@@ -46,7 +50,7 @@ namespace RouteManager2
 		/// <remarks>Must be in distance and time ascending order</remarks>
 		public BogusPreTrainInstruction[] BogusPreTrainInstructions;
 
-		public double[] PrecedingTrainTimeDeltas = new double[] { };
+		public double[] PrecedingTrainTimeDeltas = { };
 
 		/// <summary>Holds all points of interest within the game world</summary>
 		public PointOfInterest[] PointsOfInterest;
@@ -81,7 +85,7 @@ namespace RouteManager2
 
 		public Atmosphere Atmosphere;
 
-		public double[] BufferTrackPositions = { };
+		public List<BufferStop> BufferTrackPositions = new List<BufferStop>();
 
 		/// <summary>The current in game time, expressed as the number of seconds since midnight on the first day</summary>
 		public double SecondsSinceMidnight;
@@ -95,17 +99,16 @@ namespace RouteManager2
 		/// <summary>Controls the object disposal mode</summary>
 		public ObjectDisposalMode AccurateObjectDisposal;
 
+		/// <summary>All switches on the route</summary>
+		public Dictionary<Guid, Switch> Switches;
+
 		public CurrentRoute(HostInterface host, BaseRenderer renderer)
 		{
 			currentHost = host;
 			this.renderer = renderer;
 			
 			Tracks = new Dictionary<int, Track>();
-			Track t = new Track
-			{
-				Elements = new TrackElement[0]
-			};
-			Tracks.Add(0, t);
+			Tracks.Add(0, new Track());
 			Sections = new Section[0];
 			Stations = new RouteStation[0];
 			BogusPreTrainInstructions = new BogusPreTrainInstruction[0];
@@ -134,8 +137,7 @@ namespace RouteManager2
 			 * and use a while loop
 			 * https://github.com/leezer3/OpenBVE/issues/557
 			 */
-			Section nextSectionToUpdate;
-			UpdateSection(Sections.LastOrDefault(), out nextSectionToUpdate);
+			UpdateSection(Sections.LastOrDefault(), out Section nextSectionToUpdate);
 			while (nextSectionToUpdate != null)
 			{
 				UpdateSection(nextSectionToUpdate, out nextSectionToUpdate);
@@ -146,8 +148,7 @@ namespace RouteManager2
 		/// <param name="SectionIndex"></param>
 		public void UpdateSection(int SectionIndex)
 		{
-			Section nextSectionToUpdate;
-			UpdateSection(Sections[SectionIndex], out nextSectionToUpdate);
+			UpdateSection(Sections[SectionIndex], out Section nextSectionToUpdate);
 			while (nextSectionToUpdate != null)
 			{
 				UpdateSection(nextSectionToUpdate, out nextSectionToUpdate);
@@ -172,7 +173,7 @@ namespace RouteManager2
 			int zeroAspect = 0;
 			bool setToRed = false;
 
-			if (Section.Type == SectionType.ValueBased)
+			if (Section.Type == SectionType.ValueBased || Section.Type == SectionType.PermissiveValueBased)
 			{
 				// value-based
 				zeroAspect = 0;
@@ -216,7 +217,7 @@ namespace RouteManager2
 
 				if (train == null)
 				{
-					double b = -Double.MaxValue;
+					double b = -double.MaxValue;
 
 					foreach (AbstractTrain t in currentHost.Trains)
 					{
@@ -238,7 +239,7 @@ namespace RouteManager2
 					{
 						if (train.Station == d)
 						{
-							int c = Stations[d].GetStopIndex(train.NumberOfCars);
+							int c = Stations[d].GetStopIndex(train);
 
 							if (c >= 0)
 							{
@@ -314,6 +315,19 @@ namespace RouteManager2
 				setToRed = true;
 			}
 
+			if ((Section.Type == SectionType.PermissiveValueBased || Section.Type == SectionType.PermissiveIndexBased) && Section.SignallerPermission == false)
+			{
+				// with a permissive section, check to see if the *previous* section holds the player train
+				// ignore for AI trains (we'll assume they can contact the signaller silently)
+				for (int i = 0; i < Section.PreviousSection.Trains.Length; i++)
+				{
+					if (Section.PreviousSection.Trains[i].Type == TrainType.LocalPlayerTrain || Section.PreviousSection.Trains[i].Type == TrainType.RemotePlayerTrain)
+					{
+						setToRed = true;
+					}
+				}
+			}
+
 			// free sections
 			int newAspect = -1;
 
@@ -346,7 +360,7 @@ namespace RouteManager2
 			// change aspect
 			if (newAspect == -1)
 			{
-				if (Section.Type == SectionType.ValueBased)
+				if (Section.Type == SectionType.ValueBased || Section.Type == SectionType.PermissiveValueBased)
 				{
 					// value-based
 					Section n = Section.NextSection;
@@ -428,6 +442,26 @@ namespace RouteManager2
 			return null;
 		}
 
+		/// <summary>Gets the next speed limit, starting from the specified track element</summary>
+		/// <param name="trackElement">The specified track element</param>
+		/// <param name="trackPosition">The next limit's track position</param>
+		public double NextLimit(int trackElement, out double trackPosition)
+		{
+			for (int i = trackElement + 1; i < Tracks[0].Elements.Length; i++)
+			{
+				trackPosition = Tracks[0].Elements[i].StartingTrackPosition;
+				for (int j = 0; j < Tracks[0].Elements[i].Events.Count; j++)
+				{
+					if (Tracks[0].Elements[i].Events[j] is LimitChangeEvent lim)
+					{
+						return lim.NextSpeedLimit;
+					}
+				}
+			}
+			trackPosition = double.PositiveInfinity;
+			return double.PositiveInfinity;
+		}
+
 		/// <summary>Updates the currently displayed background</summary>
 		/// <param name="TimeElapsed">The time elapsed since the previous call to this function</param>
 		/// <param name="GamePaused">Whether the game is currently paused</param>
@@ -439,38 +473,45 @@ namespace RouteManager2
 				TimeElapsed = 0.0;
 			}
 
-			const float scale = 0.5f;
+			// scale value is used to update the size of the fog region relative to the actual background object
+			float scale = 0.5f * (float)(CurrentBackground.BackgroundImageDistance / CurrentBackground.FogDistance);
+			float clipAdjustment = 1.0f;
+
+			if (CurrentBackground.BackgroundImageDistance > 1100)
+			{
+				// HACK: BackgroundImageDistance above ~1100 can cause things to go out
+				// of the viewing plane, which then bugs out OpenGL clipping, so clamp the scale
+				// downwards to compensate
+				clipAdjustment = 1100f/ (float)CurrentBackground.BackgroundImageDistance;
+			}
 
 			// fog
 			const float fogDistance = 600.0f;
 
 			if (CurrentFog.Start < CurrentFog.End & CurrentFog.Start < fogDistance)
 			{
-				float ratio = (float)CurrentBackground.BackgroundImageDistance / fogDistance;
+				float ratio = (float)(CurrentBackground.BackgroundImageDistance / fogDistance) * clipAdjustment;
 
-				renderer.OptionFog = true;
+				renderer.Fog.Enabled = true;
 				renderer.Fog.Start = CurrentFog.Start * ratio * scale;
 				renderer.Fog.End = CurrentFog.End * ratio * scale;
 				renderer.Fog.Color = CurrentFog.Color;
 				renderer.Fog.Density = CurrentFog.Density;
 				renderer.Fog.IsLinear = CurrentFog.IsLinear;
-				if (!renderer.AvailableNewRenderer)
-				{
-					renderer.Fog.SetForImmediateMode();
-				}
+				renderer.Fog.Set();
 			}
 			else
 			{
-				renderer.OptionFog = false;
+				renderer.Fog.Enabled = false;
 			}
-
-			//Update the currently displayed background
-			CurrentBackground.UpdateBackground(SecondsSinceMidnight, TimeElapsed, false);
+			
+            //Update the currently displayed background
+            CurrentBackground.UpdateBackground(SecondsSinceMidnight, TimeElapsed, false);
 
 			if (TargetBackground == null || TargetBackground == CurrentBackground)
 			{
 				//No target background, so call the render function
-				renderer.Background.Render(CurrentBackground, scale);
+				renderer.Background.Render(CurrentBackground, scale * clipAdjustment);
 				return;
 			}
 
@@ -486,12 +527,12 @@ namespace RouteManager2
 			{
 				//Render, switching on the transition mode
 				case BackgroundTransitionMode.FadeIn:
-					renderer.Background.Render(CurrentBackground, 1.0f, scale);
-					renderer.Background.Render(TargetBackground, TargetBackground.CurrentAlpha, scale);
+					renderer.Background.Render(CurrentBackground, 1.0f, scale * clipAdjustment);
+					renderer.Background.Render(TargetBackground, TargetBackground.CurrentAlpha, scale * clipAdjustment);
 					break;
 				case BackgroundTransitionMode.FadeOut:
-					renderer.Background.Render(TargetBackground, 1.0f, scale);
-					renderer.Background.Render(CurrentBackground, TargetBackground.CurrentAlpha, scale);
+					renderer.Background.Render(TargetBackground, 1.0f, scale * clipAdjustment);
+					renderer.Background.Render(CurrentBackground, TargetBackground.CurrentAlpha, scale * clipAdjustment);
 					break;
 			}
 
@@ -513,6 +554,61 @@ namespace RouteManager2
 			renderer.Lighting.ShouldInitialize = true;
 		}
 
+		/// <summary>Moves the camera to a point of interest</summary>
+		/// <param name="direction">The direction of the jump to perform</param>
+		/// <returns>False if the previous / next POI would be outside those defined, true otherwise</returns>
+		public bool ApplyPointOfInterest(TrackDirection direction)
+		{
+			double t = 0.0;
+			int j = -1;
+			if (direction == TrackDirection.Reverse)
+			{
+				t = double.NegativeInfinity;
+				for (int i = 0; i < PointsOfInterest.Length; i++)
+				{
+					if (PointsOfInterest[i].TrackPosition < renderer.CameraTrackFollower.TrackPosition)
+					{
+						if (PointsOfInterest[i].TrackPosition > t)
+						{
+							t = PointsOfInterest[i].TrackPosition;
+							j = i;
+						}
+					}
+				}
+			}
+			else if (direction == TrackDirection.Forwards)
+			{
+				t = double.PositiveInfinity;
+				for (int i = 0; i < PointsOfInterest.Length; i++)
+				{
+					if (PointsOfInterest[i].TrackPosition > renderer.CameraTrackFollower.TrackPosition)
+					{
+						if (PointsOfInterest[i].TrackPosition < t)
+						{
+							t = PointsOfInterest[i].TrackPosition;
+							j = i;
+						}
+					}
+				}
+			}
+
+			if (j < 0) return false;
+			renderer.CameraTrackFollower.UpdateAbsolute(t, true, false);
+			renderer.Camera.Alignment.Position = PointsOfInterest[j].TrackOffset;
+			renderer.Camera.Alignment.Yaw = PointsOfInterest[j].TrackYaw;
+			renderer.Camera.Alignment.Pitch = PointsOfInterest[j].TrackPitch;
+			renderer.Camera.Alignment.Roll = PointsOfInterest[j].TrackRoll;
+			renderer.Camera.Alignment.TrackPosition = t;
+
+			if (PointsOfInterest[j].Text != null)
+			{
+				double n = 3.0 + 0.5 * Math.Sqrt(PointsOfInterest[j].Text.Length);
+				currentHost.AddMessage(PointsOfInterest[j].Text, MessageDependency.PointOfInterest, GameMode.Expert, MessageColor.White, n, null);
+			}
+
+			return true;
+		}
+
 		/// <summary>The index of the first station</summary>
 		public int PlayerFirstStationIndex
 		{
@@ -527,7 +623,7 @@ namespace RouteManager2
 					{
 						if (!string.IsNullOrEmpty(InitialStationName))
 						{
-							if (InitialStationName.ToLowerInvariant() == Stations[i].Name.ToLowerInvariant())
+							if (string.Equals(InitialStationName, Stations[i].Name, StringComparison.InvariantCultureIgnoreCase))
 							{
 								return i;
 							}
@@ -548,7 +644,7 @@ namespace RouteManager2
 					{
 						if (!string.IsNullOrEmpty(InitialStationName))
 						{
-							if (InitialStationName.ToLowerInvariant() == Stations[i].Name.ToLowerInvariant())
+							if (string.Equals(InitialStationName, Stations[i].Name, StringComparison.InvariantCultureIgnoreCase))
 							{
 								return i;
 							}
