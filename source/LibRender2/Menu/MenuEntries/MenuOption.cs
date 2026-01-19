@@ -39,7 +39,9 @@ namespace LibRender2.Menu
 		private readonly object[] Entries;
 
 		/// <summary>Gets the current option</summary>
-		public object CurrentOption => Entries[CurrentlySelectedOption];
+		public object CurrentOption => Type == OptionType.FullScreen
+			? (BaseMenu.CurrentOptions.FullscreenMode ? Entries[0] : Entries[1])
+			: Entries[CurrentlySelectedOption];
 
 		private int CurrentlySelectedOption;
 

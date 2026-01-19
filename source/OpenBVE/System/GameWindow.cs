@@ -372,6 +372,24 @@ namespace OpenBve
 			}
 		}
 
+		protected override void OnWindowStateChanged(EventArgs e)
+		{
+			base.OnWindowStateChanged(e);
+			if (Program.CurrentHost.Platform == HostPlatform.AppleOSX)
+			{
+				bool isFullscreen = WindowState == WindowState.Fullscreen;
+
+				if (Interface.CurrentOptions.FullscreenMode != isFullscreen)
+				{
+					Interface.CurrentOptions.FullscreenMode = isFullscreen;
+				}
+				if (Program.Renderer?.Screen != null)
+				{
+					Program.Renderer.Screen.Fullscreen = isFullscreen;
+				}
+			}
+		}
+
 		[DllImport("user32.dll")]
 		private static extern int FindWindow(string className, string windowText);
 		[DllImport("user32.dll")]
