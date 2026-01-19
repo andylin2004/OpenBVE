@@ -174,29 +174,13 @@ namespace LibRender2.Menu
 					BaseMenu.Renderer.SetWindowSize((int)(res.Width * BaseMenu.Renderer.ScaleFactor.X), (int)(res.Height * BaseMenu.Renderer.ScaleFactor.Y));
 					if (BaseMenu.CurrentOptions.FullscreenMode)
 					{
-						IList<DisplayResolution> resolutions = DisplayDevice.Default.AvailableResolutions;
-						foreach (DisplayResolution currentResolution in resolutions)
+						int targetWidth = (int)(BaseMenu.Renderer.Screen.Width / BaseMenu.Renderer.ScaleFactor.X);
+						int targetHeight = (int)(BaseMenu.Renderer.Screen.Height / BaseMenu.Renderer.ScaleFactor.Y);
+						if (BaseMenu.Renderer.TryApplyFullscreenResolution(targetWidth, targetHeight))
 						{
-							//Test resolution
-							if (currentResolution.Width == BaseMenu.Renderer.Screen.Width / BaseMenu.Renderer.ScaleFactor.X &&
-								currentResolution.Height == BaseMenu.Renderer.Screen.Height / BaseMenu.Renderer.ScaleFactor.Y)
-							{
-								try
-								{
-									//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
-									DisplayDevice.Default.RestoreResolution();
-									DisplayDevice.Default.ChangeResolution(currentResolution);
-									BaseMenu.Renderer.SetWindowState(WindowState.Fullscreen);
-									BaseMenu.Renderer.SetWindowSize((int)(currentResolution.Width * BaseMenu.Renderer.ScaleFactor.X), (int)(currentResolution.Height * BaseMenu.Renderer.ScaleFactor.Y));
-									BaseMenu.CurrentOptions.FullscreenWidth = currentResolution.Width;
-									BaseMenu.CurrentOptions.FullscreenHeight = currentResolution.Height;
-									return;
-								}
-								catch
-								{
-									//refresh rate wrong? - Keep trying in case a different refresh rate works OK
-								}
-							}
+							BaseMenu.CurrentOptions.FullscreenWidth = targetWidth;
+							BaseMenu.CurrentOptions.FullscreenHeight = targetHeight;
+							return;
 						}
 					}
 					else
@@ -215,28 +199,7 @@ namespace LibRender2.Menu
 					}
 					else
 					{
-						IList<DisplayResolution> resolutions = DisplayDevice.Default.AvailableResolutions;
-						foreach (DisplayResolution currentResolution in resolutions)
-						{
-							//Test resolution
-							if (currentResolution.Width == BaseMenu.Renderer.Screen.Width / BaseMenu.Renderer.ScaleFactor.X &&
-								currentResolution.Height == BaseMenu.Renderer.Screen.Height / BaseMenu.Renderer.ScaleFactor.Y)
-							{
-								try
-								{
-									//HACK: some resolutions will result in openBVE not appearing on screen in full screen, so restore resolution then change resolution
-									DisplayDevice.Default.RestoreResolution();
-									DisplayDevice.Default.ChangeResolution(currentResolution);
-									BaseMenu.Renderer.SetWindowState(WindowState.Fullscreen);
-									BaseMenu.Renderer.SetWindowSize((int)(currentResolution.Width * BaseMenu.Renderer.ScaleFactor.X), (int)(currentResolution.Height * BaseMenu.Renderer.ScaleFactor.Y));
-									return;
-								}
-								catch
-								{
-									//refresh rate wrong? - Keep trying in case a different refresh rate works OK
-								}
-							}
-						}
+						BaseMenu.Renderer.SetWindowState(WindowState.Fullscreen);
 					}
 					BaseMenu.ComputePosition();
 					break;

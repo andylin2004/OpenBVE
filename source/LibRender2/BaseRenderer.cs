@@ -366,11 +366,11 @@ namespace LibRender2
 						 */
 						DefaultShader?.Deactivate();
 					}
-					catch 
-					{ 
+					catch
+					{
 						// ignored
 					}
-					
+
 				}
 
 				if (DefaultShader == null)
@@ -396,7 +396,7 @@ namespace LibRender2
 			StaticObjectStates = new List<ObjectState>();
 			DynamicObjectStates = new List<ObjectState>();
 			VisibleObjects = new VisibleObjectLibrary(this);
-			whitePixel = new Texture(new Texture(1, 1, PixelFormat.RGBAlpha, new byte[] {255, 255, 255, 255}, null));
+			whitePixel = new Texture(new Texture(1, 1, PixelFormat.RGBAlpha, new byte[] { 255, 255, 255, 255 }, null));
 			GL.ClearColor(0.67f, 0.67f, 0.67f, 1.0f);
 			GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 			GL.Enable(EnableCap.DepthTest);
@@ -504,7 +504,7 @@ namespace LibRender2
 				GL.Disable(EnableCap.Fog);
 				GL.Disable(EnableCap.Texture2D);
 			}
-			
+
 			SetBlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 			UnsetBlendFunc();
 			GL.Enable(EnableCap.DepthTest);
@@ -628,8 +628,8 @@ namespace LibRender2
 					endingDistance = (float)EndingDistance;
 					break;
 				case ObjectDisposalMode.Mechanik:
-					startingDistance = (float) StartingDistance;
-					endingDistance = (float) EndingDistance + 1500;
+					startingDistance = (float)StartingDistance;
+					endingDistance = (float)EndingDistance + 1500;
 					if (startingDistance < 0)
 					{
 						startingDistance = 0;
@@ -645,7 +645,7 @@ namespace LibRender2
 				EndingDistance = endingDistance,
 				WorldPosition = Position
 			});
-			
+
 			foreach (MeshFace face in Prototype.Mesh.Faces)
 			{
 				switch (face.Flags & FaceFlags.FaceTypeMask)
@@ -675,7 +675,7 @@ namespace LibRender2
 		{
 			if (internalObject == null)
 			{
-				internalObject = new ObjectState( new StaticObject(currentHost));
+				internalObject = new ObjectState(new StaticObject(currentHost));
 			}
 
 			internalObject.Prototype.Dynamic = true;
@@ -711,7 +711,7 @@ namespace LibRender2
 			ObjectsSortedByEnd = StaticObjectStates.Select((x, i) => new { Index = i, Distance = x.EndingDistance }).OrderBy(x => x.Distance).Select(x => x.Index).ToArray();
 			ObjectsSortedByStartPointer = 0;
 			ObjectsSortedByEndPointer = 0;
-			
+
 			if (currentOptions.ObjectDisposalMode == ObjectDisposalMode.QuadTree)
 			{
 				foreach (ObjectState state in StaticObjectStates)
@@ -734,7 +734,7 @@ namespace LibRender2
 		private VisibilityUpdate updateVisibility;
 		/// <summary>The lock to be held whilst visibility updates or loading operations are in progress</summary>
 		public object VisibilityUpdateLock = new object();
-		
+
 		public bool VisibilityThreadShouldRun = true;
 
 		public Thread VisibilityThread;
@@ -790,7 +790,7 @@ namespace LibRender2
 					UpdateLegacyVisibility(trackPosition + 0.01);
 					UpdateLegacyVisibility(trackPosition - 0.01);
 				}
-				
+
 			}
 		}
 
@@ -972,7 +972,7 @@ namespace LibRender2
 				currentOptions.AnisotropicFilteringMaximum = 16;
 				return;
 			}
-			
+
 			string[] Extensions;
 			try
 			{
@@ -1022,7 +1022,7 @@ namespace LibRender2
 				currentOptions.AnisotropicFilteringLevel = currentOptions.AnisotropicFilteringMaximum;
 			}
 		}
-		
+
 		/// <summary>Updates the openGL viewport</summary>
 		/// <param name="mode">The viewport change mode</param>
 		public void UpdateViewport(ViewportChangeMode mode)
@@ -1144,9 +1144,9 @@ namespace LibRender2
 			else
 			{
 				GL.Enable(EnableCap.AlphaTest);
-				GL.AlphaFunc(comparison, value);	
+				GL.AlphaFunc(comparison, value);
 			}
-			
+
 		}
 
 		/// <summary>Disables OpenGL alpha testing</summary>
@@ -1159,9 +1159,9 @@ namespace LibRender2
 			}
 			else
 			{
-				GL.Disable(EnableCap.AlphaTest);	
+				GL.Disable(EnableCap.AlphaTest);
 			}
-			
+
 		}
 
 		/// <summary>Restores the OpenGL alpha function to it's previous state</summary>
@@ -1179,7 +1179,7 @@ namespace LibRender2
 					GL.Enable(EnableCap.AlphaTest);
 					GL.AlphaFunc(alphaFuncComparison, alphaFuncValue);
 				}
-				
+
 			}
 			else
 			{
@@ -1281,12 +1281,12 @@ namespace LibRender2
 				shader.SetCurrentTextureMatrix(state.TextureTranslation);
 				sendToShader = false;
 			}
-			
+
 			if (OptionWireFrame || debugTouchMode)
 			{
 				GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
 			}
-			
+
 			// lighting
 			shader.SetMaterialFlags(material.Flags);
 			if (OptionLighting)
@@ -1419,7 +1419,7 @@ namespace LibRender2
 				// alpha test
 				shader.SetAlphaTest(true);
 				shader.SetAlphaFunction(AlphaFunction.Greater, 0.0f);
-				
+
 				// blend mode
 				float alphaFactor = distanceFactor * blendFactor;
 
@@ -1772,6 +1772,37 @@ namespace LibRender2
 			{
 				SetWindowState(WindowState.Maximized);
 			}
+		}
+
+		/// <summary>Attempts to switch to the given resolution.</summary>
+		/// <param name="targetWidth">Target width in pixels.</param>
+		/// <param name="targetHeight">Target height in pixels.</param>
+		/// <returns>True if the resolution was applied.</returns>
+		public bool TryApplyFullscreenResolution(int targetWidth, int targetHeight)
+		{
+			IList<DisplayResolution> resolutions = DisplayDevice.Default.AvailableResolutions;
+			foreach (DisplayResolution currentResolution in resolutions)
+			{
+				// Test resolution
+				if (currentResolution.Width == targetWidth && currentResolution.Height == targetHeight)
+				{
+					try
+					{
+						// HACK: some resolutions will result in openBVE not appearing on screen in full screen,
+						// so restore resolution then change resolution
+						DisplayDevice.Default.RestoreResolution();
+						DisplayDevice.Default.ChangeResolution(currentResolution);
+						SetWindowState(WindowState.Fullscreen);
+						SetWindowSize((int)(currentResolution.Width * ScaleFactor.X), (int)(currentResolution.Height * ScaleFactor.Y));
+						return true;
+					}
+					catch
+					{
+						// refresh rate wrong? - Keep trying in case a different refresh rate works OK
+					}
+				}
+			}
+			return false;
 		}
 
 		public ConcurrentQueue<ThreadStart> RenderThreadJobs;
